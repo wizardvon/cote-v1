@@ -1,28 +1,43 @@
-import { onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
-import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
-import { auth, db } from './firebase.js';
+import { auth, db, onAuthStateChanged, signOut, doc, getDoc } from './firebase.js';
 
 const emailElement = document.getElementById('student-email');
-const fullNameElement = document.getElementById('student-full-name');
-const profileEmailElement = document.getElementById('student-profile-email');
-const sexElement = document.getElementById('student-sex');
-const birthdayElement = document.getElementById('student-birthday');
-const lrnElement = document.getElementById('student-lrn');
-const phoneElement = document.getElementById('student-phone');
-const addressElement = document.getElementById('student-address');
+const profileDataElement = document.getElementById('profileData');
 const logoutButton = document.getElementById('logout-button');
 
-const setText = (element, value) => {
-  if (!element) return;
-  element.textContent = value || 'Not provided';
+const displayValue = (value) => {
+  if (value === undefined || value === null) return 'Not provided';
+  const trimmed = String(value).trim();
+  return trimmed || 'Not provided';
 };
+
+const escapeHtml = (value) =>
+  String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 
 const getFullName = (data) => {
   const nameParts = [data.firstName, data.middleName, data.lastName]
     .map((part) => (part || '').trim())
     .filter(Boolean);
 
-  return nameParts.length ? nameParts.join(' ') : 'Not provided';
+  return nameParts.length ? nameParts.join(' ') : data.fullName || 'Not provided';
+};
+
+const renderProfile = (profile) => {
+  if (!profileDataElement) return;
+
+  profileDataElement.innerHTML = `
+    <p><strong>Full Name:</strong> ${escapeHtml(displayValue(profile.fullName))}</p>
+    <p><strong>Email:</strong> ${escapeHtml(displayValue(profile.email))}</p>
+    <p><strong>Sex:</strong> ${escapeHtml(displayValue(profile.sex))}</p>
+    <p><strong>Birthday:</strong> ${escapeHtml(displayValue(profile.birthday))}</p>
+    <p><strong>LRN:</strong> ${escapeHtml(displayValue(profile.lrn))}</p>
+    <p><strong>Phone Number:</strong> ${escapeHtml(displayValue(profile.phoneNumber))}</p>
+    <p><strong>Address:</strong> ${escapeHtml(displayValue(profile.address))}</p>
+  `;
 };
 
 const loadStudentProfile = async (user) => {
@@ -31,28 +46,40 @@ const loadStudentProfile = async (user) => {
     const studentSnapshot = await getDoc(studentDocRef);
 
     if (!studentSnapshot.exists()) {
-      setText(fullNameElement, 'No profile data found');
-      setText(profileEmailElement, user.email || 'Not provided');
-      setText(sexElement, 'Not provided');
-      setText(birthdayElement, 'Not provided');
-      setText(lrnElement, 'Not provided');
-      setText(phoneElement, 'Not provided');
-      setText(addressElement, 'Not provided');
+      renderProfile({
+        fullName: 'No profile data found',
+        email: user.email,
+        sex: null,
+        birthday: null,
+        lrn: null,
+        phoneNumber: null,
+        address: null
+      });
       return;
     }
 
     const studentData = studentSnapshot.data();
 
-    setText(fullNameElement, getFullName(studentData));
-    setText(profileEmailElement, studentData.email || user.email || 'Not provided');
-    setText(sexElement, studentData.sex);
-    setText(birthdayElement, studentData.birthday);
-    setText(lrnElement, studentData.lrn);
-    setText(phoneElement, studentData.phoneNumber);
-    setText(addressElement, studentData.address);
+    renderProfile({
+      fullName: getFullName(studentData),
+      email: studentData.email || user.email,
+      sex: studentData.sex,
+      birthday: studentData.birthday,
+      lrn: studentData.lrn,
+      phoneNumber: studentData.phoneNumber,
+      address: studentData.address
+    });
   } catch (error) {
     console.error('Failed to load student profile:', error);
-    setText(fullNameElement, 'Failed to load profile');
+    renderProfile({
+      fullName: 'Failed to load profile',
+      email: user.email,
+      sex: null,
+      birthday: null,
+      lrn: null,
+      phoneNumber: null,
+      address: null
+    });
   }
 };
 
