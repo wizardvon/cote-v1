@@ -1,133 +1,89 @@
-import { auth, db, onAuthStateChanged, signOut, doc, getDoc } from './firebase.js';
+import {
+  auth,
+  db,
+  onAuthStateChanged,
+  signOut,
+  doc,
+  getDoc
+} from "./firebase.js";
 
-const emailElement = document.getElementById('student-email');
-const profileDataElement = document.getElementById('profileData');
-const logoutButton = document.getElementById('logout-button');
+const emailElement = document.getElementById("student-email");
+const profileDataElement = document.getElementById("profileData");
+const logoutButton = document.getElementById("logout-button");
 
-const displayValue = (value) => {
-  if (value === undefined || value === null) return 'Not provided';
-  const trimmed = String(value).trim();
-  return trimmed || 'Not provided';
-};
+function safe(value) {
+  if (value === undefined || value === null) return "Not provided";
+  const text = String(value).trim();
+  return text || "Not provided";
+}
 
-const escapeHtml = (value) =>
-  String(value)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
+function fullName(data) {
+  return [data.firstName, data.middleName, data.lastName]
+    .map((v) => (v || "").trim())
+    .filter(Boolean)
+    .join(" ") || "Not provided";
+}
 
-const getField = (data, ...keys) => {
-  for (const key of keys) {
-    if (data[key] !== undefined && data[key] !== null && String(data[key]).trim() !== '') {
-      return data[key];
-    }
-  }
-
-  return null;
-};
-
-const getFullName = (data) => {
-  const nameParts = [
-    getField(data, 'firstName', 'first_name'),
-    getField(data, 'middleName', 'middle_name'),
-    getField(data, 'lastName', 'last_name')
-  ]
-    .map((part) => (part || '').trim())
-    .filter(Boolean);
-
-  return nameParts.length ? nameParts.join(' ') : getField(data, 'fullName', 'full_name') || 'Not provided';
-};
-
-const renderProfile = (profile) => {
-  if (!profileDataElement) return;
-
+function renderProfile(data, fallbackEmail) {
   profileDataElement.innerHTML = `
-    <p><strong>Full Name:</strong> ${escapeHtml(displayValue(profile.fullName))}</p>
-    <p><strong>Email:</strong> ${escapeHtml(displayValue(profile.email))}</p>
-    <p><strong>Sex:</strong> ${escapeHtml(displayValue(profile.sex))}</p>
-    <p><strong>Birthday:</strong> ${escapeHtml(displayValue(profile.birthday))}</p>
-    <p><strong>LRN:</strong> ${escapeHtml(displayValue(profile.lrn))}</p>
-    <p><strong>Phone Number:</strong> ${escapeHtml(displayValue(profile.phoneNumber))}</p>
-    <p><strong>Address:</strong> ${escapeHtml(displayValue(profile.address))}</p>
+    <p><strong>Full Name:</strong> ${safe(fullName(data))}</p>
+    <p><strong>Email:</strong> ${safe(data.email || fallbackEmail)}</p>
+    <p><strong>Sex:</strong> ${safe(data.sex)}</p>
+    <p><strong>Birthday:</strong> ${safe(data.birthday)}</p>
+    <p><strong>LRN:</strong> ${safe(data.lrn)}</p>
+    <p><strong>Phone Number:</strong> ${safe(data.phoneNumber)}</p>
+    <p><strong>Address:</strong> ${safe(data.address)}</p>
   `;
-};
+}
 
-const loadStudentProfile = async (user) => {
-  try {
-    const studentDocRef = doc(db, 'students', user.uid);
-    const studentSnapshot = await getDoc(studentDocRef);
-
-    if (!studentSnapshot.exists()) {
-      renderProfile({
-        fullName: 'No profile data found',
-        email: user.email,
-        sex: null,
-        birthday: null,
-        lrn: null,
-        phoneNumber: null,
-        address: null
-      });
-      return;
-    }
-
-    const studentData = studentSnapshot.data();
-
-    renderProfile({
-      fullName: getFullName(studentData),
-      email: getField(studentData, 'email') || user.email,
-      sex: getField(studentData, 'sex'),
-      birthday: getField(studentData, 'birthday'),
-      lrn: getField(studentData, 'lrn'),
-      phoneNumber: getField(studentData, 'phoneNumber', 'phone_number', 'phone'),
-      address: getField(studentData, 'address')
-    });
-  } catch (error) {
-    console.error('Failed to load student profile:', error);
-    renderProfile({
-      fullName: 'Failed to load profile',
-      email: user.email,
-      sex: null,
-      birthday: null,
-      lrn: null,
-      phoneNumber: null,
-      address: null
-    });
-  }
-};
-
-onAuthStateChanged(auth, (user) => {
+onAuthStateChanged(auth, async (user) => {
   if (!user) {
-    window.location.replace('index.html');
+    window.location.href = "index.html";
     return;
   }
 
-  if (emailElement) {
-    emailElement.textContent = user.email || 'No email available';
-  }
-
-  loadStudentProfile(user);
-});
-
-logoutButton?.addEventListener('click', async () => {
-  logoutButton.disabled = true;
-  logoutButton.textContent = 'Logging out...';
+  emailElement.textContent = user.email || "No email available";
 
   try {
-    await signOut(auth);
-    window.location.replace('index.html');
+    const studentRef = doc(db, "students", user.uid);
+    const studentSnap = await getDoc(studentRef);
+
+    if (!studentSnap.exists()) {
+      profileDataElement.innerHTML = `
+        <p><strong>Full Name:</strong> No profile found</p>
+        <p><strong>Email:</strong> ${safe(user.email)}</p>
+        <p><strong>Sex:</strong> Not provided</p>
+        <p><strong>Birthday:</strong> Not provided</p>
+        <p><strong>LRN:</strong> Not provided</p>
+        <p><strong>Phone Number:</strong> Not provided</p>
+        <p><strong>Address:</strong> Not provided</p>
+      `;
+      return;
+    }
+
+    const studentData = studentSnap.data();
+    renderProfile(studentData, user.email);
   } catch (error) {
-    console.error('Logout failed:', error);
-    logoutButton.disabled = false;
-    logoutButton.textContent = 'Logout';
+    console.error("Failed to load profile:", error);
+    profileDataElement.innerHTML = `
+      <p><strong>Error:</strong> Failed to load profile data.</p>
+    `;
   }
 });
 
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/cote-v1/sw.js', { scope: '/cote-v1/' }).catch((error) => {
-      console.error('Service worker registration failed:', error);
-    });
+logoutButton.addEventListener("click", async () => {
+  try {
+    await signOut(auth);
+    window.location.href = "index.html";
+  } catch (error) {
+    console.error("Logout failed:", error);
+  }
+});
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker
+      .register("/cote-v1/sw.js", { scope: "/cote-v1/" })
+      .catch((error) => console.error("SW registration failed:", error));
   });
 }
