@@ -18,12 +18,26 @@ const escapeHtml = (value) =>
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
 
+const getField = (data, ...keys) => {
+  for (const key of keys) {
+    if (data[key] !== undefined && data[key] !== null && String(data[key]).trim() !== '') {
+      return data[key];
+    }
+  }
+
+  return null;
+};
+
 const getFullName = (data) => {
-  const nameParts = [data.firstName, data.middleName, data.lastName]
+  const nameParts = [
+    getField(data, 'firstName', 'first_name'),
+    getField(data, 'middleName', 'middle_name'),
+    getField(data, 'lastName', 'last_name')
+  ]
     .map((part) => (part || '').trim())
     .filter(Boolean);
 
-  return nameParts.length ? nameParts.join(' ') : data.fullName || 'Not provided';
+  return nameParts.length ? nameParts.join(' ') : getField(data, 'fullName', 'full_name') || 'Not provided';
 };
 
 const renderProfile = (profile) => {
@@ -62,12 +76,12 @@ const loadStudentProfile = async (user) => {
 
     renderProfile({
       fullName: getFullName(studentData),
-      email: studentData.email || user.email,
-      sex: studentData.sex,
-      birthday: studentData.birthday,
-      lrn: studentData.lrn,
-      phoneNumber: studentData.phoneNumber,
-      address: studentData.address
+      email: getField(studentData, 'email') || user.email,
+      sex: getField(studentData, 'sex'),
+      birthday: getField(studentData, 'birthday'),
+      lrn: getField(studentData, 'lrn'),
+      phoneNumber: getField(studentData, 'phoneNumber', 'phone_number', 'phone'),
+      address: getField(studentData, 'address')
     });
   } catch (error) {
     console.error('Failed to load student profile:', error);
