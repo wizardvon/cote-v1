@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { auth, db } from '../firebase';
+import { auth, db, firebaseConfigError } from '../firebase';
 
 const initialForm = {
   firstName: '',
@@ -18,6 +18,8 @@ function Register() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  const firebaseReady = Boolean(auth && db && !firebaseConfigError);
+
   const handleChange = (event) => {
     const { name, value } = event.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -27,6 +29,12 @@ function Register() {
     event.preventDefault();
     setError('');
     setSuccess('');
+
+    if (!firebaseReady) {
+      setError('Firebase is not configured. Please set VITE_FIREBASE_* secrets.');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -66,6 +74,13 @@ function Register() {
     <main className="auth-container">
       <form className="auth-card" onSubmit={handleSubmit}>
         <h1>COTE Student Registration</h1>
+
+        {!firebaseReady && (
+          <p className="error">
+            Firebase config is missing on this deployment. Add VITE_FIREBASE_* variables in
+            GitHub repository secrets.
+          </p>
+        )}
 
         <label htmlFor="firstName">First Name</label>
         <input
@@ -132,7 +147,7 @@ function Register() {
           required
         />
 
-        <button type="submit" disabled={loading}>
+        <button type="submit" disabled={loading || !firebaseReady}>
           {loading ? 'Registering...' : 'Register'}
         </button>
 

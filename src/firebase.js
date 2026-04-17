@@ -11,7 +11,21 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+const missingEnvVars = Object.entries(firebaseConfig)
+  .filter(([, value]) => !value)
+  .map(([key]) => key);
 
-export const auth = getAuth(app);
-export const db = getFirestore(app);
+let firebaseConfigError = '';
+let auth = null;
+let db = null;
+
+if (missingEnvVars.length === 0) {
+  const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  db = getFirestore(app);
+} else {
+  firebaseConfigError = `Missing Firebase env vars: ${missingEnvVars.join(', ')}`;
+  console.error(firebaseConfigError);
+}
+
+export { auth, db, firebaseConfigError };
