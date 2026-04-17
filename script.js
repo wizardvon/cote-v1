@@ -46,7 +46,7 @@ function showFormMessage(message, type) {
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch((error) => {
+    navigator.serviceWorker.register('/cote-v1/sw.js', { scope: '/cote-v1/' }).catch((error) => {
       console.error('Service worker registration failed:', error);
     });
   });
