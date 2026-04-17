@@ -64,17 +64,17 @@ registrationForm?.addEventListener('submit', async (event) => {
       phoneNumber: payload.phoneNumber.trim(),
       address: payload.address.trim(),
       email,
+      role: 'student',
+      status: 'pending',
       createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
     });
 
     await setDoc(doc(db, 'users', uid), {
       uid,
       email,
       role: 'student',
-      status: 'active',
+      status: 'pending',
       createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
     });
 
     showFormMessage('Student registration submitted successfully.', 'success');
