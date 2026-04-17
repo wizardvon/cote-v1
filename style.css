@@ -1,6 +1,6 @@
 :root {
   color-scheme: light;
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: Inter, 'Segoe UI', Roboto, Arial, sans-serif;
 }
 
 * {
@@ -12,41 +12,91 @@ body {
   min-height: 100vh;
   display: grid;
   place-items: center;
-  background: #f5f7fb;
+  padding: 1rem;
+  background: linear-gradient(145deg, #eef2ff, #f8fafc);
   color: #1f2937;
 }
 
 .container {
-  width: min(92vw, 460px);
+  width: min(100%, 760px);
   background: #ffffff;
   border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 1.5rem;
+  border-radius: 16px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.1);
+  padding: clamp(1rem, 2.5vw, 2rem);
 }
 
 h1 {
-  margin-top: 0;
-  margin-bottom: 1rem;
-  font-size: 1.5rem;
+  margin: 0;
+  font-size: clamp(1.4rem, 2.8vw, 1.9rem);
+}
+
+.subtitle {
+  margin-top: 0.4rem;
+  margin-bottom: 1.25rem;
+  color: #4b5563;
+  font-size: 0.95rem;
 }
 
 form {
   display: grid;
-  gap: 0.75rem;
+  gap: 1rem;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.95rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.field-full {
+  grid-column: 1 / -1;
 }
 
 label {
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: 0.92rem;
+}
+
+label span {
+  color: #dc2626;
 }
 
 input,
 select,
 button {
+  width: 100%;
   font: inherit;
-  padding: 0.65rem 0.75rem;
-  border-radius: 8px;
+  padding: 0.68rem 0.78rem;
+  border-radius: 10px;
   border: 1px solid #cbd5e1;
+  background: #fff;
+}
+
+input:focus,
+select:focus {
+  outline: 3px solid rgba(37, 99, 235, 0.15);
+  border-color: #2563eb;
+}
+
+.form-message {
+  margin: 0;
+  min-height: 1.2rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.form-message.success {
+  color: #047857;
+}
+
+.form-message.error {
+  color: #b91c1c;
 }
 
 button {
@@ -55,8 +105,23 @@ button {
   color: #ffffff;
   font-weight: 600;
   cursor: pointer;
+  transition: background-color 0.2s ease;
 }
 
 button:hover {
   background: #1d4ed8;
+}
+
+button:active {
+  background: #1e40af;
+}
+
+@media (max-width: 640px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .container {
+    border-radius: 14px;
+  }
 }
