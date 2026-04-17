@@ -125,3 +125,32 @@ button:active {
     border-radius: 14px;
   }
 }
+
+.auth-container {
+  width: min(100%, 520px);
+}
+
+.auth-form {
+  gap: 0.9rem;
+}
+
+.auth-grid {
+  grid-template-columns: 1fr;
+}
+
+.auth-switch {
+  margin: 1rem 0 0;
+  color: #4b5563;
+  font-size: 0.92rem;
+}
+
+.auth-switch a {
+  color: #1d4ed8;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.auth-switch a:hover,
+.auth-switch a:focus {
+  text-decoration: underline;
+}
