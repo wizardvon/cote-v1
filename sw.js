@@ -1,8 +1,9 @@
-const CACHE_NAME = 'cote-web-app-v3';
+const CACHE_NAME = 'cote-web-app-v4';
 const ASSETS_TO_CACHE = [
   '/cote-v1/',
   '/cote-v1/index.html',
   '/cote-v1/login.html',
+  '/cote-v1/registration.html',
   '/cote-v1/style.css',
   '/cote-v1/script.js',
   '/cote-v1/login.js',
