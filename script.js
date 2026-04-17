@@ -42,3 +42,12 @@ function showFormMessage(message, type) {
   formMessage.classList.remove('success', 'error');
   formMessage.classList.add(type);
 }
+
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch((error) => {
+      console.error('Service worker registration failed:', error);
+    });
+  });
+}
