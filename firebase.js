@@ -6,12 +6,12 @@ import { getFirestore } from 'https://www.gstatic.com/firebasejs/10.14.1/firebas
 // You can find it in Firebase Console > Project settings > General > Your apps > SDK setup and configuration.
 // Example keys are shown for guidance only.
 const firebaseConfig = {
-  apiKey: 'PASTE_YOUR_API_KEY_HERE',
-  authDomain: 'PASTE_YOUR_AUTH_DOMAIN_HERE',
-  projectId: 'PASTE_YOUR_PROJECT_ID_HERE',
-  storageBucket: 'PASTE_YOUR_STORAGE_BUCKET_HERE',
-  messagingSenderId: 'PASTE_YOUR_MESSAGING_SENDER_ID_HERE',
-  appId: 'PASTE_YOUR_APP_ID_HERE',
+  apiKey: "AIzaSyA_y-kzUWTt04vuyKSqR9b5_L8c_VvbCIs",
+  authDomain: "cote-v1.firebaseapp.com",
+  projectId: "cote-v1",
+  storageBucket: "cote-v1.firebasestorage.app",
+  messagingSenderId: "414423398647",
+  appId: "1:414423398647:web:2e61049858326b2b2b7bf2"
 };
 
 const app = initializeApp(firebaseConfig);
