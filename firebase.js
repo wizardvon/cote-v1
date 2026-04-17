@@ -15,4 +15,5 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-export { app, auth, db, onAuthStateChanged, signOut, doc, getDoc };
+// Shared Firebase instances and helpers used by login, registration, and dashboard pages.
+export { auth, db, onAuthStateChanged, signOut, doc, getDoc, app };
