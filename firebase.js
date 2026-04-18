@@ -1,6 +1,6 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
-import { getFirestore, doc, getDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+import { getFirestore, collection, doc, getDoc, getDocs, limit, query, updateDoc, where } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyA_y-kzUWTt04vuyKSqR9b5_L8c_VvbCIs',
@@ -16,4 +16,18 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 
 // Shared Firebase instances and helpers used by login, registration, and dashboard pages.
-export { auth, db, onAuthStateChanged, signOut, doc, getDoc, updateDoc, app };
+export {
+  auth,
+  db,
+  onAuthStateChanged,
+  signOut,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  limit,
+  query,
+  updateDoc,
+  where,
+  app
+};

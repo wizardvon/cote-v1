@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>COTE Web App | Admin Points</title>
+    <meta name="theme-color" content="#2563eb" />
+    <link rel="manifest" href="/cote-v1/manifest.json" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="container dashboard-container" aria-labelledby="admin-title">
+      <section class="dashboard-header">
+        <div>
+          <h1 id="admin-title">Teacher Admin: Manage Student Points</h1>
+          <p class="subtitle">Signed in as <strong id="admin-email">Loading...</strong></p>
+        </div>
+        <button id="logout-button" type="button" class="logout-button">Logout</button>
+      </section>
+
+      <section class="dashboard-card" aria-labelledby="lookup-title">
+        <h2 id="lookup-title">Find Student</h2>
+        <div class="admin-actions">
+          <div class="field admin-search-field">
+            <label for="student-search">Student Email or LRN</label>
+            <input
+              id="student-search"
+              type="text"
+              placeholder="Enter student email or LRN"
+              autocomplete="off"
+            />
+          </div>
+          <button id="load-student-button" type="button">Load Student</button>
+        </div>
+        <p id="admin-message" class="form-message" role="status" aria-live="polite"></p>
+      </section>
+
+      <section class="dashboard-card" aria-labelledby="student-title">
+        <h2 id="student-title">Student Details</h2>
+        <div id="student-details" class="admin-student-details" aria-live="polite">
+          <p><strong>Name:</strong> Not loaded</p>
+          <p><strong>Email:</strong> Not loaded</p>
+          <p><strong>LRN:</strong> Not loaded</p>
+          <p><strong>Current Points:</strong> 0</p>
+        </div>
+
+        <div class="admin-actions">
+          <div class="field admin-points-field">
+            <label for="points-value">Points to Add/Deduct</label>
+            <input id="points-value" type="number" min="1" step="1" placeholder="Enter point value" />
+          </div>
+          <button id="add-points-button" type="button" disabled>Add Points</button>
+          <button id="deduct-points-button" type="button" class="danger-button" disabled>Deduct Points</button>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="admin.js"></script>
+  </body>
+</html>
