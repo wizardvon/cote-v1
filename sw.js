@@ -1,13 +1,18 @@
-const CACHE_NAME = "cote-web-app-v3";
+const CACHE_NAME = "cote-web-app-v4";
 
 const APP_SHELL = [
   "/cote-v1/",
   "/cote-v1/index.html",
   "/cote-v1/login.html",
+  "/cote-v1/teacher-login.html",
   "/cote-v1/dashboard.html",
+  "/cote-v1/admin.html",
   "/cote-v1/style.css",
+  "/cote-v1/login.js",
+  "/cote-v1/teacher-login.js",
   "/cote-v1/script.js",
   "/cote-v1/dashboard.js",
+  "/cote-v1/admin.js",
   "/cote-v1/firebase.js",
   "/cote-v1/manifest.json",
   "/cote-v1/icons/icon-192.png",
