@@ -240,15 +240,15 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     const userData = userSnap.data();
-    const role = String(userData.role || '').trim().toLowerCase();
+    const role = String(userData.role || '').trim();
 
     if (role !== 'teacher') {
       window.location.replace('dashboard.html');
       return;
     }
 
-    adminEmailElement.textContent = user.email || userData.email || 'No email available';
-    setMessage('Admin access granted. Load a student to manage points.', 'success');
+    adminEmailElement.textContent = userData.email || user.email || 'No email available';
+    setMessage('Teacher access granted. Load a student to manage points.', 'success');
   } catch (error) {
     console.error('Failed to validate teacher role:', error);
     window.location.replace('dashboard.html');

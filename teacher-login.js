@@ -28,7 +28,7 @@ teacherLoginForm?.addEventListener('submit', async (event) => {
 
     showFormMessage('Login successful. Redirecting to admin page...', 'success');
     teacherLoginForm.reset();
-    window.location.href = 'admin.html';
+    window.location.replace('admin.html');
   } catch (error) {
     console.error('Teacher login failed:', error);
 
