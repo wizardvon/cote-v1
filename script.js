@@ -4,11 +4,40 @@ import { auth, db } from './firebase.js';
 
 const registrationForm = document.getElementById('registration-form');
 const formMessage = document.getElementById('form-message');
+const gradeLevelSelect = document.getElementById('grade-level');
+const sectionSelect = document.getElementById('section');
+
+const sectionsByGrade = {
+  'Grade 11': [
+    'ABM 11 - Aboitiz',
+    'HUMSS 11 - Aristotle',
+    'HUMSS 11 - Confucius',
+    'HUMSS 11 - Democritus',
+    'HUMSS 11 - Freud',
+    'HUMSS 11 - Plato',
+    'STEM 11 - Newton',
+    'TVL HE 11 - Stewart',
+    'TVLE ICT 11 - Bill Gates',
+  ],
+  'Grade 12': [
+    'ABM 12 - Gokongwei',
+    'HUMSS 12 - Aquinas',
+    'HUMSS 12 - Archimedes',
+    'HUMSS 12 - Dewey',
+    'HUMSS 12 - Pythagoras',
+    'HUMSS 12 - Socrates',
+    'STEM 12 - Galileo',
+    'TVL HE 12 - Hilton',
+    'TVLE ICT 12 - Lovelace',
+  ],
+};
 
 const requiredFields = [
   'firstName',
   'lastName',
   'sex',
+  'gradeLevel',
+  'section',
   'birthday',
   'lrn',
   'phoneNumber',
@@ -16,6 +45,15 @@ const requiredFields = [
   'email',
   'password',
 ];
+
+if (gradeLevelSelect && sectionSelect) {
+  resetSectionSelect();
+
+  gradeLevelSelect.addEventListener('change', () => {
+    const selectedGrade = gradeLevelSelect.value;
+    populateSectionOptions(selectedGrade);
+  });
+}
 
 registrationForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -59,6 +97,8 @@ registrationForm?.addEventListener('submit', async (event) => {
       middleName: payload.middleName ? payload.middleName.trim() : '',
       lastName: payload.lastName.trim(),
       sex: payload.sex,
+      gradeLevel: payload.gradeLevel,
+      section: payload.section,
       birthday: payload.birthday,
       lrn: payload.lrn.trim(),
       phoneNumber: payload.phoneNumber.trim(),
@@ -80,6 +120,7 @@ registrationForm?.addEventListener('submit', async (event) => {
 
     showFormMessage('Student registration submitted successfully.', 'success');
     registrationForm.reset();
+    resetSectionSelect();
     console.log('Student registration submitted:', { uid, ...payload, email });
   } catch (error) {
     console.error('Registration failed:', error);
@@ -104,6 +145,32 @@ registrationForm?.addEventListener('submit', async (event) => {
     }
   }
 });
+
+function resetSectionSelect() {
+  if (!sectionSelect) {
+    return;
+  }
+
+  sectionSelect.innerHTML = '<option value="" selected disabled>Select section</option>';
+  sectionSelect.disabled = true;
+}
+
+function populateSectionOptions(gradeLevel) {
+  if (!sectionSelect) {
+    return;
+  }
+
+  resetSectionSelect();
+
+  const sections = sectionsByGrade[gradeLevel] ?? [];
+  if (sections.length === 0) {
+    return;
+  }
+
+  const options = sections.map((section) => `<option value="${section}">${section}</option>`).join('');
+  sectionSelect.insertAdjacentHTML('beforeend', options);
+  sectionSelect.disabled = false;
+}
 
 function showFormMessage(message, type) {
   if (!formMessage) {
