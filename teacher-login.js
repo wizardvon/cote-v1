@@ -24,9 +24,9 @@ teacherLoginForm?.addEventListener('submit', async (event) => {
   }
 
   try {
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    await signInWithEmailAndPassword(auth, email, password);
 
-    showFormMessage(`Login successful. Welcome, ${userCredential.user.email}.`, 'success');
+    showFormMessage('Login successful. Redirecting to admin page...', 'success');
     teacherLoginForm.reset();
     window.location.href = 'admin.html';
   } catch (error) {
