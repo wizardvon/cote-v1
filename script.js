@@ -64,6 +64,7 @@ registrationForm?.addEventListener('submit', async (event) => {
       phoneNumber: payload.phoneNumber.trim(),
       address: payload.address.trim(),
       email,
+      points: 0,
       role: 'student',
       status: 'pending',
       createdAt: serverTimestamp(),
