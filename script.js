@@ -4,8 +4,6 @@ import { auth, db } from './firebase.js';
 
 const registrationForm = document.getElementById('registration-form');
 const formMessage = document.getElementById('form-message');
-const gradeLevelSelect = document.getElementById('grade-level');
-const sectionSelect = document.getElementById('section');
 
 const requiredFields = [
   'firstName',
