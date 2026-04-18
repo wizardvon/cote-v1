@@ -240,7 +240,7 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     const userData = userSnap.data();
-    const role = String(userData.role || '').trim();
+    const role = String(userData.role || '').trim().toLowerCase();
 
     if (role !== 'teacher') {
       window.location.replace('dashboard.html');
