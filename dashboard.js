@@ -6,11 +6,13 @@ import {
   onAuthStateChanged,
   signOut,
   doc,
-  getDoc
+  getDoc,
+  updateDoc
 } from "./firebase.js";
 
 const emailElement = document.getElementById("student-email");
 const profileDataElement = document.getElementById("profileData");
+const pointsTotalElement = document.getElementById("points-total");
 const logoutButton = document.getElementById("logout-button");
 
 function safe(value) {
@@ -38,6 +40,10 @@ function renderProfile(data, fallbackEmail) {
   `;
 }
 
+function normalizePoints(points) {
+  return typeof points === "number" && Number.isFinite(points) ? points : 0;
+}
+
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
     window.location.replace("index.html");
@@ -60,15 +66,32 @@ onAuthStateChanged(auth, async (user) => {
         <p><strong>Phone Number:</strong> Not provided</p>
         <p><strong>Address:</strong> Not provided</p>
       `;
+      if (pointsTotalElement) {
+        pointsTotalElement.textContent = "Total Points: 0";
+      }
       return;
     }
 
-    renderProfile(studentSnap.data(), user.email);
+    const studentData = studentSnap.data();
+    const points = normalizePoints(studentData.points);
+
+    if (pointsTotalElement) {
+      pointsTotalElement.textContent = `Total Points: ${points}`;
+    }
+
+    if (studentData.points === undefined) {
+      await updateDoc(studentRef, { points: 0 });
+    }
+
+    renderProfile(studentData, user.email);
   } catch (error) {
     console.error("Failed to load profile:", error);
     profileDataElement.innerHTML = `
       <p><strong>Error:</strong> Failed to load profile data.</p>
     `;
+    if (pointsTotalElement) {
+      pointsTotalElement.textContent = "Total Points: 0";
+    }
   }
 });
 
