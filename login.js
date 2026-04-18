@@ -29,7 +29,7 @@ loginForm?.addEventListener('submit', async (event) => {
     showFormMessage(`Login successful. Welcome back, ${userCredential.user.email}.`, 'success');
     loginForm.reset();
     console.log('Login successful:', userCredential.user.uid);
-    window.location.href = 'dashboard.html';
+    window.location.href = "dashboard.html?v=3";
   } catch (error) {
     console.error('Login failed:', error);
 
