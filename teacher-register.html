@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>COTE Web App | Teacher Registration</title>
+    <meta name="theme-color" content="#2563eb" />
+    <link rel="manifest" href="/cote-v1/manifest.json" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="container" aria-labelledby="teacher-registration-title">
+      <h1 id="teacher-registration-title">Teacher Registration</h1>
+      <p class="subtitle">Please complete all required details before submitting.</p>
+
+      <form id="teacher-registration-form" novalidate>
+        <div class="form-grid">
+          <div class="field">
+            <label for="teacher-first-name">First Name <span aria-hidden="true">*</span></label>
+            <input id="teacher-first-name" name="firstName" type="text" autocomplete="given-name" required />
+          </div>
+
+          <div class="field">
+            <label for="teacher-middle-name">Middle Name</label>
+            <input id="teacher-middle-name" name="middleName" type="text" autocomplete="additional-name" />
+          </div>
+
+          <div class="field">
+            <label for="teacher-last-name">Last Name <span aria-hidden="true">*</span></label>
+            <input id="teacher-last-name" name="lastName" type="text" autocomplete="family-name" required />
+          </div>
+
+          <div class="field">
+            <label for="teacher-sex">Sex <span aria-hidden="true">*</span></label>
+            <select id="teacher-sex" name="sex" required>
+              <option value="" selected disabled>Select sex</option>
+              <option value="Female">Female</option>
+              <option value="Male">Male</option>
+              <option value="Other">Other</option>
+              <option value="Prefer not to say">Prefer not to say</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="teacher-birthday">Birthday <span aria-hidden="true">*</span></label>
+            <input id="teacher-birthday" name="birthday" type="date" required />
+          </div>
+
+          <div class="field">
+            <label for="employee-number">Employee Number <span aria-hidden="true">*</span></label>
+            <input id="employee-number" name="employeeNumber" type="text" required />
+          </div>
+
+          <div class="field">
+            <label for="teacher-phone-number">Phone Number <span aria-hidden="true">*</span></label>
+            <input
+              id="teacher-phone-number"
+              name="phoneNumber"
+              type="tel"
+              inputmode="tel"
+              placeholder="e.g. 09171234567"
+              required
+            />
+          </div>
+
+          <div class="field field-full">
+            <label for="teacher-address">Address <span aria-hidden="true">*</span></label>
+            <input id="teacher-address" name="address" type="text" autocomplete="street-address" required />
+          </div>
+
+          <div class="field">
+            <label for="teacher-email">Email <span aria-hidden="true">*</span></label>
+            <input id="teacher-email" name="email" type="email" autocomplete="email" required />
+          </div>
+
+          <div class="field">
+            <label for="teacher-password">Password <span aria-hidden="true">*</span></label>
+            <input id="teacher-password" name="password" type="password" minlength="6" required />
+          </div>
+        </div>
+
+        <p id="teacher-form-message" class="form-message" role="status" aria-live="polite"></p>
+        <button type="submit">Submit</button>
+      </form>
+
+      <p class="auth-switch">
+        Already have a teacher account?
+        <a href="teacher-login.html">Login here</a>
+      </p>
+    </main>
+
+    <script type="module" src="teacher-register.js"></script>
+  </body>
+</html>
