@@ -38,7 +38,7 @@ function renderProfile(data, fallbackEmail) {
 
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
-    window.location.href = "index.html";
+    window.location.replace("index.html");
     return;
   }
 
@@ -61,8 +61,7 @@ onAuthStateChanged(auth, async (user) => {
       return;
     }
 
-    const studentData = studentSnap.data();
-    renderProfile(studentData, user.email);
+    renderProfile(studentSnap.data(), user.email);
   } catch (error) {
     console.error("Failed to load profile:", error);
     profileDataElement.innerHTML = `
@@ -71,10 +70,10 @@ onAuthStateChanged(auth, async (user) => {
   }
 });
 
-logoutButton.addEventListener("click", async () => {
+logoutButton?.addEventListener("click", async () => {
   try {
     await signOut(auth);
-    window.location.href = "index.html";
+    window.location.replace("index.html");
   } catch (error) {
     console.error("Logout failed:", error);
   }
