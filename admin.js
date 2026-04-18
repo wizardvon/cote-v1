@@ -13,7 +13,6 @@ import {
   where
 } from './firebase.js';
 
-const ALLOWED_ADMIN_EMAIL = 'teacher.admin@cote-v1.com';
 
 const adminEmailElement = document.getElementById('admin-email');
 const logoutButton = document.getElementById('logout-button');
@@ -225,21 +224,35 @@ logoutButton?.addEventListener('click', async () => {
   }
 });
 
-onAuthStateChanged(auth, (user) => {
+onAuthStateChanged(auth, async (user) => {
   if (!user) {
     window.location.replace('index.html');
     return;
   }
 
-  const currentEmail = (user.email || '').trim().toLowerCase();
+  try {
+    const userRef = doc(db, 'users', user.uid);
+    const userSnap = await getDoc(userRef);
 
-  if (currentEmail !== ALLOWED_ADMIN_EMAIL.toLowerCase()) {
+    if (!userSnap.exists()) {
+      window.location.replace('dashboard.html');
+      return;
+    }
+
+    const userData = userSnap.data();
+    const role = String(userData.role || '').trim().toLowerCase();
+
+    if (role !== 'teacher') {
+      window.location.replace('dashboard.html');
+      return;
+    }
+
+    adminEmailElement.textContent = user.email || userData.email || 'No email available';
+    setMessage('Admin access granted. Load a student to manage points.', 'success');
+  } catch (error) {
+    console.error('Failed to validate teacher role:', error);
     window.location.replace('dashboard.html');
-    return;
   }
-
-  adminEmailElement.textContent = user.email || 'No email available';
-  setMessage('Admin access granted. Load a student to manage points.', 'success');
 });
 
 if ('serviceWorker' in navigator) {
