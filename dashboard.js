@@ -1,4 +1,4 @@
-alert("dashboard.js is running");
+
 
 import {
   auth,
