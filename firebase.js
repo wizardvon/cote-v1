@@ -1,6 +1,16 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
-import { getFirestore, collection, doc, getDoc, getDocs, limit, query, updateDoc, where } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  updateDoc,
+  collection,
+  getDocs,
+  limit,
+  query,
+  where
+} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyA_y-kzUWTt04vuyKSqR9b5_L8c_VvbCIs',
@@ -15,19 +25,18 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// Shared Firebase instances and helpers used by login, registration, and dashboard pages.
 export {
+  app,
   auth,
   db,
   onAuthStateChanged,
   signOut,
-  collection,
   doc,
   getDoc,
+  updateDoc,
+  collection,
   getDocs,
   limit,
   query,
-  updateDoc,
-  where,
-  app
+  where
 };
