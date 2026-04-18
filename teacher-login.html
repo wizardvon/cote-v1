@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>COTE Web App | Teacher Login</title>
+    <meta name="theme-color" content="#2563eb" />
+    <link rel="manifest" href="/cote-v1/manifest.json" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="container auth-container" aria-labelledby="teacher-form-title">
+      <h1 id="teacher-form-title">Teacher Login</h1>
+      <p class="subtitle">Sign in with your teacher account to access the admin panel.</p>
+
+      <form id="teacher-login-form" class="auth-form" novalidate>
+        <div class="form-grid auth-grid">
+          <div class="field field-full">
+            <label for="teacher-email">Email <span aria-hidden="true">*</span></label>
+            <input id="teacher-email" name="email" type="email" autocomplete="email" required />
+          </div>
+
+          <div class="field field-full">
+            <label for="teacher-password">Password <span aria-hidden="true">*</span></label>
+            <input
+              id="teacher-password"
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              required
+            />
+          </div>
+        </div>
+
+        <p id="teacher-form-message" class="form-message" role="status" aria-live="polite"></p>
+        <button type="submit">Login</button>
+      </form>
+
+      <p class="auth-switch teacher-auth-switch">
+        Student?
+        <a href="index.html">Login here</a>
+      </p>
+    </main>
+
+    <script type="module" src="teacher-login.js"></script>
+  </body>
+</html>
