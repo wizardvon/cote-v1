@@ -7,40 +7,31 @@ import {
   getDoc,
   updateDoc,
   collection,
-  getDocs,
-  limit,
-  query,
-  where
+  getDocs
 } from './firebase.js';
-
 
 const adminEmailElement = document.getElementById('admin-email');
 const logoutButton = document.getElementById('logout-button');
+const sectionFilterElement = document.getElementById('section-filter');
 const searchInput = document.getElementById('student-search');
-const loadStudentButton = document.getElementById('load-student-button');
+const selectAllCheckbox = document.getElementById('select-all');
+const tableBody = document.getElementById('students-table-body');
 const pointsValueInput = document.getElementById('points-value');
 const addPointsButton = document.getElementById('add-points-button');
 const deductPointsButton = document.getElementById('deduct-points-button');
 const messageElement = document.getElementById('admin-message');
-const studentDetailsElement = document.getElementById('student-details');
 
-let loadedStudent = null;
-
-function safeText(value, fallback = 'Not provided') {
-  if (value === undefined || value === null) return fallback;
-  const text = String(value).trim();
-  return text || fallback;
-}
-
-function formatName(data) {
-  return [data.firstName, data.middleName, data.lastName]
-    .map((part) => (part || '').trim())
-    .filter(Boolean)
-    .join(' ') || 'Not provided';
-}
+let allStudents = [];
+let visibleStudents = [];
 
 function normalizePoints(points) {
   return typeof points === 'number' && Number.isFinite(points) ? points : 0;
+}
+
+function safeText(value, fallback = '—') {
+  if (value === undefined || value === null) return fallback;
+  const text = String(value).trim();
+  return text || fallback;
 }
 
 function setMessage(message, type = '') {
@@ -52,167 +43,281 @@ function setMessage(message, type = '') {
   }
 }
 
-function renderStudentDetails(student) {
-  if (!student) {
-    studentDetailsElement.innerHTML = `
-      <p><strong>Name:</strong> Not loaded</p>
-      <p><strong>Email:</strong> Not loaded</p>
-      <p><strong>LRN:</strong> Not loaded</p>
-      <p><strong>Current Points:</strong> 0</p>
-    `;
+function compareStudents(a, b) {
+  const sectionCompare = safeText(a.section, '').localeCompare(safeText(b.section, ''), undefined, {
+    sensitivity: 'base'
+  });
+
+  if (sectionCompare !== 0) {
+    return sectionCompare;
+  }
+
+  const lastNameCompare = safeText(a.lastName, '').localeCompare(safeText(b.lastName, ''), undefined, {
+    sensitivity: 'base'
+  });
+
+  if (lastNameCompare !== 0) {
+    return lastNameCompare;
+  }
+
+  return safeText(a.firstName, '').localeCompare(safeText(b.firstName, ''), undefined, {
+    sensitivity: 'base'
+  });
+}
+
+function getSelectedStudentIds() {
+  return Array.from(tableBody.querySelectorAll('input[data-student-id]:checked')).map(
+    (input) => input.dataset.studentId
+  );
+}
+
+function updateSelectAllState() {
+  const checkboxes = Array.from(tableBody.querySelectorAll('input[data-student-id]'));
+
+  if (checkboxes.length === 0) {
+    selectAllCheckbox.checked = false;
+    selectAllCheckbox.indeterminate = false;
     return;
   }
 
-  studentDetailsElement.innerHTML = `
-    <p><strong>Name:</strong> ${safeText(formatName(student.data))}</p>
-    <p><strong>Email:</strong> ${safeText(student.data.email)}</p>
-    <p><strong>LRN:</strong> ${safeText(student.data.lrn)}</p>
-    <p><strong>Current Points:</strong> ${normalizePoints(student.data.points)}</p>
-  `;
+  const checkedCount = checkboxes.filter((checkbox) => checkbox.checked).length;
+  selectAllCheckbox.checked = checkedCount > 0 && checkedCount === checkboxes.length;
+  selectAllCheckbox.indeterminate = checkedCount > 0 && checkedCount < checkboxes.length;
 }
 
-function setPointActionEnabled(enabled) {
-  addPointsButton.disabled = !enabled;
-  deductPointsButton.disabled = !enabled;
-}
-
-async function findStudentByInput(rawValue) {
-  const value = String(rawValue || '').trim();
-
-  if (!value) {
-    return null;
+function renderTableRows() {
+  if (visibleStudents.length === 0) {
+    tableBody.innerHTML = `
+      <tr>
+        <td colspan="7" class="empty-cell">No students match your filter/search.</td>
+      </tr>
+    `;
+    updateSelectAllState();
+    return;
   }
 
-  const studentsRef = collection(db, 'students');
+  tableBody.innerHTML = visibleStudents
+    .map((student) => {
+      return `
+        <tr>
+          <td>
+            <label class="sr-only" for="student-${student.id}">Select ${safeText(student.lastName)} ${safeText(
+              student.firstName
+            )}</label>
+            <input id="student-${student.id}" type="checkbox" data-student-id="${student.id}" />
+          </td>
+          <td>${safeText(student.lastName)}</td>
+          <td>${safeText(student.firstName)}</td>
+          <td>${safeText(student.middleName)}</td>
+          <td>${safeText(student.lrn)}</td>
+          <td>${safeText(student.section)}</td>
+          <td>${normalizePoints(student.points)}</td>
+        </tr>
+      `;
+    })
+    .join('');
 
-  if (value.includes('@')) {
-    const byEmailQuery = query(studentsRef, where('email', '==', value.toLowerCase()), limit(1));
-    const byEmailSnap = await getDocs(byEmailQuery);
+  updateSelectAllState();
+}
 
-    if (!byEmailSnap.empty) {
-      const foundDoc = byEmailSnap.docs[0];
-      return { id: foundDoc.id, data: foundDoc.data() };
+function getFilteredStudents() {
+  const selectedSection = sectionFilterElement.value;
+  const keyword = searchInput.value.trim().toLowerCase();
+
+  return allStudents.filter((student) => {
+    const matchesSection = selectedSection === 'all' || safeText(student.section, '') === selectedSection;
+
+    if (!matchesSection) {
+      return false;
     }
 
-    return null;
-  }
+    if (!keyword) {
+      return true;
+    }
 
-  const byLrnQuery = query(studentsRef, where('lrn', '==', value), limit(1));
-  const byLrnSnap = await getDocs(byLrnQuery);
+    const fullName = `${safeText(student.lastName, '')} ${safeText(student.firstName, '')} ${safeText(
+      student.middleName,
+      ''
+    )}`.toLowerCase();
+    const lrn = safeText(student.lrn, '').toLowerCase();
 
-  if (byLrnSnap.empty) {
-    return null;
-  }
-
-  const foundDoc = byLrnSnap.docs[0];
-  return { id: foundDoc.id, data: foundDoc.data() };
+    return fullName.includes(keyword) || lrn.includes(keyword);
+  });
 }
 
-async function loadStudent() {
-  const value = searchInput.value;
+function applyFiltersAndRender() {
+  visibleStudents = getFilteredStudents();
+  renderTableRows();
+}
 
-  if (!value.trim()) {
-    setMessage('Please enter a student email or LRN first.', 'error');
-    return;
-  }
+function populateSectionFilter(students) {
+  const sections = [...new Set(students.map((student) => safeText(student.section, '')).filter(Boolean))].sort(
+    (a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })
+  );
 
-  loadStudentButton.disabled = true;
-  loadStudentButton.textContent = 'Loading...';
+  sectionFilterElement.innerHTML = '<option value="all">All Sections</option>';
+
+  sections.forEach((section) => {
+    const option = document.createElement('option');
+    option.value = section;
+    option.textContent = section;
+    sectionFilterElement.append(option);
+  });
+}
+
+async function loadStudents() {
+  tableBody.innerHTML = `
+    <tr>
+      <td colspan="7" class="empty-cell">Loading students...</td>
+    </tr>
+  `;
 
   try {
-    const student = await findStudentByInput(value);
+    const studentsSnapshot = await getDocs(collection(db, 'students'));
 
-    if (!student) {
-      loadedStudent = null;
-      renderStudentDetails(null);
-      setPointActionEnabled(false);
-      setMessage('No matching student found.', 'error');
-      return;
-    }
+    allStudents = studentsSnapshot.docs
+      .map((studentDoc) => {
+        const data = studentDoc.data();
+        return {
+          id: studentDoc.id,
+          ...data,
+          points: normalizePoints(data.points)
+        };
+      })
+      .sort(compareStudents);
 
-    loadedStudent = {
-      id: student.id,
-      data: {
-        ...student.data,
-        points: normalizePoints(student.data.points)
-      }
-    };
-
-    if (student.data.points === undefined) {
-      await updateDoc(doc(db, 'students', student.id), { points: 0 });
-    }
-
-    renderStudentDetails(loadedStudent);
-    setPointActionEnabled(true);
-    setMessage('Student loaded successfully.', 'success');
+    populateSectionFilter(allStudents);
+    applyFiltersAndRender();
+    setMessage(`Loaded ${allStudents.length} students. Select rows to update points.`, 'success');
   } catch (error) {
-    console.error('Error while loading student:', error);
-    setMessage('Failed to load student. Please try again.', 'error');
-  } finally {
-    loadStudentButton.disabled = false;
-    loadStudentButton.textContent = 'Load Student';
+    console.error('Failed to load students:', error);
+    allStudents = [];
+    visibleStudents = [];
+    renderTableRows();
+    setMessage('Failed to load students. Please refresh and try again.', 'error');
   }
 }
 
-async function updatePoints(action) {
-  if (!loadedStudent) {
-    setMessage('Load a student before updating points.', 'error');
+function parsePointValue() {
+  const pointValue = Number(pointsValueInput.value);
+
+  if (!Number.isFinite(pointValue) || pointValue <= 0 || !Number.isInteger(pointValue)) {
+    return null;
+  }
+
+  return pointValue;
+}
+
+async function updatePointsForSelected(action) {
+  const selectedIds = getSelectedStudentIds();
+
+  if (selectedIds.length === 0) {
+    setMessage('Please select at least one student.', 'error');
     return;
   }
 
-  const pointValue = Number(pointsValueInput.value);
+  const pointValue = parsePointValue();
 
-  if (!Number.isFinite(pointValue) || pointValue <= 0) {
-    setMessage('Enter a valid positive points value.', 'error');
+  if (pointValue === null) {
+    setMessage('Please enter a valid positive whole number for points.', 'error');
     return;
   }
 
   const delta = action === 'add' ? pointValue : -pointValue;
-  const studentRef = doc(db, 'students', loadedStudent.id);
-  const updatedPoints = normalizePoints(loadedStudent.data.points) + delta;
+  const buttonLabel = action === 'add' ? 'Adding merit...' : 'Adding demerit...';
 
   addPointsButton.disabled = true;
   deductPointsButton.disabled = true;
+  addPointsButton.textContent = action === 'add' ? buttonLabel : 'Add Merit Points';
+  deductPointsButton.textContent = action === 'subtract' ? buttonLabel : 'Add Demerit Points';
 
   try {
-    await updateDoc(studentRef, { points: updatedPoints });
+    const updates = selectedIds.map(async (studentId) => {
+      const studentRef = doc(db, 'students', studentId);
+      const current = allStudents.find((student) => student.id === studentId);
+      const currentPoints = normalizePoints(current?.points);
 
-    const refreshedSnap = await getDoc(studentRef);
+      await updateDoc(studentRef, { points: currentPoints + delta });
 
-    if (!refreshedSnap.exists()) {
-      setMessage('Student no longer exists.', 'error');
-      loadedStudent = null;
-      renderStudentDetails(null);
-      return;
-    }
+      return { studentId, points: currentPoints + delta };
+    });
 
-    loadedStudent = {
-      id: refreshedSnap.id,
-      data: {
-        ...refreshedSnap.data(),
-        points: normalizePoints(refreshedSnap.data().points)
+    const results = await Promise.all(updates);
+
+    const updatedMap = new Map(results.map((result) => [result.studentId, result.points]));
+    allStudents = allStudents.map((student) => {
+      if (!updatedMap.has(student.id)) {
+        return student;
       }
-    };
 
-    renderStudentDetails(loadedStudent);
+      return {
+        ...student,
+        points: normalizePoints(updatedMap.get(student.id))
+      };
+    });
+
+    applyFiltersAndRender();
     pointsValueInput.value = '';
-    setMessage('Points updated successfully.', 'success');
+    selectAllCheckbox.checked = false;
+    selectAllCheckbox.indeterminate = false;
+
+    const actionLabel = action === 'add' ? 'Merit points added' : 'Demerit points added';
+    setMessage(`${actionLabel} for ${results.length} student(s).`, 'success');
   } catch (error) {
-    console.error('Failed to update points:', error);
-    setMessage('Could not update points. Please try again.', 'error');
+    console.error('Failed to update selected students:', error);
+    setMessage('Could not update points for selected students. Please try again.', 'error');
   } finally {
-    setPointActionEnabled(Boolean(loadedStudent));
+    addPointsButton.disabled = false;
+    deductPointsButton.disabled = false;
+    addPointsButton.textContent = 'Add Merit Points';
+    deductPointsButton.textContent = 'Add Demerit Points';
   }
 }
 
-loadStudentButton?.addEventListener('click', loadStudent);
+sectionFilterElement?.addEventListener('change', () => {
+  applyFiltersAndRender();
+});
+
+searchInput?.addEventListener('input', () => {
+  applyFiltersAndRender();
+});
+
+selectAllCheckbox?.addEventListener('change', () => {
+  const checkboxes = tableBody.querySelectorAll('input[data-student-id]');
+
+  checkboxes.forEach((checkbox) => {
+    checkbox.checked = selectAllCheckbox.checked;
+  });
+
+  updateSelectAllState();
+});
+
+tableBody?.addEventListener('change', (event) => {
+  const target = event.target;
+
+  if (!(target instanceof HTMLInputElement)) {
+    return;
+  }
+
+  if (target.matches('input[data-student-id]')) {
+    updateSelectAllState();
+  }
+});
+
+pointsValueInput?.addEventListener('input', () => {
+  const value = Number(pointsValueInput.value);
+
+  if (Number.isFinite(value) && value < 0) {
+    pointsValueInput.value = '';
+  }
+});
 
 addPointsButton?.addEventListener('click', () => {
-  updatePoints('add');
+  updatePointsForSelected('add');
 });
 
 deductPointsButton?.addEventListener('click', () => {
-  updatePoints('deduct');
+  updatePointsForSelected('subtract');
 });
 
 logoutButton?.addEventListener('click', async () => {
@@ -248,7 +353,8 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     adminEmailElement.textContent = userData.email || user.email || 'No email available';
-    setMessage('Teacher access granted. Load a student to manage points.', 'success');
+    setMessage('Teacher access granted. Loading students...', 'success');
+    await loadStudents();
   } catch (error) {
     console.error('Failed to validate teacher role:', error);
     window.location.replace('dashboard.html');

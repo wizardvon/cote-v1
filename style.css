@@ -271,3 +271,90 @@ button:active {
     grid-template-columns: 1fr;
   }
 }
+
+.admin-toolbar {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.9rem;
+}
+
+.admin-table-wrap {
+  margin-top: 1rem;
+  overflow-x: auto;
+  border: 1px solid #dbe3f0;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.admin-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+}
+
+.admin-table th,
+.admin-table td {
+  padding: 0.65rem 0.7rem;
+  border-bottom: 1px solid #e5e7eb;
+  text-align: left;
+  font-size: 0.9rem;
+}
+
+.admin-table th {
+  background: #eff6ff;
+  color: #1e3a8a;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.admin-table tbody tr:nth-child(even) {
+  background: #f8fafc;
+}
+
+.admin-table tbody tr:hover {
+  background: #eef2ff;
+}
+
+.admin-table .checkbox-column {
+  width: 120px;
+}
+
+.checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 600;
+}
+
+.checkbox-label input {
+  width: auto;
+  margin: 0;
+}
+
+.empty-cell {
+  text-align: center !important;
+  color: #6b7280;
+}
+
+.admin-bulk-actions {
+  margin-top: 1rem;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 720px) {
+  .admin-toolbar {
+    grid-template-columns: 1fr;
+  }
+}
