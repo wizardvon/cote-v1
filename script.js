@@ -47,12 +47,17 @@ const requiredFields = [
 ];
 
 if (gradeLevelSelect && sectionSelect) {
-  resetSectionSelect();
-
   gradeLevelSelect.addEventListener('change', () => {
     const selectedGrade = gradeLevelSelect.value;
     populateSectionOptions(selectedGrade);
   });
+
+  const initialGrade = gradeLevelSelect.value;
+  if (initialGrade) {
+    populateSectionOptions(initialGrade);
+  } else {
+    resetSectionSelect();
+  }
 }
 
 registrationForm?.addEventListener('submit', async (event) => {
