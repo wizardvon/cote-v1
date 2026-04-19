@@ -146,9 +146,13 @@ function getFilteredStudents() {
   });
 }
 
-function applyFiltersAndRender() {
+function applyFiltersAndRender(showStatusMessage = true) {
   visibleStudents = getFilteredStudents();
   renderTableRows();
+
+  if (!showStatusMessage) {
+    return;
+  }
 
   if (visibleStudents.length === 0) {
     setMessage('No matching students found.', 'error');
@@ -173,7 +177,7 @@ function populateSectionFilter(students) {
   });
 }
 
-async function loadStudents() {
+async function loadStudents({ showStatusMessage = true } = {}) {
   if (loadStudentsButton) {
     loadStudentsButton.disabled = true;
     loadStudentsButton.textContent = 'Loading...';
@@ -210,13 +214,15 @@ async function loadStudents() {
         : 'all';
     }
 
-    applyFiltersAndRender();
+    applyFiltersAndRender(showStatusMessage);
+    return true;
   } catch (error) {
     console.error('Failed to load students:', error);
     allStudents = [];
     visibleStudents = [];
     renderTableRows();
     setMessage('Failed to load students. Please refresh and try again.', 'error');
+    return false;
   } finally {
     if (loadStudentsButton) {
       loadStudentsButton.disabled = false;
@@ -283,7 +289,12 @@ async function updatePointsForSelected(action) {
       };
     });
 
-    applyFiltersAndRender();
+    const reloadSucceeded = await loadStudents({ showStatusMessage: false });
+
+    if (!reloadSucceeded) {
+      return;
+    }
+
     pointsValueInput.value = '';
     selectAllCheckbox.checked = false;
     selectAllCheckbox.indeterminate = false;
