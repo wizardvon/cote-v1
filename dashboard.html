@@ -62,31 +62,47 @@
     <main class="student-app" aria-labelledby="page-title">
       <section id="page-home" class="page active" data-page="home" aria-label="Home">
         <article class="app-card welcome-card">
-          <p class="badge">Welcome</p>
-          <h2>Student Dashboard</h2>
-          <p>Check school-wide announcements, featured activities, and reminders for all students.</p>
+          <p class="badge">System Overview</p>
+          <h2>Student Command Dashboard</h2>
+          <p>
+            Monitor announcements, track academic standing, review system notices,
+            and prepare for missions and special evaluations.
+          </p>
         </article>
 
         <article class="app-card">
-          <h3>Announcements</h3>
+          <h3>Current Standing</h3>
+          <div class="info-grid">
+            <p><strong>Student:</strong> <span id="home-student-name">Loading...</span></p>
+            <p><strong>Section:</strong> <span id="home-student-section">Loading...</span></p>
+            <p><strong>Total Points:</strong> <span id="home-student-points">0</span></p>
+            <p><strong>Status:</strong> Active Student</p>
+          </div>
+        </article>
+
+        <article class="app-card">
+          <h3>System Announcements</h3>
           <ul class="list-stack">
-            <li>📌 Midterm review week starts on Monday.</li>
-            <li>📌 Deadline for club forms is Friday at 4:00 PM.</li>
-            <li>📌 Grade 10 intramurals registration is now open.</li>
+            <li>📌 Point updates and recognition notices will appear here.</li>
+            <li>📌 Academic advisories and exam schedules may be posted here.</li>
+            <li>📌 Section-based reminders can also be integrated later.</li>
           </ul>
         </article>
 
         <article class="app-card">
-          <h3>School Updates</h3>
-          <p>The guidance office will hold a short orientation this Thursday for scholarship applicants.</p>
+          <h3>Special Exam / Mission Briefing</h3>
+          <p>
+            Missions, time-limited tasks, and major challenge events will be issued
+            through the Quest page. Students may receive points, badges, or status-based rewards.
+          </p>
         </article>
 
         <article class="app-card">
-          <h3>Featured Events & Reminders</h3>
+          <h3>System Notes</h3>
           <ul class="list-stack">
-            <li>🎉 Foundation Day practice: Wednesday, 3:00 PM.</li>
-            <li>📝 Quarterly exam permit release starts next week.</li>
-            <li>📚 Library book return reminder for all sections.</li>
+            <li>🏅 Points reflect current recognized standing in the system.</li>
+            <li>📱 Mobile access may later be used for notices, transfers, and submissions.</li>
+            <li>🧭 Use the sidebar menu to navigate between profile, records, resources, and quest.</li>
           </ul>
         </article>
       </section>
@@ -104,6 +120,16 @@
         <article class="app-card points-highlight">
           <p>Total Points</p>
           <p id="points-total" class="points-number">0</p>
+        </article>
+
+        <article class="app-card">
+          <h3>Student Identity</h3>
+          <div class="info-grid">
+            <p><strong>Student Rank:</strong> Not yet assigned</p>
+            <p><strong>Status:</strong> Active</p>
+            <p><strong>Access Level:</strong> Student</p>
+            <p><strong>Badge Tier:</strong> Standard</p>
+          </div>
         </article>
 
         <article class="app-card" aria-labelledby="profile-heading">
@@ -125,71 +151,89 @@
 
       <section id="page-records" class="page" data-page="records" aria-label="Records">
         <article class="app-card">
-          <h3>Merit / Demerit Logs</h3>
-          <p>Your discipline and commendation history will appear here.</p>
+          <h3>Points History</h3>
+          <p>
+            Merit, demerit, and future point movement records will appear here for transparency and review.
+          </p>
         </article>
 
         <article class="app-card">
-          <h3>Quiz Scores</h3>
-          <p>Recent quizzes and subject-level scores will be listed here.</p>
+          <h3>Assessment Records</h3>
+          <p>
+            Quiz scores, performance tasks, activities, and examination summaries will be displayed here.
+          </p>
         </article>
 
         <article class="app-card">
-          <h3>Activity Scores</h3>
-          <p>Performance tasks and activity points will appear in this section.</p>
+          <h3>Achievements and Recognition</h3>
+          <p>
+            Awards, badges, and official recognitions earned inside the system will appear in this section.
+          </p>
         </article>
 
         <article class="app-card">
-          <h3>Exam Scores</h3>
-          <p>Major examination summaries and grading breakdowns will display here.</p>
-        </article>
-
-        <article class="app-card">
-          <h3>Badges / Awards History</h3>
-          <p>Your earned badges, medals, and recognitions will be recorded here.</p>
+          <h3>Behavior and Standing</h3>
+          <p>
+            Future attendance notes, conduct remarks, or adviser observations may also be included here.
+          </p>
         </article>
       </section>
 
       <section id="page-resources" class="page" data-page="resources" aria-label="Resources">
         <article class="app-card resource-card">
-          <h3>Student Handbook (PDF)</h3>
-          <p>Latest school policies, code of conduct, and student rights.</p>
+          <h3>Student Handbook</h3>
+          <p>Policies, rules, student expectations, and system guidelines.</p>
           <button type="button">Download</button>
         </article>
 
         <article class="app-card resource-card">
-          <h3>Quarterly Academic Calendar</h3>
-          <p>Important dates for assessments, events, and class schedules.</p>
+          <h3>Academic Calendar</h3>
+          <p>Official schedule of assessments, school events, and submission windows.</p>
           <button type="button">Download</button>
         </article>
 
         <article class="app-card resource-card">
-          <h3>Reviewer Pack - Science</h3>
-          <p>Compiled reviewer and practice worksheets for upcoming exams.</p>
+          <h3>Reviewer Pack</h3>
+          <p>Review materials and academic support files for current learning tasks.</p>
           <button type="button">Download</button>
+        </article>
+
+        <article class="app-card resource-card">
+          <h3>Mission Guides</h3>
+          <p>Future challenge instructions, quest guides, and scoring references may appear here.</p>
+          <button type="button">View</button>
         </article>
       </section>
 
       <section id="page-quest" class="page" data-page="quest" aria-label="Quest">
         <article class="app-card quest-card">
-          <h3>Daily Attendance Hero</h3>
-          <p>Attend all classes today and check in on time.</p>
+          <h3>Daily Attendance Mission</h3>
+          <p>Maintain complete and on-time attendance for the day.</p>
           <p><strong>Reward:</strong> +10 points</p>
-          <button type="button">Start Quest</button>
+          <button type="button">Start Mission</button>
         </article>
 
         <article class="app-card quest-card">
-          <h3>Reading Champion</h3>
-          <p>Finish one assigned reading and submit a short reflection.</p>
-          <p><strong>Reward:</strong> 1 Badge</p>
+          <h3>Academic Focus Mission</h3>
+          <p>Complete one required task before the deadline and maintain proper submission quality.</p>
+          <p><strong>Reward:</strong> +15 points</p>
           <button type="button">View Details</button>
         </article>
 
         <article class="app-card quest-card">
-          <h3>Clean Campus Mission</h3>
-          <p>Join the campus cleanup drive and upload your proof.</p>
-          <p><strong>Reward:</strong> +15 points</p>
-          <button type="button">Join Quest</button>
+          <h3>Campus Contribution Mission</h3>
+          <p>Participate in approved campus improvement or service-related activities.</p>
+          <p><strong>Reward:</strong> Badge + points</p>
+          <button type="button">Join Mission</button>
+        </article>
+
+        <article class="app-card quest-card">
+          <h3>Special Examination Event</h3>
+          <p>
+            Major school-wide challenge events may be announced here with special mechanics and outcomes.
+          </p>
+          <p><strong>Reward:</strong> Variable</p>
+          <button type="button">Coming Soon</button>
         </article>
       </section>
     </main>
