@@ -9,62 +9,89 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body class="dashboard-body">
-    <aside id="sidebar" class="sidebar" aria-hidden="true">
-      <div class="sidebar-header">
-        <h2>Menu</h2>
-        <button id="sidebar-close" class="icon-button" type="button" aria-label="Close menu">✕</button>
-      </div>
+    <aside id="sidebar" class="sidebar" aria-hidden="true" aria-label="Sidebar menu">
+      <div>
+        <div class="sidebar-header">
+          <p class="sidebar-label">Student App</p>
+          <h2>Juan Dela Cruz</h2>
+          <p class="sidebar-email" id="sidebar-student-email">Loading...</p>
+        </div>
 
-      <nav class="sidebar-nav" aria-label="Sidebar navigation">
-        <button type="button" class="menu-btn active" data-target="home">Home</button>
-        <button type="button" class="menu-btn" data-target="profile">Profile</button>
-        <button type="button" class="menu-btn" data-target="records">Records</button>
-        <button type="button" class="menu-btn" data-target="resources">Resources</button>
-        <button type="button" class="menu-btn" data-target="quest">Quest</button>
-      </nav>
+        <nav class="sidebar-nav" aria-label="Sidebar navigation">
+          <button type="button" class="menu-btn active" data-target="home">
+            <span aria-hidden="true">🏠</span>
+            <span>Home</span>
+          </button>
+          <button type="button" class="menu-btn" data-target="profile">
+            <span aria-hidden="true">👤</span>
+            <span>Profile</span>
+          </button>
+          <button type="button" class="menu-btn" data-target="records">
+            <span aria-hidden="true">📘</span>
+            <span>Records</span>
+          </button>
+          <button type="button" class="menu-btn" data-target="resources">
+            <span aria-hidden="true">📂</span>
+            <span>Resources</span>
+          </button>
+          <button type="button" class="menu-btn" data-target="quest">
+            <span aria-hidden="true">🎯</span>
+            <span>Quest</span>
+          </button>
+        </nav>
+      </div>
 
       <button id="logout-button" type="button" class="logout-button menu-logout">Logout</button>
     </aside>
 
-    <div id="sidebar-overlay" class="sidebar-overlay" hidden></div>
+    <button id="sidebar-overlay" class="sidebar-overlay" hidden aria-label="Close sidebar"></button>
+
+    <header class="app-bar" aria-label="Top app bar">
+      <div class="app-bar-side app-bar-left">
+        <button id="burger-button" class="icon-button" type="button" aria-label="Open menu">☰</button>
+      </div>
+
+      <h1 id="page-title" class="app-bar-title">Home</h1>
+
+      <div class="app-bar-side app-bar-right" aria-label="Notifications and messages">
+        <button class="icon-button" type="button" aria-label="Notifications">🔔</button>
+        <button class="icon-button" type="button" aria-label="Messages">💬</button>
+      </div>
+    </header>
 
     <main class="student-app" aria-labelledby="page-title">
-      <header class="mobile-navbar" aria-label="Top navigation bar">
-        <button id="burger-button" class="icon-button" type="button" aria-label="Open menu">☰</button>
-        <div class="navbar-right" aria-label="Notifications and messages">
-          <button class="icon-button" type="button" aria-label="Notifications">🔔</button>
-          <button class="icon-button" type="button" aria-label="Messages">💬</button>
-        </div>
-      </header>
-
-      <section class="title-strip" aria-label="Active page title">
-        <h1 id="page-title">Home</h1>
-        <p class="subtitle">Signed in as <strong id="student-email">Loading...</strong></p>
-      </section>
-
-      <section id="home" class="page active" data-section aria-label="Home">
+      <section id="page-home" class="page active" data-page="home" aria-label="Home">
         <article class="app-card welcome-card">
           <p class="badge">Welcome</p>
-          <h2>Hello, student!</h2>
-          <p>Track your updates, complete quests, and view your academic progress in one place.</p>
+          <h2>Student Dashboard</h2>
+          <p>Check school-wide announcements, featured activities, and reminders for all students.</p>
         </article>
 
         <article class="app-card">
           <h3>Announcements</h3>
           <ul class="list-stack">
             <li>📌 Midterm review week starts on Monday.</li>
-            <li>📌 Submit your club forms before Friday.</li>
-            <li>📌 New resources are available in the Resources tab.</li>
+            <li>📌 Deadline for club forms is Friday at 4:00 PM.</li>
+            <li>📌 Grade 10 intramurals registration is now open.</li>
           </ul>
         </article>
 
         <article class="app-card">
           <h3>School Updates</h3>
-          <p>Stay tuned for events, exam reminders, and classroom notices from the school admin team.</p>
+          <p>The guidance office will hold a short orientation this Thursday for scholarship applicants.</p>
+        </article>
+
+        <article class="app-card">
+          <h3>Featured Events & Reminders</h3>
+          <ul class="list-stack">
+            <li>🎉 Foundation Day practice: Wednesday, 3:00 PM.</li>
+            <li>📝 Quarterly exam permit release starts next week.</li>
+            <li>📚 Library book return reminder for all sections.</li>
+          </ul>
         </article>
       </section>
 
-      <section id="profile" class="page" data-section aria-label="Profile">
+      <section id="page-profile" class="page" data-page="profile" aria-label="Profile">
         <article class="app-card profile-hero">
           <div class="avatar-placeholder" aria-hidden="true">👤</div>
           <div>
@@ -93,54 +120,73 @@
         </article>
       </section>
 
-      <section id="records" class="page" data-section aria-label="Records">
+      <section id="page-records" class="page" data-page="records" aria-label="Records">
         <article class="app-card">
-          <h3>Merit / Demerit History</h3>
-          <p>No recent merit or demerit entries yet.</p>
+          <h3>Merit / Demerit Logs</h3>
+          <p>Your discipline and commendation history will appear here.</p>
         </article>
 
         <article class="app-card">
-          <h3>Scores</h3>
-          <p>Exam and activity scores will appear here.</p>
+          <h3>Quiz Scores</h3>
+          <p>Recent quizzes and subject-level scores will be listed here.</p>
         </article>
 
         <article class="app-card">
-          <h3>Activities Log</h3>
-          <p>Your attendance and activity records will appear here.</p>
+          <h3>Activity Scores</h3>
+          <p>Performance tasks and activity points will appear in this section.</p>
+        </article>
+
+        <article class="app-card">
+          <h3>Exam Scores</h3>
+          <p>Major examination summaries and grading breakdowns will display here.</p>
+        </article>
+
+        <article class="app-card">
+          <h3>Badges / Awards History</h3>
+          <p>Your earned badges, medals, and recognitions will be recorded here.</p>
         </article>
       </section>
 
-      <section id="resources" class="page" data-section aria-label="Resources">
-        <article class="app-card">
-          <h3>Downloadable Resources</h3>
-          <ul class="resource-list">
-            <li><span>📄 Student Handbook.pdf</span><button type="button">Download</button></li>
-            <li><span>📄 Classroom Calendar.pdf</span><button type="button">Download</button></li>
-            <li><span>📄 Review Packet.pdf</span><button type="button">Download</button></li>
-          </ul>
+      <section id="page-resources" class="page" data-page="resources" aria-label="Resources">
+        <article class="app-card resource-card">
+          <h3>Student Handbook (PDF)</h3>
+          <p>Latest school policies, code of conduct, and student rights.</p>
+          <button type="button">Download</button>
+        </article>
+
+        <article class="app-card resource-card">
+          <h3>Quarterly Academic Calendar</h3>
+          <p>Important dates for assessments, events, and class schedules.</p>
+          <button type="button">Download</button>
+        </article>
+
+        <article class="app-card resource-card">
+          <h3>Reviewer Pack - Science</h3>
+          <p>Compiled reviewer and practice worksheets for upcoming exams.</p>
+          <button type="button">Download</button>
         </article>
       </section>
 
-      <section id="quest" class="page" data-section aria-label="Quest">
+      <section id="page-quest" class="page" data-page="quest" aria-label="Quest">
         <article class="app-card quest-card">
           <h3>Daily Attendance Hero</h3>
           <p>Attend all classes today and check in on time.</p>
           <p><strong>Reward:</strong> +10 points</p>
-          <button type="button">Start</button>
+          <button type="button">Start Quest</button>
         </article>
 
         <article class="app-card quest-card">
           <h3>Reading Champion</h3>
-          <p>Finish one assigned reading and submit your reflection.</p>
-          <p><strong>Reward:</strong> +1 badge</p>
-          <button type="button">View</button>
+          <p>Finish one assigned reading and submit a short reflection.</p>
+          <p><strong>Reward:</strong> 1 Badge</p>
+          <button type="button">View Details</button>
         </article>
 
         <article class="app-card quest-card">
           <h3>Clean Campus Mission</h3>
-          <p>Join the weekly cleanup and upload proof of participation.</p>
+          <p>Join the campus cleanup drive and upload your proof.</p>
           <p><strong>Reward:</strong> +15 points</p>
-          <button type="button">View</button>
+          <button type="button">Join Quest</button>
         </article>
       </section>
     </main>
