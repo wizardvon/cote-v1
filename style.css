@@ -274,9 +274,17 @@ button:active {
 
 .admin-toolbar {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.75rem;
   margin-top: 0.9rem;
+}
+
+.admin-load-field {
+  align-self: end;
+}
+
+.admin-load-field button {
+  margin-top: auto;
 }
 
 .admin-table-wrap {

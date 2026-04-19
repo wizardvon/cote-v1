@@ -14,6 +14,7 @@ const adminEmailElement = document.getElementById('admin-email');
 const logoutButton = document.getElementById('logout-button');
 const sectionFilterElement = document.getElementById('section-filter');
 const searchInput = document.getElementById('student-search');
+const loadStudentsButton = document.getElementById('load-students-button');
 const selectAllCheckbox = document.getElementById('select-all');
 const tableBody = document.getElementById('students-table-body');
 const pointsValueInput = document.getElementById('points-value');
@@ -89,7 +90,7 @@ function renderTableRows() {
   if (visibleStudents.length === 0) {
     tableBody.innerHTML = `
       <tr>
-        <td colspan="7" class="empty-cell">No students match your filter/search.</td>
+        <td colspan="7" class="empty-cell">No matching students found.</td>
       </tr>
     `;
     updateSelectAllState();
@@ -148,6 +149,13 @@ function getFilteredStudents() {
 function applyFiltersAndRender() {
   visibleStudents = getFilteredStudents();
   renderTableRows();
+
+  if (visibleStudents.length === 0) {
+    setMessage('No matching students found.', 'error');
+    return;
+  }
+
+  setMessage(`Loaded ${visibleStudents.length} student(s).`, 'success');
 }
 
 function populateSectionFilter(students) {
@@ -166,6 +174,11 @@ function populateSectionFilter(students) {
 }
 
 async function loadStudents() {
+  if (loadStudentsButton) {
+    loadStudentsButton.disabled = true;
+    loadStudentsButton.textContent = 'Loading...';
+  }
+
   tableBody.innerHTML = `
     <tr>
       <td colspan="7" class="empty-cell">Loading students...</td>
@@ -186,15 +199,29 @@ async function loadStudents() {
       })
       .sort(compareStudents);
 
+    const previousSection = sectionFilterElement.value;
     populateSectionFilter(allStudents);
+
+    if (previousSection && previousSection !== 'all') {
+      sectionFilterElement.value = Array.from(sectionFilterElement.options).some(
+        (option) => option.value === previousSection
+      )
+        ? previousSection
+        : 'all';
+    }
+
     applyFiltersAndRender();
-    setMessage(`Loaded ${allStudents.length} students. Select rows to update points.`, 'success');
   } catch (error) {
     console.error('Failed to load students:', error);
     allStudents = [];
     visibleStudents = [];
     renderTableRows();
     setMessage('Failed to load students. Please refresh and try again.', 'error');
+  } finally {
+    if (loadStudentsButton) {
+      loadStudentsButton.disabled = false;
+      loadStudentsButton.textContent = 'Load Students';
+    }
   }
 }
 
@@ -274,12 +301,8 @@ async function updatePointsForSelected(action) {
   }
 }
 
-sectionFilterElement?.addEventListener('change', () => {
-  applyFiltersAndRender();
-});
-
-searchInput?.addEventListener('input', () => {
-  applyFiltersAndRender();
+loadStudentsButton?.addEventListener('click', () => {
+  loadStudents();
 });
 
 selectAllCheckbox?.addEventListener('change', () => {
@@ -353,8 +376,13 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     adminEmailElement.textContent = userData.email || user.email || 'No email available';
-    setMessage('Teacher access granted. Loading students...', 'success');
-    await loadStudents();
+    setMessage('Teacher access granted. Choose filters, then click "Load Students".', 'success');
+
+    tableBody.innerHTML = `
+      <tr>
+        <td colspan="7" class="empty-cell">Click "Load Students" to fetch and display students.</td>
+      </tr>
+    `;
   } catch (error) {
     console.error('Failed to validate teacher role:', error);
     window.location.replace('dashboard.html');
