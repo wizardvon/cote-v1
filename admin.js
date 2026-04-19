@@ -7,7 +7,9 @@ import {
   getDoc,
   updateDoc,
   collection,
-  getDocs
+  getDocs,
+  addDoc,
+  serverTimestamp
 } from './firebase.js';
 
 const adminEmailElement = document.getElementById('admin-email');
@@ -268,6 +270,13 @@ async function updatePointsForSelected(action) {
 
   const delta = action === 'add' ? pointValue : -pointValue;
   const buttonLabel = action === 'add' ? 'Adding merit...' : 'Adding demerit...';
+  const reasonInput = window.prompt(`Enter reason for this ${action === 'add' ? 'merit' : 'demerit'} update:`) || '';
+  const reason = reasonInput.trim();
+
+  if (!reason) {
+    setMessage('A reason is required to log this point update.', 'error');
+    return;
+  }
 
   addPointsButton.disabled = true;
   deductPointsButton.disabled = true;
@@ -281,6 +290,22 @@ async function updatePointsForSelected(action) {
       const currentPoints = normalizePoints(current?.points);
 
       await updateDoc(studentRef, { points: currentPoints + delta });
+      await addDoc(collection(db, 'pointLogs'), {
+        studentId,
+        studentName: `${safeText(current?.firstName, '')} ${safeText(current?.middleName, '')} ${safeText(
+          current?.lastName,
+          ''
+        )}`
+          .replace(/\s+/g, ' ')
+          .trim(),
+        lrn: safeText(current?.lrn, ''),
+        section: safeText(current?.section, ''),
+        type: action === 'add' ? 'merit' : 'demerit',
+        points: pointValue,
+        reason,
+        teacherEmail: auth.currentUser?.email || '',
+        createdAt: serverTimestamp()
+      });
 
       return { studentId, points: currentPoints + delta };
     });
