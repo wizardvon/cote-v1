@@ -6,6 +6,11 @@ import {
   doc,
   getDoc,
   updateDoc,
+  collection,
+  getDocs,
+  query,
+  where,
+  orderBy,
 } from './firebase.js';
 
 const profileDataElement = document.getElementById('profileData');
@@ -31,6 +36,7 @@ const burgerButton = document.getElementById('burger-button');
 
 const menuButtons = Array.from(document.querySelectorAll('.menu-btn'));
 const pages = Array.from(document.querySelectorAll('.page'));
+const recordsPageElement = document.getElementById('page-records');
 
 const pageTitles = {
   home: 'Home',
@@ -72,6 +78,59 @@ function makeInitials(data) {
 
 function normalizePoints(points) {
   return typeof points === 'number' && Number.isFinite(points) ? points : 0;
+}
+
+function getRecordsListElement() {
+  if (!recordsPageElement) return null;
+
+  const pointsHistoryCard = recordsPageElement.querySelector('.app-card');
+  if (!pointsHistoryCard) return null;
+
+  let listElement = pointsHistoryCard.querySelector('#point-logs-list');
+
+  if (!listElement) {
+    listElement = document.createElement('ul');
+    listElement.id = 'point-logs-list';
+    listElement.className = 'list-stack';
+    pointsHistoryCard.appendChild(listElement);
+  }
+
+  return listElement;
+}
+
+async function loadPointLogs(studentId) {
+  const listElement = getRecordsListElement();
+  if (!listElement) return;
+
+  listElement.innerHTML = '<li>Loading point logs...</li>';
+
+  try {
+    const logsQuery = query(
+      collection(db, 'pointLogs'),
+      where('studentId', '==', studentId),
+      orderBy('createdAt', 'desc')
+    );
+    const logsSnapshot = await getDocs(logsQuery);
+
+    if (logsSnapshot.empty) {
+      listElement.innerHTML = '<li>No point logs available yet.</li>';
+      return;
+    }
+
+    listElement.innerHTML = logsSnapshot.docs
+      .map((logDoc) => {
+        const log = logDoc.data();
+        const points = normalizePoints(log.points);
+        const sign = log.type === 'demerit' ? '-' : '+';
+        const label = log.type === 'demerit' ? 'Demerit' : 'Merit';
+        const reason = String(log.reason || 'No reason provided').trim() || 'No reason provided';
+        return `<li>${sign}${points} ${label} — ${reason}</li>`;
+      })
+      .join('');
+  } catch (error) {
+    console.error('Failed to load point logs:', error);
+    listElement.innerHTML = '<li>Failed to load point logs.</li>';
+  }
 }
 
 function toggleSidebar() {
@@ -283,6 +342,7 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     setStudentData(studentData, user.email);
+    loadPointLogs(user.uid);
   } catch (error) {
     console.error('Failed to load profile:', error);
 
