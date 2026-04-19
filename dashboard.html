@@ -8,20 +8,60 @@
     <link rel="manifest" href="/cote-v1/manifest.json" />
     <link rel="stylesheet" href="style.css" />
   </head>
-  <body>
-    <main class="container dashboard-container" aria-labelledby="dashboard-title">
-      <section class="dashboard-header">
+  <body class="dashboard-body">
+    <main class="student-app" aria-labelledby="dashboard-title">
+      <header class="app-topbar">
         <div>
-          <h1 id="dashboard-title">Welcome to your student dashboard</h1>
+          <h1 id="dashboard-title">Student Dashboard</h1>
           <p class="subtitle">Signed in as <strong id="student-email">Loading...</strong></p>
         </div>
         <button id="logout-button" type="button" class="logout-button">Logout</button>
+      </header>
+
+      <section id="home" class="app-section active" data-section aria-label="Home">
+        <article class="app-card welcome-card">
+          <p class="badge">Welcome</p>
+          <h2>Hello, student!</h2>
+          <p>Track your updates, complete quests, and view your academic progress in one place.</p>
+        </article>
+
+        <article class="app-card">
+          <h3>Announcements</h3>
+          <ul class="list-stack">
+            <li>📌 Midterm review week starts on Monday.</li>
+            <li>📌 Submit your club forms before Friday.</li>
+            <li>📌 New resources are available in the Resources tab.</li>
+          </ul>
+        </article>
+
+        <article class="app-card">
+          <h3>School Updates</h3>
+          <p>Stay tuned for events, exam reminders, and classroom notices from the school admin team.</p>
+        </article>
+
+        <article class="app-card">
+          <h3>Top Students</h3>
+          <p>Leaderboard is coming soon. Keep earning points through good records and completed quests.</p>
+        </article>
       </section>
 
-      <section class="dashboard-grid" aria-label="Student overview">
-        <article class="dashboard-card" aria-labelledby="profile-heading">
-          <h2 id="profile-heading">Profile</h2>
-          <div id="profileData" aria-live="polite">
+      <section id="profile" class="app-section" data-section aria-label="Profile">
+        <article class="app-card profile-hero">
+          <div class="avatar-placeholder" aria-hidden="true">👤</div>
+          <div>
+            <h2 id="profile-full-name">Loading...</h2>
+            <p id="profile-email">Loading...</p>
+          </div>
+        </article>
+
+        <article class="app-card points-highlight">
+          <p>Total Points</p>
+          <p id="points-total" class="points-number">0</p>
+        </article>
+
+        <article class="app-card" aria-labelledby="profile-heading">
+          <h3 id="profile-heading">Personal Information</h3>
+          <div id="profileData" class="info-grid" aria-live="polite">
             <p><strong>Full Name:</strong> Loading...</p>
             <p><strong>Email:</strong> Loading...</p>
             <p><strong>Sex:</strong> Loading...</p>
@@ -29,25 +69,70 @@
             <p><strong>LRN:</strong> Loading...</p>
             <p><strong>Phone Number:</strong> Loading...</p>
             <p><strong>Address:</strong> Loading...</p>
+            <p><strong>Total Points:</strong> Loading...</p>
           </div>
         </article>
+      </section>
 
-        <article class="dashboard-card" aria-labelledby="points-heading">
-          <h2 id="points-heading">Points</h2>
-          <p id="points-total">Total Points: 0</p>
+      <section id="records" class="app-section" data-section aria-label="Records">
+        <article class="app-card">
+          <h3>Merit / Demerit History</h3>
+          <p>No recent merit or demerit entries yet.</p>
         </article>
 
-        <article class="dashboard-card" aria-labelledby="scores-heading">
-          <h2 id="scores-heading">Scores</h2>
+        <article class="app-card">
+          <h3>Scores</h3>
           <p>Exam and activity scores will appear here.</p>
         </article>
 
-        <article class="dashboard-card" aria-labelledby="records-heading">
-          <h2 id="records-heading">Records</h2>
-          <p>Attendance and record history will appear here.</p>
+        <article class="app-card">
+          <h3>Activities Log</h3>
+          <p>Your attendance and activity records will appear here.</p>
+        </article>
+      </section>
+
+      <section id="resources" class="app-section" data-section aria-label="Resources">
+        <article class="app-card">
+          <h3>Downloadable Resources</h3>
+          <ul class="resource-list">
+            <li><span>📄 Student Handbook.pdf</span><button type="button">Download</button></li>
+            <li><span>📄 Classroom Calendar.pdf</span><button type="button">Download</button></li>
+            <li><span>📄 Review Packet.pdf</span><button type="button">Download</button></li>
+          </ul>
+        </article>
+      </section>
+
+      <section id="quest" class="app-section" data-section aria-label="Quest">
+        <article class="app-card quest-card">
+          <h3>Daily Attendance Hero</h3>
+          <p>Attend all classes today and check in on time.</p>
+          <p><strong>Reward:</strong> +10 points</p>
+          <button type="button">Start</button>
+        </article>
+
+        <article class="app-card quest-card">
+          <h3>Reading Champion</h3>
+          <p>Finish one assigned reading and submit your reflection.</p>
+          <p><strong>Reward:</strong> +1 badge</p>
+          <button type="button">View</button>
+        </article>
+
+        <article class="app-card quest-card">
+          <h3>Clean Campus Mission</h3>
+          <p>Join the weekly cleanup and upload proof of participation.</p>
+          <p><strong>Reward:</strong> +15 points</p>
+          <button type="button">View</button>
         </article>
       </section>
     </main>
+
+    <nav class="bottom-nav" aria-label="Bottom navigation">
+      <button type="button" class="nav-btn active" data-target="home">Home</button>
+      <button type="button" class="nav-btn" data-target="profile">Profile</button>
+      <button type="button" class="nav-btn" data-target="records">Records</button>
+      <button type="button" class="nav-btn" data-target="resources">Resources</button>
+      <button type="button" class="nav-btn" data-target="quest">Quest</button>
+    </nav>
 
     <script type="module" src="dashboard.js"></script>
   </body>
