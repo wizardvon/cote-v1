@@ -29,6 +29,7 @@ const messagesButton = document.getElementById('messages-button');
 const homeStudentNameElement = document.getElementById('home-student-name');
 const homeStudentSectionElement = document.getElementById('home-student-section');
 const homeStudentPointsElement = document.getElementById('home-student-points');
+const leaderboardListElement = document.getElementById('leaderboard-list');
 
 const sidebar = document.getElementById('sidebar');
 const sidebarOverlay = document.getElementById('sidebar-overlay');
@@ -78,6 +79,72 @@ function makeInitials(data) {
 
 function normalizePoints(points) {
   return typeof points === 'number' && Number.isFinite(points) ? points : 0;
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function makeLeaderboardName(data) {
+  return [data.firstName, data.lastName]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .join(' ');
+}
+
+async function loadLeaderboard() {
+  if (!leaderboardListElement) return;
+
+  leaderboardListElement.innerHTML = '<p>Loading leaderboard...</p>';
+
+  try {
+    const studentsSnapshot = await getDocs(collection(db, 'students'));
+    const students = studentsSnapshot.docs.map((studentDoc) => {
+      const student = studentDoc.data();
+      return {
+        firstName: String(student.firstName || '').trim(),
+        lastName: String(student.lastName || '').trim(),
+        gradeLevel: String(student.gradeLevel || '').trim(),
+        section: String(student.section || '').trim(),
+        points: normalizePoints(student.points),
+      };
+    });
+
+    students.sort((a, b) => {
+      if (b.points !== a.points) return b.points - a.points;
+
+      const lastNameCompare = a.lastName.localeCompare(b.lastName, undefined, { sensitivity: 'base' });
+      if (lastNameCompare !== 0) return lastNameCompare;
+
+      return a.firstName.localeCompare(b.firstName, undefined, { sensitivity: 'base' });
+    });
+
+    const topStudents = students.slice(0, 10);
+
+    if (!topStudents.length) {
+      leaderboardListElement.innerHTML = '<p>No leaderboard data available yet.</p>';
+      return;
+    }
+
+    leaderboardListElement.innerHTML = topStudents
+      .map((student, index) => {
+        const fullName = makeLeaderboardName(student) || 'Unnamed Student';
+        const gradeLevel = student.gradeLevel || 'Not provided';
+        const section = student.section || 'Not provided';
+        return `<p>#${index + 1} ${escapeHtml(fullName)} — ${escapeHtml(
+          gradeLevel
+        )} - ${escapeHtml(section)} — ${student.points} pts</p>`;
+      })
+      .join('');
+  } catch (error) {
+    console.error('Failed to load leaderboard:', error);
+    leaderboardListElement.innerHTML = '<p>No leaderboard data available yet.</p>';
+  }
 }
 
 function getRecordsListElement() {
@@ -343,6 +410,8 @@ onAuthStateChanged(auth, async (user) => {
     window.location.replace('index.html');
     return;
   }
+
+  loadLeaderboard();
 
   if (sidebarStudentEmailElement) {
     sidebarStudentEmailElement.textContent = user.email || 'No email available';
