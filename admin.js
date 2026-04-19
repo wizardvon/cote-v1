@@ -291,21 +291,22 @@ async function updatePointsForSelected(action) {
 
       await updateDoc(studentRef, { points: currentPoints + delta });
       await addDoc(collection(db, 'pointLogs'), {
-        studentId,
-        studentName: `${safeText(current?.firstName, '')} ${safeText(current?.middleName, '')} ${safeText(
-          current?.lastName,
-          ''
-        )}`
-          .replace(/\s+/g, ' ')
-          .trim(),
-        lrn: safeText(current?.lrn, ''),
-        section: safeText(current?.section, ''),
-        type: action === 'add' ? 'merit' : 'demerit',
-        points: pointValue,
-        reason,
-        teacherEmail: auth.currentUser?.email || '',
-        createdAt: serverTimestamp()
-      });
+  studentId,
+  studentName: `${safeText(current?.firstName, '')} ${safeText(current?.middleName, '')} ${safeText(
+    current?.lastName,
+    ''
+  )}`
+    .replace(/\s+/g, ' ')
+    .trim(),
+  lrn: safeText(current?.lrn, ''),
+  section: safeText(current?.section, ''),
+  type: action === 'add' ? 'merit' : 'demerit',
+  points: pointValue,
+  reason,
+  teacherId: auth.currentUser?.uid || '',
+  teacherEmail: auth.currentUser?.email || '',
+  createdAt: serverTimestamp()
+});
 
       return { studentId, points: currentPoints + delta };
     });
