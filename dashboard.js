@@ -30,6 +30,7 @@ const homeStudentNameElement = document.getElementById('home-student-name');
 const homeStudentSectionElement = document.getElementById('home-student-section');
 const homeStudentPointsElement = document.getElementById('home-student-points');
 const leaderboardListElement = document.getElementById('leaderboard-list');
+const profileRankElement = document.getElementById('profile-rank');
 
 const sidebar = document.getElementById('sidebar');
 const sidebarOverlay = document.getElementById('sidebar-overlay');
@@ -101,12 +102,16 @@ async function loadLeaderboard() {
   if (!leaderboardListElement) return;
 
   leaderboardListElement.innerHTML = '<p>Loading leaderboard...</p>';
+  if (profileRankElement) {
+    profileRankElement.textContent = 'Loading...';
+  }
 
   try {
     const studentsSnapshot = await getDocs(collection(db, 'students'));
     const students = studentsSnapshot.docs.map((studentDoc) => {
       const student = studentDoc.data();
       return {
+        id: studentDoc.id,
         firstName: String(student.firstName || '').trim(),
         lastName: String(student.lastName || '').trim(),
         gradeLevel: String(student.gradeLevel || '').trim(),
@@ -125,6 +130,18 @@ async function loadLeaderboard() {
     });
 
     const topStudents = students.slice(0, 10);
+    const currentStudentId = auth.currentUser?.uid;
+    const currentStudentIndex = students.findIndex((student) => student.id === currentStudentId);
+
+    if (profileRankElement) {
+      if (currentStudentIndex >= 0) {
+        const rank = currentStudentIndex + 1;
+        const total = students.length;
+        profileRankElement.textContent = `#${rank} of ${total}`;
+      } else {
+        profileRankElement.textContent = 'Not ranked';
+      }
+    }
 
     if (!topStudents.length) {
       leaderboardListElement.innerHTML = '<p>No leaderboard data available yet.</p>';
@@ -144,6 +161,9 @@ async function loadLeaderboard() {
   } catch (error) {
     console.error('Failed to load leaderboard:', error);
     leaderboardListElement.innerHTML = '<p>No leaderboard data available yet.</p>';
+    if (profileRankElement) {
+      profileRankElement.textContent = 'Not ranked';
+    }
   }
 }
 
@@ -365,6 +385,10 @@ function renderNoProfile(email = '') {
     homeStudentPointsElement.textContent = '0';
   }
 
+  if (profileRankElement) {
+    profileRankElement.textContent = 'Not ranked';
+  }
+
   if (profileDataElement) {
     profileDataElement.innerHTML = `
       <p><strong>Full Name:</strong> No profile found</p>
@@ -477,6 +501,10 @@ onAuthStateChanged(auth, async (user) => {
 
     if (homeStudentPointsElement) {
       homeStudentPointsElement.textContent = '0';
+    }
+
+    if (profileRankElement) {
+      profileRankElement.textContent = 'Not ranked';
     }
   }
 });
