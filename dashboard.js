@@ -14,9 +14,23 @@ const profileFullNameElement = document.getElementById('profile-full-name');
 const profileEmailElement = document.getElementById('profile-email');
 const pointsTotalElement = document.getElementById('points-total');
 const logoutButton = document.getElementById('logout-button');
+const pageTitleElement = document.getElementById('page-title');
 
-const navButtons = Array.from(document.querySelectorAll('.nav-btn'));
-const sections = Array.from(document.querySelectorAll('[data-section]'));
+const sidebar = document.getElementById('sidebar');
+const sidebarOverlay = document.getElementById('sidebar-overlay');
+const burgerButton = document.getElementById('burger-button');
+const sidebarCloseButton = document.getElementById('sidebar-close');
+
+const menuButtons = Array.from(document.querySelectorAll('.menu-btn'));
+const pages = Array.from(document.querySelectorAll('.page'));
+
+const pageTitles = {
+  home: 'Home',
+  profile: 'Profile',
+  records: 'Records',
+  resources: 'Resources',
+  quest: 'Quest',
+};
 
 function safe(value) {
   if (value === undefined || value === null) return 'Not provided';
@@ -31,14 +45,26 @@ function fullName(data) {
     .join(' ') || 'Not provided';
 }
 
-function showSection(sectionId) {
-  sections.forEach((section) => {
-    section.classList.toggle('active', section.id === sectionId);
+function setSidebarState(isOpen) {
+  if (!sidebar || !sidebarOverlay) return;
+
+  sidebar.classList.toggle('open', isOpen);
+  sidebar.setAttribute('aria-hidden', String(!isOpen));
+  sidebarOverlay.hidden = !isOpen;
+}
+
+function showPage(pageName) {
+  pages.forEach((page) => {
+    page.classList.toggle('active', page.id === pageName);
   });
 
-  navButtons.forEach((button) => {
-    button.classList.toggle('active', button.dataset.target === sectionId);
+  menuButtons.forEach((button) => {
+    button.classList.toggle('active', button.dataset.target === pageName);
   });
+
+  if (pageTitleElement) {
+    pageTitleElement.textContent = pageTitles[pageName] || 'Dashboard';
+  }
 }
 
 function renderProfile(data, fallbackEmail, points) {
@@ -69,10 +95,22 @@ function normalizePoints(points) {
   return typeof points === 'number' && Number.isFinite(points) ? points : 0;
 }
 
-navButtons.forEach((button) => {
+menuButtons.forEach((button) => {
   button.addEventListener('click', () => {
-    showSection(button.dataset.target);
+    const target = button.dataset.target;
+    showPage(target);
+    setSidebarState(false);
   });
+});
+
+burgerButton?.addEventListener('click', () => setSidebarState(true));
+sidebarCloseButton?.addEventListener('click', () => setSidebarState(false));
+sidebarOverlay?.addEventListener('click', () => setSidebarState(false));
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    setSidebarState(false);
+  }
 });
 
 onAuthStateChanged(auth, async (user) => {
@@ -145,3 +183,6 @@ if ('serviceWorker' in navigator) {
       .catch((error) => console.error('SW registration failed:', error));
   });
 }
+
+showPage('home');
+setSidebarState(false);
