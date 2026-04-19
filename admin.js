@@ -21,6 +21,7 @@ const pointsValueInput = document.getElementById('points-value');
 const addPointsButton = document.getElementById('add-points-button');
 const deductPointsButton = document.getElementById('deduct-points-button');
 const messageElement = document.getElementById('admin-message');
+const TABLE_COLUMN_COUNT = 8;
 
 let allStudents = [];
 let visibleStudents = [];
@@ -36,6 +37,7 @@ function safeText(value, fallback = '—') {
 }
 
 function setMessage(message, type = '') {
+  if (!messageElement) return;
   messageElement.textContent = message;
   messageElement.classList.remove('success', 'error');
 
@@ -90,7 +92,7 @@ function renderTableRows() {
   if (visibleStudents.length === 0) {
     tableBody.innerHTML = `
       <tr>
-        <td colspan="7" class="empty-cell">No matching students found.</td>
+        <td colspan="${TABLE_COLUMN_COUNT}" class="empty-cell">No matching students found.</td>
       </tr>
     `;
     updateSelectAllState();
@@ -159,7 +161,7 @@ function applyFiltersAndRender(showStatusMessage = true) {
     return;
   }
 
-  setMessage(`Loaded ${visibleStudents.length} student(s).`, 'success');
+  setMessage(`Loaded ${visibleStudents.length} students.`, 'success');
 }
 
 function populateSectionFilter(students) {
@@ -178,6 +180,8 @@ function populateSectionFilter(students) {
 }
 
 async function loadStudents({ showStatusMessage = true } = {}) {
+  setMessage('Loading students...');
+
   if (loadStudentsButton) {
     loadStudentsButton.disabled = true;
     loadStudentsButton.textContent = 'Loading...';
@@ -185,7 +189,7 @@ async function loadStudents({ showStatusMessage = true } = {}) {
 
   tableBody.innerHTML = `
     <tr>
-      <td colspan="7" class="empty-cell">Loading students...</td>
+      <td colspan="${TABLE_COLUMN_COUNT}" class="empty-cell">Loading students...</td>
     </tr>
   `;
 
@@ -214,14 +218,20 @@ async function loadStudents({ showStatusMessage = true } = {}) {
         : 'all';
     }
 
-    applyFiltersAndRender(showStatusMessage);
+    applyFiltersAndRender(false);
+
+    if (showStatusMessage) {
+      setMessage(`Loaded ${allStudents.length} students.`, 'success');
+    }
+
     return true;
   } catch (error) {
     console.error('Failed to load students:', error);
     allStudents = [];
     visibleStudents = [];
     renderTableRows();
-    setMessage('Failed to load students. Please refresh and try again.', 'error');
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    setMessage(`Failed to load students: ${errorMessage}`, 'error');
     return false;
   } finally {
     if (loadStudentsButton) {
@@ -316,6 +326,16 @@ loadStudentsButton?.addEventListener('click', () => {
   loadStudents();
 });
 
+sectionFilterElement?.addEventListener('change', () => {
+  if (!allStudents.length) return;
+  applyFiltersAndRender(false);
+});
+
+searchInput?.addEventListener('input', () => {
+  if (!allStudents.length) return;
+  applyFiltersAndRender(false);
+});
+
 selectAllCheckbox?.addEventListener('change', () => {
   const checkboxes = tableBody.querySelectorAll('input[data-student-id]');
 
@@ -391,7 +411,7 @@ onAuthStateChanged(auth, async (user) => {
 
     tableBody.innerHTML = `
       <tr>
-        <td colspan="7" class="empty-cell">Click "Load Students" to fetch and display students.</td>
+        <td colspan="${TABLE_COLUMN_COUNT}" class="empty-cell">Click "Load Students" to fetch and display students.</td>
       </tr>
     `;
   } catch (error) {
