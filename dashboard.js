@@ -8,10 +8,10 @@ import {
   updateDoc,
 } from './firebase.js';
 
-const emailElement = document.getElementById('student-email');
 const profileDataElement = document.getElementById('profileData');
 const profileFullNameElement = document.getElementById('profile-full-name');
 const profileEmailElement = document.getElementById('profile-email');
+const sidebarStudentEmailElement = document.getElementById('sidebar-student-email');
 const pointsTotalElement = document.getElementById('points-total');
 const logoutButton = document.getElementById('logout-button');
 const pageTitleElement = document.getElementById('page-title');
@@ -19,7 +19,6 @@ const pageTitleElement = document.getElementById('page-title');
 const sidebar = document.getElementById('sidebar');
 const sidebarOverlay = document.getElementById('sidebar-overlay');
 const burgerButton = document.getElementById('burger-button');
-const sidebarCloseButton = document.getElementById('sidebar-close');
 
 const menuButtons = Array.from(document.querySelectorAll('.menu-btn'));
 const pages = Array.from(document.querySelectorAll('.page'));
@@ -45,17 +44,26 @@ function fullName(data) {
     .join(' ') || 'Not provided';
 }
 
-function setSidebarState(isOpen) {
+function toggleSidebar() {
   if (!sidebar || !sidebarOverlay) return;
 
-  sidebar.classList.toggle('open', isOpen);
-  sidebar.setAttribute('aria-hidden', String(!isOpen));
-  sidebarOverlay.hidden = !isOpen;
+  const isOpen = sidebar.classList.contains('open');
+  sidebar.classList.toggle('open', !isOpen);
+  sidebar.setAttribute('aria-hidden', String(isOpen));
+  sidebarOverlay.hidden = isOpen;
+}
+
+function closeSidebar() {
+  if (!sidebar || !sidebarOverlay) return;
+
+  sidebar.classList.remove('open');
+  sidebar.setAttribute('aria-hidden', 'true');
+  sidebarOverlay.hidden = true;
 }
 
 function showPage(pageName) {
   pages.forEach((page) => {
-    page.classList.toggle('active', page.id === pageName);
+    page.classList.toggle('active', page.dataset.page === pageName);
   });
 
   menuButtons.forEach((button) => {
@@ -65,6 +73,8 @@ function showPage(pageName) {
   if (pageTitleElement) {
     pageTitleElement.textContent = pageTitles[pageName] || 'Dashboard';
   }
+
+  closeSidebar();
 }
 
 function renderProfile(data, fallbackEmail, points) {
@@ -79,13 +89,17 @@ function renderProfile(data, fallbackEmail, points) {
     profileEmailElement.textContent = displayEmail;
   }
 
+  if (sidebarStudentEmailElement) {
+    sidebarStudentEmailElement.textContent = displayEmail;
+  }
+
   profileDataElement.innerHTML = `
     <p><strong>Full Name:</strong> ${displayName}</p>
     <p><strong>Email:</strong> ${displayEmail}</p>
     <p><strong>Sex:</strong> ${safe(data.sex)}</p>
     <p><strong>Birthday:</strong> ${safe(data.birthday)}</p>
     <p><strong>LRN:</strong> ${safe(data.lrn)}</p>
-    <p><strong>Phone:</strong> ${safe(data.phoneNumber)}</p>
+    <p><strong>Phone Number:</strong> ${safe(data.phoneNumber)}</p>
     <p><strong>Address:</strong> ${safe(data.address)}</p>
     <p><strong>Total Points:</strong> ${points}</p>
   `;
@@ -99,17 +113,15 @@ menuButtons.forEach((button) => {
   button.addEventListener('click', () => {
     const target = button.dataset.target;
     showPage(target);
-    setSidebarState(false);
   });
 });
 
-burgerButton?.addEventListener('click', () => setSidebarState(true));
-sidebarCloseButton?.addEventListener('click', () => setSidebarState(false));
-sidebarOverlay?.addEventListener('click', () => setSidebarState(false));
+burgerButton?.addEventListener('click', toggleSidebar);
+sidebarOverlay?.addEventListener('click', closeSidebar);
 
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
-    setSidebarState(false);
+    closeSidebar();
   }
 });
 
@@ -119,7 +131,9 @@ onAuthStateChanged(auth, async (user) => {
     return;
   }
 
-  emailElement.textContent = user.email || 'No email available';
+  if (sidebarStudentEmailElement) {
+    sidebarStudentEmailElement.textContent = user.email || 'No email available';
+  }
 
   try {
     const studentRef = doc(db, 'students', user.uid);
@@ -132,7 +146,7 @@ onAuthStateChanged(auth, async (user) => {
         <p><strong>Sex:</strong> Not provided</p>
         <p><strong>Birthday:</strong> Not provided</p>
         <p><strong>LRN:</strong> Not provided</p>
-        <p><strong>Phone:</strong> Not provided</p>
+        <p><strong>Phone Number:</strong> Not provided</p>
         <p><strong>Address:</strong> Not provided</p>
         <p><strong>Total Points:</strong> 0</p>
       `;
@@ -184,5 +198,9 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+window.toggleSidebar = toggleSidebar;
+window.closeSidebar = closeSidebar;
+window.showPage = showPage;
+
 showPage('home');
-setSidebarState(false);
+closeSidebar();
