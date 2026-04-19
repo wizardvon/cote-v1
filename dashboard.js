@@ -105,12 +105,34 @@ async function loadPointLogs(studentId) {
   listElement.innerHTML = '<li>Loading point logs...</li>';
 
   try {
-    const logsQuery = query(
-      collection(db, 'pointLogs'),
-      where('studentId', '==', studentId),
-      orderBy('createdAt', 'desc')
-    );
-    const logsSnapshot = await getDocs(logsQuery);
+    let logsSnapshot;
+
+    try {
+      const logsQuery = query(
+        collection(db, 'pointLogs'),
+        where('studentId', '==', studentId),
+        orderBy('createdAt', 'desc')
+      );
+      logsSnapshot = await getDocs(logsQuery);
+    } catch (error) {
+      console.error('Failed to query point logs with index:', error);
+      const message = String(error?.message || error).toLowerCase();
+
+      if (message.includes('index')) {
+        console.log('Create Firestore index for pointLogs query');
+      }
+
+      const fallbackSnapshot = await getDocs(collection(db, 'pointLogs'));
+      const filteredDocs = fallbackSnapshot.docs
+        .filter((logDoc) => logDoc.data().studentId === studentId)
+        .sort((a, b) => {
+          const aTime = a.data().createdAt?.toMillis?.() || 0;
+          const bTime = b.data().createdAt?.toMillis?.() || 0;
+          return bTime - aTime;
+        });
+
+      logsSnapshot = { empty: filteredDocs.length === 0, docs: filteredDocs };
+    }
 
     if (logsSnapshot.empty) {
       listElement.innerHTML = '<li>No point logs available yet.</li>';
@@ -129,7 +151,11 @@ async function loadPointLogs(studentId) {
       .join('');
   } catch (error) {
     console.error('Failed to load point logs:', error);
-    listElement.innerHTML = '<li>Failed to load point logs.</li>';
+    const message = String(error?.message || error).toLowerCase();
+    if (message.includes('index')) {
+      console.log('Create Firestore index for pointLogs query');
+    }
+    listElement.innerHTML = '<li>Unable to load logs. Please try again later.</li>';
   }
 }
 
