@@ -21,6 +21,10 @@ const pageTitleElement = document.getElementById('page-title');
 const notificationsButton = document.getElementById('notifications-button');
 const messagesButton = document.getElementById('messages-button');
 
+const homeStudentNameElement = document.getElementById('home-student-name');
+const homeStudentSectionElement = document.getElementById('home-student-section');
+const homeStudentPointsElement = document.getElementById('home-student-points');
+
 const sidebar = document.getElementById('sidebar');
 const sidebarOverlay = document.getElementById('sidebar-overlay');
 const burgerButton = document.getElementById('burger-button');
@@ -138,6 +142,18 @@ function setStudentData(data, fallbackEmail = '') {
     pointsTotalElement.textContent = String(points);
   }
 
+  if (homeStudentNameElement) {
+    homeStudentNameElement.textContent = displayName;
+  }
+
+  if (homeStudentSectionElement) {
+    homeStudentSectionElement.textContent = displayGradeSection;
+  }
+
+  if (homeStudentPointsElement) {
+    homeStudentPointsElement.textContent = String(points);
+  }
+
   if (profileDataElement) {
     profileDataElement.innerHTML = `
       <p><strong>Full Name:</strong> ${displayName}</p>
@@ -183,6 +199,18 @@ function renderNoProfile(email = '') {
 
   if (pointsTotalElement) {
     pointsTotalElement.textContent = '0';
+  }
+
+  if (homeStudentNameElement) {
+    homeStudentNameElement.textContent = 'No profile found';
+  }
+
+  if (homeStudentSectionElement) {
+    homeStudentSectionElement.textContent = 'Not provided';
+  }
+
+  if (homeStudentPointsElement) {
+    homeStudentPointsElement.textContent = '0';
   }
 
   if (profileDataElement) {
@@ -282,6 +310,18 @@ onAuthStateChanged(auth, async (user) => {
 
     if (pointsTotalElement) {
       pointsTotalElement.textContent = '0';
+    }
+
+    if (homeStudentNameElement) {
+      homeStudentNameElement.textContent = 'Failed to load';
+    }
+
+    if (homeStudentSectionElement) {
+      homeStudentSectionElement.textContent = 'Not available';
+    }
+
+    if (homeStudentPointsElement) {
+      homeStudentPointsElement.textContent = '0';
     }
   }
 });
