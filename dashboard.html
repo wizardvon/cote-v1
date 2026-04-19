@@ -13,7 +13,7 @@
       <div>
         <div class="sidebar-header">
           <p class="sidebar-label">Student App</p>
-          <h2>Juan Dela Cruz</h2>
+          <h2 id="sidebar-student-name">Student</h2>
           <p class="sidebar-email" id="sidebar-student-email">Loading...</p>
         </div>
 
@@ -54,8 +54,8 @@
       <h1 id="page-title" class="app-bar-title">Home</h1>
 
       <div class="app-bar-side app-bar-right" aria-label="Notifications and messages">
-        <button class="icon-button" type="button" aria-label="Notifications">🔔</button>
-        <button class="icon-button" type="button" aria-label="Messages">💬</button>
+        <button id="notifications-button" class="icon-button" type="button" aria-label="Notifications">🔔</button>
+        <button id="messages-button" class="icon-button" type="button" aria-label="Messages">💬</button>
       </div>
     </header>
 
@@ -93,10 +93,11 @@
 
       <section id="page-profile" class="page" data-page="profile" aria-label="Profile">
         <article class="app-card profile-hero">
-          <div class="avatar-placeholder" aria-hidden="true">👤</div>
+          <div class="avatar-placeholder" id="profile-avatar" aria-hidden="true">👤</div>
           <div>
             <h2 id="profile-full-name">Loading...</h2>
             <p id="profile-email">Loading...</p>
+            <p id="profile-grade-section">Loading...</p>
           </div>
         </article>
 
@@ -115,6 +116,8 @@
             <p><strong>LRN:</strong> Loading...</p>
             <p><strong>Phone Number:</strong> Loading...</p>
             <p><strong>Address:</strong> Loading...</p>
+            <p><strong>Grade Level:</strong> Loading...</p>
+            <p><strong>Section:</strong> Loading...</p>
             <p><strong>Total Points:</strong> Loading...</p>
           </div>
         </article>
@@ -191,6 +194,6 @@
       </section>
     </main>
 
-    <script type="module" src="dashboard.js"></script>
+    <script type="module" src="dashboard.js?v=2"></script>
   </body>
 </html>
