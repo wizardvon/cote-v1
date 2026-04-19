@@ -11,10 +11,15 @@ import {
 const profileDataElement = document.getElementById('profileData');
 const profileFullNameElement = document.getElementById('profile-full-name');
 const profileEmailElement = document.getElementById('profile-email');
+const profileGradeSectionElement = document.getElementById('profile-grade-section');
+const profileAvatarElement = document.getElementById('profile-avatar');
+const sidebarStudentNameElement = document.getElementById('sidebar-student-name');
 const sidebarStudentEmailElement = document.getElementById('sidebar-student-email');
 const pointsTotalElement = document.getElementById('points-total');
 const logoutButton = document.getElementById('logout-button');
 const pageTitleElement = document.getElementById('page-title');
+const notificationsButton = document.getElementById('notifications-button');
+const messagesButton = document.getElementById('messages-button');
 
 const sidebar = document.getElementById('sidebar');
 const sidebarOverlay = document.getElementById('sidebar-overlay');
@@ -37,11 +42,32 @@ function safe(value) {
   return text || 'Not provided';
 }
 
-function fullName(data) {
+function makeFullName(data) {
   return [data.firstName, data.middleName, data.lastName]
     .map((v) => (v || '').trim())
     .filter(Boolean)
     .join(' ') || 'Not provided';
+}
+
+function makeGradeSection(data) {
+  const grade = (data.gradeLevel || '').trim();
+  const section = (data.section || '').trim();
+
+  if (grade && section) return `${grade} • ${section}`;
+  if (grade) return grade;
+  if (section) return section;
+  return 'Not provided';
+}
+
+function makeInitials(data) {
+  const first = (data.firstName || '').trim().charAt(0);
+  const last = (data.lastName || '').trim().charAt(0);
+  const initials = `${first}${last}`.toUpperCase();
+  return initials || '👤';
+}
+
+function normalizePoints(points) {
+  return typeof points === 'number' && Number.isFinite(points) ? points : 0;
 }
 
 function toggleSidebar() {
@@ -75,11 +101,22 @@ function showPage(pageName) {
   }
 
   closeSidebar();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function renderProfile(data, fallbackEmail, points) {
-  const displayName = safe(fullName(data));
+function setStudentData(data, fallbackEmail = '') {
+  const displayName = safe(makeFullName(data));
   const displayEmail = safe(data.email || fallbackEmail);
+  const displayGradeSection = makeGradeSection(data);
+  const points = normalizePoints(data.points);
+
+  if (sidebarStudentNameElement) {
+    sidebarStudentNameElement.textContent = displayName;
+  }
+
+  if (sidebarStudentEmailElement) {
+    sidebarStudentEmailElement.textContent = displayEmail;
+  }
 
   if (profileFullNameElement) {
     profileFullNameElement.textContent = displayName;
@@ -89,24 +126,79 @@ function renderProfile(data, fallbackEmail, points) {
     profileEmailElement.textContent = displayEmail;
   }
 
-  if (sidebarStudentEmailElement) {
-    sidebarStudentEmailElement.textContent = displayEmail;
+  if (profileGradeSectionElement) {
+    profileGradeSectionElement.textContent = displayGradeSection;
   }
 
-  profileDataElement.innerHTML = `
-    <p><strong>Full Name:</strong> ${displayName}</p>
-    <p><strong>Email:</strong> ${displayEmail}</p>
-    <p><strong>Sex:</strong> ${safe(data.sex)}</p>
-    <p><strong>Birthday:</strong> ${safe(data.birthday)}</p>
-    <p><strong>LRN:</strong> ${safe(data.lrn)}</p>
-    <p><strong>Phone Number:</strong> ${safe(data.phoneNumber)}</p>
-    <p><strong>Address:</strong> ${safe(data.address)}</p>
-    <p><strong>Total Points:</strong> ${points}</p>
-  `;
+  if (profileAvatarElement) {
+    profileAvatarElement.textContent = makeInitials(data);
+  }
+
+  if (pointsTotalElement) {
+    pointsTotalElement.textContent = String(points);
+  }
+
+  if (profileDataElement) {
+    profileDataElement.innerHTML = `
+      <p><strong>Full Name:</strong> ${displayName}</p>
+      <p><strong>Email:</strong> ${displayEmail}</p>
+      <p><strong>Sex:</strong> ${safe(data.sex)}</p>
+      <p><strong>Birthday:</strong> ${safe(data.birthday)}</p>
+      <p><strong>LRN:</strong> ${safe(data.lrn)}</p>
+      <p><strong>Phone Number:</strong> ${safe(data.phoneNumber)}</p>
+      <p><strong>Address:</strong> ${safe(data.address)}</p>
+      <p><strong>Grade Level:</strong> ${safe(data.gradeLevel)}</p>
+      <p><strong>Section:</strong> ${safe(data.section)}</p>
+      <p><strong>Total Points:</strong> ${points}</p>
+    `;
+  }
 }
 
-function normalizePoints(points) {
-  return typeof points === 'number' && Number.isFinite(points) ? points : 0;
+function renderNoProfile(email = '') {
+  const fallback = safe(email);
+
+  if (sidebarStudentNameElement) {
+    sidebarStudentNameElement.textContent = 'No profile found';
+  }
+
+  if (sidebarStudentEmailElement) {
+    sidebarStudentEmailElement.textContent = fallback;
+  }
+
+  if (profileFullNameElement) {
+    profileFullNameElement.textContent = 'No profile found';
+  }
+
+  if (profileEmailElement) {
+    profileEmailElement.textContent = fallback;
+  }
+
+  if (profileGradeSectionElement) {
+    profileGradeSectionElement.textContent = 'Not provided';
+  }
+
+  if (profileAvatarElement) {
+    profileAvatarElement.textContent = '👤';
+  }
+
+  if (pointsTotalElement) {
+    pointsTotalElement.textContent = '0';
+  }
+
+  if (profileDataElement) {
+    profileDataElement.innerHTML = `
+      <p><strong>Full Name:</strong> No profile found</p>
+      <p><strong>Email:</strong> ${fallback}</p>
+      <p><strong>Sex:</strong> Not provided</p>
+      <p><strong>Birthday:</strong> Not provided</p>
+      <p><strong>LRN:</strong> Not provided</p>
+      <p><strong>Phone Number:</strong> Not provided</p>
+      <p><strong>Address:</strong> Not provided</p>
+      <p><strong>Grade Level:</strong> Not provided</p>
+      <p><strong>Section:</strong> Not provided</p>
+      <p><strong>Total Points:</strong> 0</p>
+    `;
+  }
 }
 
 menuButtons.forEach((button) => {
@@ -125,6 +217,14 @@ document.addEventListener('keydown', (event) => {
   }
 });
 
+notificationsButton?.addEventListener('click', () => {
+  alert('Notifications feature will be added here.');
+});
+
+messagesButton?.addEventListener('click', () => {
+  alert('Messages or chat feature will be added here.');
+});
+
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
     window.location.replace('index.html');
@@ -140,41 +240,46 @@ onAuthStateChanged(auth, async (user) => {
     const studentSnap = await getDoc(studentRef);
 
     if (!studentSnap.exists()) {
-      profileDataElement.innerHTML = `
-        <p><strong>Full Name:</strong> No profile found</p>
-        <p><strong>Email:</strong> ${safe(user.email)}</p>
-        <p><strong>Sex:</strong> Not provided</p>
-        <p><strong>Birthday:</strong> Not provided</p>
-        <p><strong>LRN:</strong> Not provided</p>
-        <p><strong>Phone Number:</strong> Not provided</p>
-        <p><strong>Address:</strong> Not provided</p>
-        <p><strong>Total Points:</strong> 0</p>
-      `;
-      profileFullNameElement.textContent = 'No profile found';
-      profileEmailElement.textContent = safe(user.email);
-      if (pointsTotalElement) {
-        pointsTotalElement.textContent = '0';
-      }
+      renderNoProfile(user.email);
       return;
     }
 
     const studentData = studentSnap.data();
     const points = normalizePoints(studentData.points);
 
-    if (pointsTotalElement) {
-      pointsTotalElement.textContent = String(points);
-    }
-
     if (studentData.points === undefined) {
       await updateDoc(studentRef, { points: 0 });
+      studentData.points = 0;
+    } else {
+      studentData.points = points;
     }
 
-    renderProfile(studentData, user.email, points);
+    setStudentData(studentData, user.email);
   } catch (error) {
     console.error('Failed to load profile:', error);
-    profileDataElement.innerHTML = `
-      <p><strong>Error:</strong> Failed to load profile data.</p>
-    `;
+
+    if (profileDataElement) {
+      profileDataElement.innerHTML = `
+        <p><strong>Error:</strong> Failed to load profile data.</p>
+      `;
+    }
+
+    if (profileFullNameElement) {
+      profileFullNameElement.textContent = 'Failed to load';
+    }
+
+    if (profileEmailElement) {
+      profileEmailElement.textContent = safe(user?.email);
+    }
+
+    if (profileGradeSectionElement) {
+      profileGradeSectionElement.textContent = 'Not available';
+    }
+
+    if (profileAvatarElement) {
+      profileAvatarElement.textContent = '👤';
+    }
+
     if (pointsTotalElement) {
       pointsTotalElement.textContent = '0';
     }
@@ -187,6 +292,7 @@ logoutButton?.addEventListener('click', async () => {
     window.location.replace('index.html');
   } catch (error) {
     console.error('Logout failed:', error);
+    alert('Logout failed.');
   }
 });
 
