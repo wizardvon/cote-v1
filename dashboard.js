@@ -226,16 +226,21 @@ async function loadPointLogs(studentId) {
       return;
     }
 
-    listElement.innerHTML = logsSnapshot.docs
-      .map((logDoc) => {
-        const log = logDoc.data();
-        const points = normalizePoints(log.points);
-        const sign = log.type === 'demerit' ? '-' : '+';
-        const label = log.type === 'demerit' ? 'Demerit' : 'Merit';
-        const reason = String(log.reason || 'No reason provided').trim() || 'No reason provided';
-        return `<li>${sign}${points} ${label} — ${reason}</li>`;
-      })
-      .join('');
+   listElement.innerHTML = logsSnapshot.docs
+  .map((logDoc) => {
+    const log = logDoc.data();
+    const points = normalizePoints(log.points);
+    const sign = log.type === 'demerit' ? '-' : '+';
+    const label = log.type === 'demerit' ? 'Demerit' : 'Merit';
+    const reason = String(log.reason || 'No reason provided').trim() || 'No reason provided';
+    const teacherName =
+      String(log.teacherName || '').trim() ||
+      String(log.teacherEmail || '').trim() ||
+      'Unknown Teacher';
+
+    return `<li>${sign}${points} ${label} — ${reason}<br><strong>Teacher:</strong> ${teacherName}</li>`;
+  })
+  .join('');
   } catch (error) {
     console.error('Failed to load point logs:', error);
     const message = String(error?.message || error).toLowerCase();
