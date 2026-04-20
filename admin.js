@@ -285,31 +285,48 @@ async function updatePointsForSelected(action) {
 
   try {
     const updates = selectedIds.map(async (studentId) => {
-      const studentRef = doc(db, 'students', studentId);
-      const current = allStudents.find((student) => student.id === studentId);
-      const currentPoints = normalizePoints(current?.points);
+  const studentRef = doc(db, 'students', studentId);
+  const current = allStudents.find((student) => student.id === studentId);
+  const currentPoints = normalizePoints(current?.points);
 
-      await updateDoc(studentRef, { points: currentPoints + delta });
-      await addDoc(collection(db, 'pointLogs'), {
-  studentId,
-  studentName: `${safeText(current?.firstName, '')} ${safeText(current?.middleName, '')} ${safeText(
-    current?.lastName,
-    ''
-  )}`
-    .replace(/\s+/g, ' ')
-    .trim(),
-  lrn: safeText(current?.lrn, ''),
-  section: safeText(current?.section, ''),
-  type: action === 'add' ? 'merit' : 'demerit',
-  points: pointValue,
-  reason,
-  teacherId: auth.currentUser?.uid || '',
-  teacherEmail: auth.currentUser?.email || '',
-  createdAt: serverTimestamp()
+  const teacherUid = auth.currentUser?.uid || '';
+  let teacherName = 'Unknown Teacher';
+
+  if (teacherUid) {
+    const teacherRef = doc(db, 'teachers', teacherUid);
+    const teacherSnap = await getDoc(teacherRef);
+
+    if (teacherSnap.exists()) {
+      const teacherData = teacherSnap.data();
+      teacherName = `${safeText(teacherData?.firstName, '')} ${safeText(teacherData?.lastName, '')}`
+        .replace(/\s+/g, ' ')
+        .trim() || 'Unknown Teacher';
+    }
+  }
+
+  await updateDoc(studentRef, { points: currentPoints + delta });
+
+  await addDoc(collection(db, 'pointLogs'), {
+    studentId,
+    studentName: `${safeText(current?.firstName, '')} ${safeText(current?.middleName, '')} ${safeText(
+      current?.lastName,
+      ''
+    )}`
+      .replace(/\s+/g, ' ')
+      .trim(),
+    lrn: safeText(current?.lrn, ''),
+    section: safeText(current?.section, ''),
+    type: action === 'add' ? 'merit' : 'demerit',
+    points: pointValue,
+    reason,
+    teacherId: teacherUid,
+    teacherName,
+    teacherEmail: auth.currentUser?.email || '',
+    createdAt: serverTimestamp()
+  });
+
+  return { studentId, points: currentPoints + delta };
 });
-
-      return { studentId, points: currentPoints + delta };
-    });
 
     const results = await Promise.all(updates);
 
