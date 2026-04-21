@@ -9,25 +9,35 @@ const loadingOverlay = document.getElementById('loadingOverlay');
 function showLoadingOverlay(text = 'Initializing C.O.T.E System...') {
   if (!loadingOverlay) return;
 
-  const loadingTextElement = loadingOverlay.querySelector('.loading-text');
-  if (loadingTextElement) {
-    loadingTextElement.textContent = text;
-  }
+  loadingOverlay.classList.remove('loading-overlay-fade-out');
+  updateLoadingText(text);
 
   loadingOverlay.classList.add('loading-overlay-visible');
   loadingOverlay.setAttribute('aria-hidden', 'false');
 }
 
+function updateLoadingText(text) {
+  if (!loadingOverlay) return;
+
+  const loadingTextElement = loadingOverlay.querySelector('.loading-text');
+  if (loadingTextElement) {
+    loadingTextElement.textContent = text;
+  }
+}
+
 function hideLoadingOverlay() {
   if (!loadingOverlay) return;
 
+  loadingOverlay.classList.add('loading-overlay-fade-out');
   loadingOverlay.classList.remove('loading-overlay-visible');
   loadingOverlay.setAttribute('aria-hidden', 'true');
 }
 
 async function redirectWithOverlay(path) {
-  showLoadingOverlay('Access granted. Loading secure workspace...');
-  await new Promise((resolve) => setTimeout(resolve, 420));
+  showLoadingOverlay('Authenticating...');
+  await new Promise((resolve) => setTimeout(resolve, 350));
+  updateLoadingText('Entering C.O.T.E System...');
+  await new Promise((resolve) => setTimeout(resolve, 850));
   window.location.href = path;
 }
 
@@ -50,7 +60,7 @@ loginForm?.addEventListener('submit', async (event) => {
     submitButton.textContent = 'Logging in...';
   }
 
-  showLoadingOverlay('Authenticating credentials...');
+  showLoadingOverlay('Authenticating...');
   let hasRedirected = false;
 
   try {
