@@ -3,87 +3,250 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>COTE Web App | Admin Points</title>
+    <title>COTE Web App | Teacher Dashboard</title>
     <meta name="theme-color" content="#2563eb" />
     <link rel="manifest" href="/cote-v1/manifest.json" />
     <link rel="stylesheet" href="style.css" />
   </head>
-  <body>
-    <main class="container dashboard-container" aria-labelledby="admin-title">
-      <section class="dashboard-header">
-        <div>
-          <h1 id="admin-title">Teacher Admin: Manage Student Points</h1>
-          <p class="subtitle">Signed in as <strong id="admin-email">Loading...</strong></p>
+  <body class="dashboard-body">
+    <aside id="sidebar" class="sidebar" aria-hidden="true" aria-label="Teacher sidebar menu">
+      <div>
+        <div class="sidebar-header">
+          <p class="sidebar-label">C.O.T.E Teacher</p>
+          <h2 id="sidebar-teacher-name">Teacher Panel</h2>
+          <p class="sidebar-email" id="admin-email">Loading...</p>
         </div>
-        <button id="logout-button" type="button" class="logout-button">Logout</button>
+
+        <nav class="sidebar-nav" aria-label="Teacher navigation">
+          <button type="button" class="menu-btn active" data-target="home">
+            <span aria-hidden="true">🏠</span>
+            <span>Home</span>
+          </button>
+          <button type="button" class="menu-btn" data-target="give-points">
+            <span aria-hidden="true">⭐</span>
+            <span>Give Points</span>
+          </button>
+          <button type="button" class="menu-btn" data-target="scores">
+            <span aria-hidden="true">📝</span>
+            <span>Scores</span>
+          </button>
+          <button type="button" class="menu-btn" data-target="quest">
+            <span aria-hidden="true">🎯</span>
+            <span>Quest</span>
+          </button>
+          <button type="button" class="menu-btn" data-target="resources">
+            <span aria-hidden="true">📂</span>
+            <span>Resources</span>
+          </button>
+        </nav>
+      </div>
+
+      <button id="logout-button" type="button" class="logout-button menu-logout">Logout</button>
+    </aside>
+
+    <button id="sidebar-overlay" class="sidebar-overlay" hidden aria-label="Close sidebar"></button>
+
+    <header class="app-bar" aria-label="Teacher app bar">
+      <div class="app-bar-side app-bar-left">
+        <button id="burger-button" class="icon-button" type="button" aria-label="Open menu">☰</button>
+      </div>
+
+      <h1 id="page-title" class="app-bar-title">Home</h1>
+
+      <div class="app-bar-side app-bar-right">
+        <span class="teacher-chip">Teacher</span>
+      </div>
+    </header>
+
+    <main class="student-app teacher-app" aria-labelledby="page-title">
+      <section id="page-home" class="page active" data-page="home" aria-label="Teacher home">
+        <article class="app-card welcome-card">
+          <p class="badge">Teacher Control Center</p>
+          <h2>Welcome to the Teacher Dashboard</h2>
+          <p>
+            Manage class point updates, track progress modules, and prepare upcoming classroom features from one app-style workspace.
+          </p>
+        </article>
+
+        <article class="app-card">
+          <h3>Quick Summary</h3>
+          <div class="info-grid">
+            <p><strong>Active module:</strong> Give Points</p>
+            <p><strong>Current access:</strong> Teacher/Admin</p>
+            <p><strong>Student source:</strong> Firestore students collection</p>
+            <p><strong>Point logs:</strong> Saved in pointLogs</p>
+          </div>
+        </article>
+
+        <article class="app-card">
+          <h3>Section Guide</h3>
+          <ul class="list-stack">
+            <li><strong>Home:</strong> Teacher dashboard overview and reminders.</li>
+            <li><strong>Give Points:</strong> Main working area for merit/demerit updates.</li>
+            <li><strong>Scores:</strong> Placeholder cards for Written Works, PT, and Exams.</li>
+            <li><strong>Quest:</strong> Placeholder cards for future quest management.</li>
+            <li><strong>Resources:</strong> Placeholder cards for learning materials.</li>
+          </ul>
+        </article>
+
+        <article class="app-card">
+          <h3>Teacher Notes</h3>
+          <ul class="list-stack">
+            <li>Always include a clear reason when applying point changes.</li>
+            <li>Use filters and search before bulk updates.</li>
+            <li>Scores, Quest, and Resources are layout-only in this release.</li>
+          </ul>
+        </article>
       </section>
 
-      <section class="dashboard-card" aria-labelledby="bulk-points-title">
-        <h2 id="bulk-points-title">Bulk Student Point Management</h2>
+      <section id="page-give-points" class="page" data-page="give-points" aria-label="Give points">
+        <article class="app-card">
+          <h2>Bulk Student Point Management</h2>
+          <p>Filter, search, select, and apply merit/demerit points with required reason logging.</p>
 
-        <div class="admin-toolbar">
-          <div class="field">
-            <label for="section-filter">Filter by Section</label>
-            <select id="section-filter">
-              <option value="all">All Sections</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="student-search">Search by Name or LRN</label>
-            <input id="student-search" type="text" placeholder="Type name or LRN" autocomplete="off" />
-          </div>
-          <div class="field admin-load-field">
-            <label for="load-students-button">Load/Filter Students</label>
-            <button id="load-students-button" type="button">Load Students</button>
-          </div>
-        </div>
+          <div class="admin-toolbar">
+            <div class="field">
+              <label for="section-filter">Filter by Section</label>
+              <select id="section-filter">
+                <option value="all">All Sections</option>
+              </select>
+            </div>
 
-        <div class="admin-table-wrap" role="region" aria-label="Student list" tabindex="0">
-          <table class="admin-table">
-            <thead>
-              <tr>
-                <th scope="col" class="checkbox-column">
-                  <label class="checkbox-label" for="select-all">
-                    <input id="select-all" type="checkbox" />
-                    <span>Select All</span>
-                  </label>
-                </th>
-                <th scope="col">Last Name</th>
-                <th scope="col">First Name</th>
-                <th scope="col">Middle Name</th>
-                <th scope="col">LRN</th>
-                <th scope="col">Section</th>
-                <th scope="col">Current Points</th>
-              </tr>
-            </thead>
-            <tbody id="students-table-body">
-              <tr>
-                <td colspan="8" class="empty-cell">Click "Load Students" to fetch and display students.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+            <div class="field">
+              <label for="student-search">Search by Name or LRN</label>
+              <input id="student-search" type="text" placeholder="Type name or LRN" autocomplete="off" />
+            </div>
 
-        <div class="admin-actions admin-bulk-actions">
-          <div class="field admin-points-field">
-            <label for="points-value">Points Value</label>
-            <input
-              id="points-value"
-              type="number"
-              min="1"
-              step="1"
-              inputmode="numeric"
-              placeholder="Enter positive points"
-            />
+            <div class="field admin-load-field">
+              <label for="load-students-button">Load/Refresh</label>
+              <button id="load-students-button" type="button">Load Students</button>
+            </div>
           </div>
-          <button id="add-points-button" type="button">Add Merit Points</button>
-          <button id="deduct-points-button" type="button" class="danger-button">Add Demerit Points</button>
-        </div>
+        </article>
 
-        <p id="admin-message" class="form-message" role="status" aria-live="polite"></p>
+        <article class="app-card admin-action-panel">
+          <h3>Point Action Panel</h3>
+          <div class="admin-actions admin-bulk-actions">
+            <div class="field admin-points-field">
+              <label for="points-value">Points Value</label>
+              <input
+                id="points-value"
+                type="number"
+                min="1"
+                step="1"
+                inputmode="numeric"
+                placeholder="Enter positive points"
+              />
+            </div>
+
+            <div class="field field-full">
+              <label for="reason-input">Reason for Update</label>
+              <textarea
+                id="reason-input"
+                class="admin-reason"
+                placeholder="Enter reason for merit/demerit update"
+                rows="3"
+              ></textarea>
+            </div>
+
+            <button id="add-points-button" type="button">Add Merit Points</button>
+            <button id="deduct-points-button" type="button" class="danger-button">Add Demerit Points</button>
+          </div>
+
+          <p id="admin-message" class="form-message" role="status" aria-live="polite"></p>
+        </article>
+
+        <article class="app-card">
+          <h3>Student List</h3>
+          <div class="admin-table-wrap" role="region" aria-label="Student list" tabindex="0">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th scope="col" class="checkbox-column">
+                    <label class="checkbox-label" for="select-all">
+                      <input id="select-all" type="checkbox" />
+                      <span>Select All</span>
+                    </label>
+                  </th>
+                  <th scope="col">Last Name</th>
+                  <th scope="col">First Name</th>
+                  <th scope="col">Middle Name</th>
+                  <th scope="col">LRN</th>
+                  <th scope="col">Section</th>
+                  <th scope="col">Current Points</th>
+                </tr>
+              </thead>
+              <tbody id="students-table-body">
+                <tr>
+                  <td colspan="8" class="empty-cell">Click "Load Students" to fetch and display students.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section id="page-scores" class="page" data-page="scores" aria-label="Scores">
+        <article class="app-card">
+          <h3>Written Works</h3>
+          <p>Prepare quizzes, short tests, and written assessments per section.</p>
+          <p><strong>Coming soon:</strong> Score encoding and release flow.</p>
+        </article>
+
+        <article class="app-card">
+          <h3>Performance Tasks</h3>
+          <p>Plan performance outputs, activity rubrics, and project-based evaluations.</p>
+          <p><strong>Coming soon:</strong> Rubric scoring and task tracking.</p>
+        </article>
+
+        <article class="app-card">
+          <h3>Quarterly Exam</h3>
+          <p>Quarter exam setup and final period evaluation dashboard placeholder.</p>
+          <p><strong>Coming soon:</strong> Exam result summaries and analytics.</p>
+        </article>
+      </section>
+
+      <section id="page-quest" class="page" data-page="quest" aria-label="Quest">
+        <article class="app-card quest-card">
+          <h3>Create Quest</h3>
+          <p>Draft section missions, challenge mechanics, and point rewards.</p>
+          <button type="button">Coming Soon</button>
+        </article>
+
+        <article class="app-card quest-card">
+          <h3>Active Quests</h3>
+          <p>View currently assigned quest drafts and mission windows.</p>
+          <button type="button">Coming Soon</button>
+        </article>
+
+        <article class="app-card quest-card">
+          <h3>Quest Instructions / Reward Notes</h3>
+          <p>Reference notes for quest rules, reward tiers, and teacher guidance.</p>
+          <button type="button">Coming Soon</button>
+        </article>
+      </section>
+
+      <section id="page-resources" class="page" data-page="resources" aria-label="Resources">
+        <article class="app-card resource-card">
+          <h3>Add Learning Resource</h3>
+          <p>Prepare future upload panel for modules, handouts, and references.</p>
+          <button type="button">Coming Soon</button>
+        </article>
+
+        <article class="app-card resource-card">
+          <h3>Uploaded Resources</h3>
+          <p>Placeholder list for available class resources and files.</p>
+          <button type="button">Coming Soon</button>
+        </article>
+
+        <article class="app-card resource-card">
+          <h3>Resource Notes / Section Assignment</h3>
+          <p>Reserve this area for section-based material assignment notes.</p>
+          <button type="button">Coming Soon</button>
+        </article>
       </section>
     </main>
 
-    <script type="module" src="admin.js?v=5"></script>
+    <script type="module" src="admin.js?v=6"></script>
   </body>
 </html>

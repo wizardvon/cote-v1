@@ -13,17 +13,36 @@ import {
 } from './firebase.js';
 
 const adminEmailElement = document.getElementById('admin-email');
+const sidebarTeacherNameElement = document.getElementById('sidebar-teacher-name');
 const logoutButton = document.getElementById('logout-button');
+
+const pageTitleElement = document.getElementById('page-title');
+const sidebar = document.getElementById('sidebar');
+const sidebarOverlay = document.getElementById('sidebar-overlay');
+const burgerButton = document.getElementById('burger-button');
+const menuButtons = Array.from(document.querySelectorAll('.menu-btn'));
+const pages = Array.from(document.querySelectorAll('.page'));
+
 const sectionFilterElement = document.getElementById('section-filter');
 const searchInput = document.getElementById('student-search');
 const loadStudentsButton = document.getElementById('load-students-button');
 const selectAllCheckbox = document.getElementById('select-all');
 const tableBody = document.getElementById('students-table-body');
 const pointsValueInput = document.getElementById('points-value');
+const reasonInput = document.getElementById('reason-input');
 const addPointsButton = document.getElementById('add-points-button');
 const deductPointsButton = document.getElementById('deduct-points-button');
 const messageElement = document.getElementById('admin-message');
+
 const TABLE_COLUMN_COUNT = 8;
+
+const pageTitles = {
+  home: 'Home',
+  'give-points': 'Give Points',
+  scores: 'Scores',
+  quest: 'Quest',
+  resources: 'Resources'
+};
 
 let allStudents = [];
 let visibleStudents = [];
@@ -70,13 +89,51 @@ function compareStudents(a, b) {
   });
 }
 
+function toggleSidebar() {
+  if (!sidebar || !sidebarOverlay) return;
+
+  const isOpen = sidebar.classList.contains('open');
+  sidebar.classList.toggle('open', !isOpen);
+  sidebar.setAttribute('aria-hidden', String(isOpen));
+  sidebarOverlay.hidden = isOpen;
+}
+
+function closeSidebar() {
+  if (!sidebar || !sidebarOverlay) return;
+
+  sidebar.classList.remove('open');
+  sidebar.setAttribute('aria-hidden', 'true');
+  sidebarOverlay.hidden = true;
+}
+
+function showPage(pageName) {
+  pages.forEach((page) => {
+    page.classList.toggle('active', page.dataset.page === pageName);
+  });
+
+  menuButtons.forEach((button) => {
+    button.classList.toggle('active', button.dataset.target === pageName);
+  });
+
+  if (pageTitleElement) {
+    pageTitleElement.textContent = pageTitles[pageName] || 'Teacher Dashboard';
+  }
+
+  closeSidebar();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
 function getSelectedStudentIds() {
+  if (!tableBody) return [];
+
   return Array.from(tableBody.querySelectorAll('input[data-student-id]:checked')).map(
     (input) => input.dataset.studentId
   );
 }
 
 function updateSelectAllState() {
+  if (!tableBody || !selectAllCheckbox) return;
+
   const checkboxes = Array.from(tableBody.querySelectorAll('input[data-student-id]'));
 
   if (checkboxes.length === 0) {
@@ -91,6 +148,8 @@ function updateSelectAllState() {
 }
 
 function renderTableRows() {
+  if (!tableBody) return;
+
   if (visibleStudents.length === 0) {
     tableBody.innerHTML = `
       <tr>
@@ -126,6 +185,8 @@ function renderTableRows() {
 }
 
 function getFilteredStudents() {
+  if (!sectionFilterElement || !searchInput) return [];
+
   const selectedSection = sectionFilterElement.value;
   const keyword = searchInput.value.trim().toLowerCase();
 
@@ -167,6 +228,8 @@ function applyFiltersAndRender(showStatusMessage = true) {
 }
 
 function populateSectionFilter(students) {
+  if (!sectionFilterElement) return;
+
   const sections = [...new Set(students.map((student) => safeText(student.section, '')).filter(Boolean))].sort(
     (a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })
   );
@@ -182,12 +245,12 @@ function populateSectionFilter(students) {
 }
 
 async function loadStudents({ showStatusMessage = true } = {}) {
+  if (!tableBody || !sectionFilterElement || !loadStudentsButton) return false;
+
   setMessage('Loading students...');
 
-  if (loadStudentsButton) {
-    loadStudentsButton.disabled = true;
-    loadStudentsButton.textContent = 'Loading...';
-  }
+  loadStudentsButton.disabled = true;
+  loadStudentsButton.textContent = 'Loading...';
 
   tableBody.innerHTML = `
     <tr>
@@ -236,14 +299,14 @@ async function loadStudents({ showStatusMessage = true } = {}) {
     setMessage(`Failed to load students: ${errorMessage}`, 'error');
     return false;
   } finally {
-    if (loadStudentsButton) {
-      loadStudentsButton.disabled = false;
-      loadStudentsButton.textContent = 'Load Students';
-    }
+    loadStudentsButton.disabled = false;
+    loadStudentsButton.textContent = 'Load Students';
   }
 }
 
 function parsePointValue() {
+  if (!pointsValueInput) return null;
+
   const pointValue = Number(pointsValueInput.value);
 
   if (!Number.isFinite(pointValue) || pointValue <= 0 || !Number.isInteger(pointValue)) {
@@ -253,7 +316,19 @@ function parsePointValue() {
   return pointValue;
 }
 
+function parseReason() {
+  const reason = String(reasonInput?.value || '').trim();
+
+  if (!reason) {
+    return null;
+  }
+
+  return reason;
+}
+
 async function updatePointsForSelected(action) {
+  if (!addPointsButton || !deductPointsButton || !pointsValueInput || !reasonInput || !selectAllCheckbox) return;
+
   const selectedIds = getSelectedStudentIds();
 
   if (selectedIds.length === 0) {
@@ -268,15 +343,15 @@ async function updatePointsForSelected(action) {
     return;
   }
 
-  const delta = action === 'add' ? pointValue : -pointValue;
-  const buttonLabel = action === 'add' ? 'Adding merit...' : 'Adding demerit...';
-  const reasonInput = window.prompt(`Enter reason for this ${action === 'add' ? 'merit' : 'demerit'} update:`) || '';
-  const reason = reasonInput.trim();
+  const reason = parseReason();
 
   if (!reason) {
     setMessage('A reason is required to log this point update.', 'error');
     return;
   }
+
+  const delta = action === 'add' ? pointValue : -pointValue;
+  const buttonLabel = action === 'add' ? 'Adding merit...' : 'Adding demerit...';
 
   addPointsButton.disabled = true;
   deductPointsButton.disabled = true;
@@ -284,49 +359,49 @@ async function updatePointsForSelected(action) {
   deductPointsButton.textContent = action === 'subtract' ? buttonLabel : 'Add Demerit Points';
 
   try {
-    const updates = selectedIds.map(async (studentId) => {
-  const studentRef = doc(db, 'students', studentId);
-  const current = allStudents.find((student) => student.id === studentId);
-  const currentPoints = normalizePoints(current?.points);
+    const teacherUid = auth.currentUser?.uid || '';
+    let teacherName = 'Unknown Teacher';
 
-  const teacherUid = auth.currentUser?.uid || '';
-  let teacherName = 'Unknown Teacher';
+    if (teacherUid) {
+      const teacherRef = doc(db, 'teachers', teacherUid);
+      const teacherSnap = await getDoc(teacherRef);
 
-  if (teacherUid) {
-    const teacherRef = doc(db, 'teachers', teacherUid);
-    const teacherSnap = await getDoc(teacherRef);
-
-    if (teacherSnap.exists()) {
-      const teacherData = teacherSnap.data();
-      teacherName = `${safeText(teacherData?.firstName, '')} ${safeText(teacherData?.lastName, '')}`
-        .replace(/\s+/g, ' ')
-        .trim() || 'Unknown Teacher';
+      if (teacherSnap.exists()) {
+        const teacherData = teacherSnap.data();
+        teacherName = `${safeText(teacherData?.firstName, '')} ${safeText(teacherData?.lastName, '')}`
+          .replace(/\s+/g, ' ')
+          .trim() || 'Unknown Teacher';
+      }
     }
-  }
 
-  await updateDoc(studentRef, { points: currentPoints + delta });
+    const updates = selectedIds.map(async (studentId) => {
+      const studentRef = doc(db, 'students', studentId);
+      const current = allStudents.find((student) => student.id === studentId);
+      const currentPoints = normalizePoints(current?.points);
 
-  await addDoc(collection(db, 'pointLogs'), {
-    studentId,
-    studentName: `${safeText(current?.firstName, '')} ${safeText(current?.middleName, '')} ${safeText(
-      current?.lastName,
-      ''
-    )}`
-      .replace(/\s+/g, ' ')
-      .trim(),
-    lrn: safeText(current?.lrn, ''),
-    section: safeText(current?.section, ''),
-    type: action === 'add' ? 'merit' : 'demerit',
-    points: pointValue,
-    reason,
-    teacherId: teacherUid,
-    teacherName,
-    teacherEmail: auth.currentUser?.email || '',
-    createdAt: serverTimestamp()
-  });
+      await updateDoc(studentRef, { points: currentPoints + delta });
 
-  return { studentId, points: currentPoints + delta };
-});
+      await addDoc(collection(db, 'pointLogs'), {
+        studentId,
+        studentName: `${safeText(current?.firstName, '')} ${safeText(current?.middleName, '')} ${safeText(
+          current?.lastName,
+          ''
+        )}`
+          .replace(/\s+/g, ' ')
+          .trim(),
+        lrn: safeText(current?.lrn, ''),
+        section: safeText(current?.section, ''),
+        type: action === 'add' ? 'merit' : 'demerit',
+        points: pointValue,
+        reason,
+        teacherId: teacherUid,
+        teacherName,
+        teacherEmail: auth.currentUser?.email || '',
+        createdAt: serverTimestamp()
+      });
+
+      return { studentId, points: currentPoints + delta };
+    });
 
     const results = await Promise.all(updates);
 
@@ -349,6 +424,7 @@ async function updatePointsForSelected(action) {
     }
 
     pointsValueInput.value = '';
+    reasonInput.value = '';
     selectAllCheckbox.checked = false;
     selectAllCheckbox.indeterminate = false;
 
@@ -365,6 +441,19 @@ async function updatePointsForSelected(action) {
   }
 }
 
+menuButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    const targetPage = button.dataset.target;
+
+    if (!targetPage) return;
+
+    showPage(targetPage);
+  });
+});
+
+burgerButton?.addEventListener('click', toggleSidebar);
+sidebarOverlay?.addEventListener('click', closeSidebar);
+
 loadStudentsButton?.addEventListener('click', () => {
   loadStudents();
 });
@@ -380,6 +469,8 @@ searchInput?.addEventListener('input', () => {
 });
 
 selectAllCheckbox?.addEventListener('change', () => {
+  if (!tableBody || !selectAllCheckbox) return;
+
   const checkboxes = tableBody.querySelectorAll('input[data-student-id]');
 
   checkboxes.forEach((checkbox) => {
@@ -402,6 +493,8 @@ tableBody?.addEventListener('change', (event) => {
 });
 
 pointsValueInput?.addEventListener('input', () => {
+  if (!pointsValueInput) return;
+
   const value = Number(pointsValueInput.value);
 
   if (Number.isFinite(value) && value < 0) {
@@ -449,14 +542,26 @@ onAuthStateChanged(auth, async (user) => {
       return;
     }
 
-    adminEmailElement.textContent = userData.email || user.email || 'No email available';
-    setMessage('Teacher access granted. Choose filters, then click "Load Students".', 'success');
+    const displayEmail = userData.email || user.email || 'No email available';
+    const displayName = `${safeText(userData.firstName, '')} ${safeText(userData.lastName, '')}`.replace(/\s+/g, ' ').trim();
 
-    tableBody.innerHTML = `
-      <tr>
-        <td colspan="${TABLE_COLUMN_COUNT}" class="empty-cell">Click "Load Students" to fetch and display students.</td>
-      </tr>
-    `;
+    if (adminEmailElement) {
+      adminEmailElement.textContent = displayEmail;
+    }
+
+    if (sidebarTeacherNameElement) {
+      sidebarTeacherNameElement.textContent = displayName || 'Teacher Panel';
+    }
+
+    setMessage('Teacher access granted. Open Give Points and click "Load Students".', 'success');
+
+    if (tableBody) {
+      tableBody.innerHTML = `
+        <tr>
+          <td colspan="${TABLE_COLUMN_COUNT}" class="empty-cell">Click "Load Students" to fetch and display students.</td>
+        </tr>
+      `;
+    }
   } catch (error) {
     console.error('Failed to validate teacher role:', error);
     window.location.replace('dashboard.html');
