@@ -4,15 +4,24 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>COTE Web App | Teacher Dashboard</title>
-    <meta name="theme-color" content="#2563eb" />
+    <meta name="theme-color" content="#061321" />
     <link rel="manifest" href="/cote-v1/manifest.json" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/cote-v1/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/cote-v1/icons/icon-192.png" />
     <link rel="stylesheet" href="style.css" />
   </head>
   <body class="dashboard-body">
     <aside id="sidebar" class="sidebar" aria-hidden="true" aria-label="Teacher sidebar menu">
       <div>
         <div class="sidebar-header">
-          <p class="sidebar-label">C.O.T.E Teacher</p>
+          <div class="brand-block">
+            <img src="icons/cote-logo.png" alt="C.O.T.E Gold Shield" class="brand-logo" />
+            <div>
+              <p class="sidebar-label">Elite Academy System</p>
+              <p class="brand-title">C.O.T.E App</p>
+            </div>
+          </div>
+          
           <h2 id="sidebar-teacher-name">Teacher Panel</h2>
           <p class="sidebar-email" id="admin-email">Loading...</p>
         </div>
@@ -54,6 +63,7 @@
       <h1 id="page-title" class="app-bar-title">Home</h1>
 
       <div class="app-bar-side app-bar-right">
+        <img src="icons/cote-logo.png" alt="C.O.T.E" class="top-brand-logo" />
         <span class="teacher-chip">Teacher</span>
       </div>
     </header>
