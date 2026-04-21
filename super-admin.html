@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>COTE Web App | Super Admin Dashboard</title>
+    <meta name="theme-color" content="#2563eb" />
+    <link rel="manifest" href="/cote-v1/manifest.json" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body class="dashboard-body">
+    <aside id="sidebar" class="sidebar" aria-hidden="true" aria-label="Super admin sidebar menu">
+      <div>
+        <div class="sidebar-header">
+          <p class="sidebar-label">C.O.T.E Super Admin</p>
+          <h2 id="sidebar-super-admin-name">Super Admin</h2>
+          <p class="sidebar-email" id="super-admin-email">Loading...</p>
+        </div>
+
+        <nav class="sidebar-nav" aria-label="Super admin navigation">
+          <button type="button" class="menu-btn active" data-target="home">
+            <span aria-hidden="true">🏠</span>
+            <span>Home</span>
+          </button>
+          <button type="button" class="menu-btn" data-target="teacher-approvals">
+            <span aria-hidden="true">✅</span>
+            <span>Teacher Approvals</span>
+          </button>
+          <button type="button" class="menu-btn" data-target="active-teachers">
+            <span aria-hidden="true">👩‍🏫</span>
+            <span>Active Teachers</span>
+          </button>
+        </nav>
+      </div>
+
+      <button id="logout-button" type="button" class="logout-button menu-logout">Logout</button>
+    </aside>
+
+    <button id="sidebar-overlay" class="sidebar-overlay" hidden aria-label="Close sidebar"></button>
+
+    <header class="app-bar" aria-label="Super admin app bar">
+      <div class="app-bar-side app-bar-left">
+        <button id="burger-button" class="icon-button" type="button" aria-label="Open menu">☰</button>
+      </div>
+
+      <h1 id="page-title" class="app-bar-title">Home</h1>
+
+      <div class="app-bar-side app-bar-right">
+        <span class="teacher-chip">Super Admin</span>
+      </div>
+    </header>
+
+    <main class="student-app teacher-app" aria-labelledby="page-title">
+      <section id="page-home" class="page active" data-page="home" aria-label="Super admin home">
+        <article class="app-card welcome-card">
+          <p class="badge">System Overview</p>
+          <h2>Super Admin Control Center</h2>
+          <p>Review teacher onboarding, approve pending accounts, and monitor core platform status.</p>
+        </article>
+
+        <article class="app-card">
+          <h3>Overview Cards</h3>
+          <div class="info-grid">
+            <p><strong>System Overview:</strong> Super admin approval flow is enabled.</p>
+            <p><strong>Total Pending Teachers:</strong> <span id="pending-count">0</span></p>
+            <p><strong>Total Active Teachers:</strong> <span id="active-count">0</span></p>
+            <p><strong>Notes/Reminders:</strong> Review pending teachers daily before classes.</p>
+          </div>
+        </article>
+      </section>
+
+      <section
+        id="page-teacher-approvals"
+        class="page"
+        data-page="teacher-approvals"
+        aria-label="Teacher approvals"
+      >
+        <article class="app-card">
+          <h2>Teacher Approvals</h2>
+          <p>Approve teacher accounts with pending status.</p>
+          <p id="super-admin-message" class="form-message" role="status" aria-live="polite"></p>
+          <div id="pending-teachers-list" class="super-admin-list"></div>
+        </article>
+      </section>
+
+      <section id="page-active-teachers" class="page" data-page="active-teachers" aria-label="Active teachers">
+        <article class="app-card">
+          <h2>Active Teachers</h2>
+          <p>Currently approved teacher accounts.</p>
+          <div id="active-teachers-list" class="super-admin-list"></div>
+        </article>
+      </section>
+    </main>
+
+    <script type="module" src="super-admin.js"></script>
+  </body>
+</html>
