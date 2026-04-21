@@ -159,26 +159,19 @@
         <article class="app-card">
           <h3>Student List</h3>
           <div class="admin-table-wrap" role="region" aria-label="Student list" tabindex="0">
-            <table class="admin-table">
+            <table class="student-table">
               <thead>
                 <tr>
-                  <th scope="col" class="checkbox-column">
-                    <label class="checkbox-label" for="select-all">
-                      <input id="select-all" type="checkbox" />
-                      <span>Select All</span>
-                    </label>
-                  </th>
-                  <th scope="col">Last Name</th>
-                  <th scope="col">First Name</th>
-                  <th scope="col">Middle Name</th>
+                  <th scope="col"><input type="checkbox" id="selectAll" aria-label="Select all students" /></th>
+                  <th scope="col">Full Name</th>
                   <th scope="col">LRN</th>
                   <th scope="col">Section</th>
-                  <th scope="col">Current Points</th>
+                  <th scope="col">Points</th>
                 </tr>
               </thead>
-              <tbody id="students-table-body">
+              <tbody id="studentTableBody">
                 <tr>
-                  <td colspan="8" class="empty-cell">Click "Load Students" to fetch and display students.</td>
+                  <td colspan="5" class="empty-cell">Click "Load Students" to fetch and display students.</td>
                 </tr>
               </tbody>
             </table>
