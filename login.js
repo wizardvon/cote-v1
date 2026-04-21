@@ -5,6 +5,7 @@ import { auth, db, signOut } from './firebase.js';
 const loginForm = document.getElementById('login-form');
 const formMessage = document.getElementById('form-message');
 const loadingOverlay = document.getElementById('loadingOverlay');
+let activeTypingJob = 0;
 
 function showLoadingOverlay(text = 'Initializing C.O.T.E System...') {
   if (!loadingOverlay) return;
@@ -22,22 +23,60 @@ function updateLoadingText(text) {
   const loadingTextElement = loadingOverlay.querySelector('.loading-text');
   if (loadingTextElement) {
     loadingTextElement.textContent = text;
+    loadingTextElement.classList.remove('is-switching');
+    void loadingTextElement.offsetWidth;
+    loadingTextElement.classList.add('is-switching');
+    setTimeout(() => loadingTextElement.classList.remove('is-switching'), 360);
   }
 }
 
 function hideLoadingOverlay() {
   if (!loadingOverlay) return;
 
+  activeTypingJob += 1;
   loadingOverlay.classList.add('loading-overlay-fade-out');
   loadingOverlay.classList.remove('loading-overlay-visible');
   loadingOverlay.setAttribute('aria-hidden', 'true');
 }
 
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function typeLoadingText(text, speed = 26) {
+  if (!loadingOverlay) return;
+
+  const loadingTextElement = loadingOverlay.querySelector('.loading-text');
+  if (!loadingTextElement) return;
+
+  const job = ++activeTypingJob;
+  loadingTextElement.textContent = '';
+
+  for (const character of text) {
+    if (job !== activeTypingJob) return;
+    loadingTextElement.textContent += character;
+    await wait(speed);
+  }
+}
+
+async function playLoadingSequence(messages, interval = 760, useTypewriter = false) {
+  if (!Array.isArray(messages) || messages.length === 0) return;
+
+  for (const message of messages) {
+    if (useTypewriter) {
+      await typeLoadingText(message, 22);
+    } else {
+      updateLoadingText(message);
+    }
+
+    await wait(interval);
+  }
+}
+
 async function redirectWithOverlay(path) {
   showLoadingOverlay('Authenticating...');
-  await new Promise((resolve) => setTimeout(resolve, 350));
-  updateLoadingText('Entering C.O.T.E System...');
-  await new Promise((resolve) => setTimeout(resolve, 850));
+  await playLoadingSequence(['Authenticating...', 'Access Granted', 'Entering C.O.T.E System...'], 520, true);
+  await wait(220);
   window.location.href = path;
 }
 
@@ -128,6 +167,13 @@ loginForm?.addEventListener('submit', async (event) => {
       submitButton.textContent = 'Login';
     }
   }
+});
+
+window.addEventListener('load', async () => {
+  showLoadingOverlay('Initializing C.O.T.E System...');
+  await playLoadingSequence(['Initializing C.O.T.E System...', 'Loading Profile...', 'Syncing Records...'], 460, true);
+  await wait(160);
+  hideLoadingOverlay();
 });
 
 function showFormMessage(message, type) {
