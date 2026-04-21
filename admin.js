@@ -26,15 +26,15 @@ const pages = Array.from(document.querySelectorAll('.page'));
 const sectionFilterElement = document.getElementById('section-filter');
 const searchInput = document.getElementById('student-search');
 const loadStudentsButton = document.getElementById('load-students-button');
-const selectAllCheckbox = document.getElementById('select-all');
-const tableBody = document.getElementById('students-table-body');
+const selectAllCheckbox = document.getElementById('selectAll') || document.getElementById('select-all');
+const tableBody = document.getElementById('studentTableBody') || document.getElementById('students-table-body');
 const pointsValueInput = document.getElementById('points-value');
 const reasonInput = document.getElementById('reason-input');
 const addPointsButton = document.getElementById('add-points-button');
 const deductPointsButton = document.getElementById('deduct-points-button');
 const messageElement = document.getElementById('admin-message');
 
-const TABLE_COLUMN_COUNT = 8;
+const TABLE_COLUMN_COUNT = 5;
 
 const pageTitles = {
   home: 'Home',
@@ -55,6 +55,26 @@ function safeText(value, fallback = '—') {
   if (value === undefined || value === null) return fallback;
   const text = String(value).trim();
   return text || fallback;
+}
+
+function toTitleCase(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\b([a-z])/g, (match) => match.toUpperCase());
+}
+
+function formatFullName(student) {
+  const lastName = toTitleCase(safeText(student.lastName, ''));
+  const firstName = toTitleCase(safeText(student.firstName, ''));
+  const middleName = toTitleCase(safeText(student.middleName, ''));
+  const middleInitial = middleName ? `${middleName.charAt(0)}.` : '';
+  const namePart = [firstName, middleInitial].filter(Boolean).join(' ');
+
+  if (lastName && namePart) return `${lastName}, ${namePart}`;
+  if (lastName) return lastName;
+  if (namePart) return namePart;
+  return '—';
 }
 
 function setMessage(message, type = '') {
@@ -165,14 +185,9 @@ function renderTableRows() {
       return `
         <tr>
           <td>
-            <label class="sr-only" for="student-${student.id}">Select ${safeText(student.lastName)} ${safeText(
-              student.firstName
-            )}</label>
-            <input id="student-${student.id}" type="checkbox" data-student-id="${student.id}" />
+            <input id="student-${student.id}" type="checkbox" data-student-id="${student.id}" aria-label="Select student" />
           </td>
-          <td>${safeText(student.lastName)}</td>
-          <td>${safeText(student.firstName)}</td>
-          <td>${safeText(student.middleName)}</td>
+          <td>${formatFullName(student)}</td>
           <td>${safeText(student.lrn)}</td>
           <td>${safeText(student.section)}</td>
           <td>${normalizePoints(student.points)}</td>
