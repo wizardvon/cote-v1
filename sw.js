@@ -1,4 +1,4 @@
-const CACHE_NAME = "cote-web-app-v6";
+const CACHE_NAME = "cote-web-app-v7";
 
 const APP_SHELL = [
   "/cote-v1/",
@@ -19,7 +19,8 @@ const APP_SHELL = [
   "/cote-v1/firebase.js",
   "/cote-v1/manifest.json",
   "/cote-v1/icons/icon-192.png",
-  "/cote-v1/icons/icon-512.png"
+  "/cote-v1/icons/icon-512.png",
+  "/cote-v1/icons/cote-logo.png"
 ];
 
 self.addEventListener("install", (event) => {

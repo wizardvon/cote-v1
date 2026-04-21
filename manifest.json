@@ -1,20 +1,22 @@
 {
-  "name": "COTE Web App",
-  "short_name": "COTE",
+  "name": "C.O.T.E Elite System",
+  "short_name": "C.O.T.E",
   "start_url": "/cote-v1/",
   "display": "standalone",
-  "background_color": "#eef2ff",
-  "theme_color": "#2563eb",
+  "background_color": "#02060e",
+  "theme_color": "#061321",
   "icons": [
     {
       "src": "icons/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "icons/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }

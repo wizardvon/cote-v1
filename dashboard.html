@@ -4,15 +4,23 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>COTE Web App | Dashboard</title>
-    <meta name="theme-color" content="#2563eb" />
+    <meta name="theme-color" content="#061321" />
     <link rel="manifest" href="/cote-v1/manifest.json" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/cote-v1/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/cote-v1/icons/icon-192.png" />
     <link rel="stylesheet" href="style.css" />
   </head>
   <body class="dashboard-body">
     <aside id="sidebar" class="sidebar" aria-hidden="true" aria-label="Sidebar menu">
       <div>
         <div class="sidebar-header">
-          <p class="sidebar-label">C.O.T.E App</p>
+          <div class="brand-block">
+            <img src="icons/cote-logo.png" alt="C.O.T.E Gold Shield" class="brand-logo" />
+            <div>
+              <p class="sidebar-label">Elite Academy System</p>
+              <p class="brand-title">C.O.T.E App</p>
+            </div>
+          </div>
           <h2 id="sidebar-student-name">Student</h2>
           <p class="sidebar-email" id="sidebar-student-email">Loading...</p>
         </div>
@@ -54,6 +62,7 @@
       <h1 id="page-title" class="app-bar-title">Home</h1>
 
       <div class="app-bar-side app-bar-right" aria-label="Notifications and messages">
+        <img src="icons/cote-logo.png" alt="C.O.T.E" class="top-brand-logo" />
         <button id="notifications-button" class="icon-button" type="button" aria-label="Notifications">🔔</button>
         <button id="messages-button" class="icon-button" type="button" aria-label="Messages">💬</button>
       </div>
@@ -61,13 +70,14 @@
 
     <main class="student-app" aria-labelledby="page-title">
       <section id="page-home" class="page active" data-page="home" aria-label="Home">
-          <article class="app-card welcome-card">
+        <article class="app-card welcome-card">
           <p class="badge">System Overview</p>
           <h2>Welcome to Classroom of the Elite</h2>
           <p>
-                Monitor announcements, track academic standing, review system notices, and prepare for missions and special evaluations.
+            Monitor announcements, track academic standing, review system notices, and prepare for missions and
+            special evaluations.
           </p>
-          </article>
+        </article>
 
         <article class="app-card">
           <h3>Current Standing</h3>
@@ -99,8 +109,8 @@
         <article class="app-card">
           <h3>Special Exam / Mission Briefing</h3>
           <p>
-            Missions, time-limited tasks, and major challenge events will be issued
-            through the Quest page. Students may receive points, badges, or status-based rewards.
+            Missions, time-limited tasks, and major challenge events will be issued through the Quest page. Students
+            may receive points, badges, or status-based rewards.
           </p>
         </article>
 
