@@ -178,6 +178,42 @@ button:active {
   width: min(100%, 520px);
 }
 
+/* ================= LOGIN LOGO FIX ================= */
+
+.login-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.login-logo {
+  width: 120px;
+  max-width: 40vw;
+  height: auto;
+  display: block;
+  margin: 0 auto 12px;
+
+  /* subtle gold glow */
+  filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.5));
+}
+
+.login-title {
+  margin: 0;
+  font-size: 24px;
+  letter-spacing: 2px;
+}
+
+.login-subtitle {
+  font-size: 14px;
+  opacity: 0.7;
+}
+
+/* mobile adjustment */
+@media (max-width: 480px) {
+  .login-logo {
+    width: 90px;
+  }
+}
+
 .login-branding {
   display: grid;
   place-items: center;
