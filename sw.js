@@ -1,4 +1,4 @@
-const CACHE_NAME = "cote-web-app-v5";
+const CACHE_NAME = "cote-web-app-v6";
 
 const APP_SHELL = [
   "/cote-v1/",
