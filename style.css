@@ -265,12 +265,16 @@ button:active {
   display: grid;
   place-items: center;
   padding: 1rem;
-  background: radial-gradient(circle at 50% 14%, rgba(58, 190, 255, 0.14), transparent 35%), rgba(2, 8, 17, 0.96);
-  z-index: 999;
+  background:
+    radial-gradient(circle at 50% 14%, rgba(58, 190, 255, 0.16), transparent 38%),
+    radial-gradient(circle at 50% 80%, rgba(231, 188, 88, 0.06), transparent 42%),
+    rgba(2, 8, 17, 0.97);
+  backdrop-filter: blur(3px);
+  z-index: 9999;
   opacity: 0;
   pointer-events: none;
   visibility: hidden;
-  transition: opacity 0.34s ease, visibility 0.34s ease;
+  transition: opacity 0.5s ease, visibility 0.5s ease;
 }
 
 .loading-overlay-visible {
@@ -286,39 +290,130 @@ button:active {
 }
 
 .loading-overlay-content {
+  min-width: min(88vw, 480px);
+  padding: 1.4rem 1.2rem;
+  border-radius: 20px;
+  border: 1px solid rgba(58, 190, 255, 0.22);
+  background: linear-gradient(155deg, rgba(5, 13, 26, 0.78), rgba(3, 10, 20, 0.84));
+  box-shadow:
+    0 0 0 1px rgba(231, 188, 88, 0.11) inset,
+    0 24px 46px rgba(0, 0, 0, 0.42);
   text-align: center;
   display: grid;
-  gap: 0.92rem;
+  gap: 0.88rem;
   justify-items: center;
+  animation: overlayContentIn 0.58s cubic-bezier(0.2, 0.7, 0.3, 1) both;
 }
 
 .loading-logo {
   width: clamp(140px, 28vw, 230px);
   height: auto;
   object-fit: contain;
-  filter: drop-shadow(0 0 26px rgba(231, 188, 88, 0.54)) drop-shadow(0 0 18px rgba(58, 190, 255, 0.24));
-  animation: logoPulse 2.1s ease-in-out infinite;
+  filter: drop-shadow(0 0 22px rgba(231, 188, 88, 0.5)) drop-shadow(0 0 16px rgba(58, 190, 255, 0.28));
+  transform-origin: center;
+  animation:
+    logoAwaken 0.66s cubic-bezier(0.2, 0.7, 0.2, 1) both,
+    logoPulse 2.7s ease-in-out 0.66s infinite;
   will-change: transform, opacity, filter;
 }
 
 .loading-text {
+  position: relative;
   margin: 0;
+  min-height: 1.35em;
   color: #dcecff;
-  letter-spacing: 0.04em;
-  font-weight: 700;
+  letter-spacing: 0.06em;
+  font-weight: 650;
   font-size: clamp(0.94rem, 2.6vw, 1.08rem);
+  line-height: 1.35;
   text-shadow: 0 0 12px rgba(56, 189, 248, 0.36);
+  opacity: 0.93;
+}
+
+.loading-text::after {
+  content: "";
+  display: inline-block;
+  width: 0.08em;
+  height: 1em;
+  margin-left: 0.28em;
+  vertical-align: -0.1em;
+  background: rgba(220, 236, 255, 0.82);
+  box-shadow: 0 0 12px rgba(58, 190, 255, 0.4);
+  animation: loadingCursorBlink 1.1s steps(1, end) infinite;
+}
+
+.loading-text.is-switching {
+  animation: loadingTextShift 0.32s ease;
+}
+
+@keyframes overlayContentIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.986);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes logoAwaken {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+    filter: drop-shadow(0 0 8px rgba(231, 188, 88, 0.25)) drop-shadow(0 0 6px rgba(58, 190, 255, 0.14));
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+    filter: drop-shadow(0 0 22px rgba(231, 188, 88, 0.5)) drop-shadow(0 0 16px rgba(58, 190, 255, 0.28));
+  }
 }
 
 @keyframes logoPulse {
   0%,
   100% {
-    opacity: 0.78;
-    transform: scale(0.985);
+    opacity: 0.9;
+    transform: scale(0.992);
+    filter: drop-shadow(0 0 20px rgba(231, 188, 88, 0.44)) drop-shadow(0 0 12px rgba(58, 190, 255, 0.2));
   }
   50% {
     opacity: 1;
-    transform: scale(1);
+    transform: scale(1.018);
+    filter: drop-shadow(0 0 30px rgba(231, 188, 88, 0.58)) drop-shadow(0 0 20px rgba(58, 190, 255, 0.32));
+  }
+}
+
+@keyframes loadingTextShift {
+  0% {
+    opacity: 0.4;
+    transform: translateY(5px);
+  }
+  100% {
+    opacity: 0.95;
+    transform: translateY(0);
+  }
+}
+
+@keyframes loadingCursorBlink {
+  0%,
+  47% {
+    opacity: 1;
+  }
+  48%,
+  100% {
+    opacity: 0.22;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-overlay,
+  .loading-overlay-content,
+  .loading-logo,
+  .loading-text,
+  .loading-text::after {
+    animation: none !important;
+    transition: none !important;
   }
 }
 

@@ -27,6 +27,7 @@ const activeTeachersListElement = document.getElementById('active-teachers-list'
 const pendingCountElement = document.getElementById('pending-count');
 const activeCountElement = document.getElementById('active-count');
 const messageElement = document.getElementById('super-admin-message');
+let overlaySequenceJob = 0;
 
 const pageTitles = {
   home: 'Home',
@@ -50,15 +51,35 @@ function updateLoadingText(text) {
   const loadingTextElement = loadingOverlay.querySelector('.loading-text');
   if (loadingTextElement) {
     loadingTextElement.textContent = text;
+    loadingTextElement.classList.remove('is-switching');
+    void loadingTextElement.offsetWidth;
+    loadingTextElement.classList.add('is-switching');
+    setTimeout(() => loadingTextElement.classList.remove('is-switching'), 360);
   }
 }
 
 function hideLoadingOverlay() {
   if (!loadingOverlay) return;
 
+  overlaySequenceJob += 1;
   loadingOverlay.classList.add('loading-overlay-fade-out');
   loadingOverlay.classList.remove('loading-overlay-visible');
   loadingOverlay.setAttribute('aria-hidden', 'true');
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function playLoadingSequence(messages, interval = 430) {
+  if (!Array.isArray(messages) || messages.length === 0) return;
+
+  const job = ++overlaySequenceJob;
+  for (const message of messages) {
+    if (job !== overlaySequenceJob) return;
+    updateLoadingText(message);
+    await wait(interval);
+  }
 }
 
 function setMessage(message, type = '') {
@@ -312,7 +333,12 @@ if ('serviceWorker' in navigator) {
 }
 
 window.addEventListener('load', () => {
-  showLoadingOverlay('Initializing System...');
-  setTimeout(() => updateLoadingText('Loading Admin Controls...'), 320);
-  setTimeout(() => hideLoadingOverlay(), 780);
+  showLoadingOverlay('Initializing C.O.T.E System...');
+  playLoadingSequence(
+    ['Initializing C.O.T.E System...', 'Loading Command Authority...', 'Syncing Records...'],
+    380
+  ).then(async () => {
+    await wait(190);
+    hideLoadingOverlay();
+  });
 });
