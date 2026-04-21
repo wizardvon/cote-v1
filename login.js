@@ -4,6 +4,32 @@ import { auth, db, signOut } from './firebase.js';
 
 const loginForm = document.getElementById('login-form');
 const formMessage = document.getElementById('form-message');
+const loadingOverlay = document.getElementById('loadingOverlay');
+
+function showLoadingOverlay(text = 'Initializing C.O.T.E System...') {
+  if (!loadingOverlay) return;
+
+  const loadingTextElement = loadingOverlay.querySelector('.loading-text');
+  if (loadingTextElement) {
+    loadingTextElement.textContent = text;
+  }
+
+  loadingOverlay.classList.add('loading-overlay-visible');
+  loadingOverlay.setAttribute('aria-hidden', 'false');
+}
+
+function hideLoadingOverlay() {
+  if (!loadingOverlay) return;
+
+  loadingOverlay.classList.remove('loading-overlay-visible');
+  loadingOverlay.setAttribute('aria-hidden', 'true');
+}
+
+async function redirectWithOverlay(path) {
+  showLoadingOverlay('Access granted. Loading secure workspace...');
+  await new Promise((resolve) => setTimeout(resolve, 420));
+  window.location.href = path;
+}
 
 loginForm?.addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -24,6 +50,9 @@ loginForm?.addEventListener('submit', async (event) => {
     submitButton.textContent = 'Logging in...';
   }
 
+  showLoadingOverlay('Authenticating credentials...');
+  let hasRedirected = false;
+
   try {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
@@ -42,12 +71,14 @@ loginForm?.addEventListener('submit', async (event) => {
     const status = String(userData.status || '').trim();
 
     if (role === 'superAdmin' && status === 'active') {
-      window.location.href = 'super-admin.html';
+      hasRedirected = true;
+      await redirectWithOverlay('super-admin.html');
       return;
     }
 
     if (role === 'teacher' && status === 'active') {
-      window.location.href = 'admin.html';
+      hasRedirected = true;
+      await redirectWithOverlay('admin.html');
       return;
     }
 
@@ -58,7 +89,8 @@ loginForm?.addEventListener('submit', async (event) => {
     }
 
     if (role === 'student') {
-      window.location.href = 'dashboard.html';
+      hasRedirected = true;
+      await redirectWithOverlay('dashboard.html');
       return;
     }
 
@@ -77,6 +109,10 @@ loginForm?.addEventListener('submit', async (event) => {
 
     showFormMessage(errorMessage, 'error');
   } finally {
+    if (!hasRedirected) {
+      hideLoadingOverlay();
+    }
+
     if (submitButton) {
       submitButton.disabled = false;
       submitButton.textContent = 'Login';

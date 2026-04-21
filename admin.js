@@ -22,6 +22,7 @@ const sidebarOverlay = document.getElementById('sidebar-overlay');
 const burgerButton = document.getElementById('burger-button');
 const menuButtons = Array.from(document.querySelectorAll('.menu-btn'));
 const pages = Array.from(document.querySelectorAll('.page'));
+const loadingOverlay = document.getElementById('loadingOverlay');
 
 const sectionFilterElement = document.getElementById('section-filter');
 const searchInput = document.getElementById('student-search');
@@ -43,6 +44,25 @@ const pageTitles = {
   quest: 'Quest',
   resources: 'Resources'
 };
+
+function showLoadingOverlay(text = 'Initializing C.O.T.E System...') {
+  if (!loadingOverlay) return;
+
+  const loadingTextElement = loadingOverlay.querySelector('.loading-text');
+  if (loadingTextElement) {
+    loadingTextElement.textContent = text;
+  }
+
+  loadingOverlay.classList.add('loading-overlay-visible');
+  loadingOverlay.setAttribute('aria-hidden', 'false');
+}
+
+function hideLoadingOverlay() {
+  if (!loadingOverlay) return;
+
+  loadingOverlay.classList.remove('loading-overlay-visible');
+  loadingOverlay.setAttribute('aria-hidden', 'true');
+}
 
 let allStudents = [];
 let visibleStudents = [];
@@ -527,6 +547,7 @@ deductPointsButton?.addEventListener('click', () => {
 
 logoutButton?.addEventListener('click', async () => {
   try {
+    showLoadingOverlay('Signing out...');
     await signOut(auth);
     window.location.replace('index.html');
   } catch (error) {
@@ -536,6 +557,7 @@ logoutButton?.addEventListener('click', async () => {
 
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
+    showLoadingOverlay('Session expired. Returning to login...');
     window.location.replace('index.html');
     return;
   }
@@ -545,6 +567,7 @@ onAuthStateChanged(auth, async (user) => {
     const userSnap = await getDoc(userRef);
 
     if (!userSnap.exists()) {
+      showLoadingOverlay('Checking access...');
       window.location.replace('dashboard.html');
       return;
     }
@@ -554,6 +577,7 @@ onAuthStateChanged(auth, async (user) => {
     const status = String(userData.status || '').trim();
 
     if (role !== 'teacher' || status !== 'active') {
+      showLoadingOverlay('Checking access...');
       window.location.replace('dashboard.html');
       return;
     }
@@ -580,6 +604,7 @@ onAuthStateChanged(auth, async (user) => {
     }
   } catch (error) {
     console.error('Failed to validate teacher role:', error);
+    showLoadingOverlay('Checking access...');
     window.location.replace('dashboard.html');
   }
 });
@@ -591,3 +616,7 @@ if ('serviceWorker' in navigator) {
     });
   });
 }
+
+window.addEventListener('load', () => {
+  setTimeout(() => hideLoadingOverlay(), 450);
+});
