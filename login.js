@@ -41,25 +41,29 @@ loginForm?.addEventListener('submit', async (event) => {
     const role = String(userData.role || '').trim();
     const status = String(userData.status || '').trim();
 
-    showFormMessage(`Login successful. Welcome back, ${user.email}.`, 'success');
-
-    if (role === 'superAdmin') {
+    if (role === 'superAdmin' && status === 'active') {
       window.location.href = 'super-admin.html';
       return;
     }
 
-    if (role === 'teacher') {
-      if (status === 'active') {
-        window.location.href = 'admin.html';
-      } else {
-        await signOut(auth);
-        showFormMessage('Your teacher account is pending approval.', 'error');
-      }
-
+    if (role === 'teacher' && status === 'active') {
+      window.location.href = 'admin.html';
       return;
     }
 
-    window.location.href = 'dashboard.html';
+    if (role === 'teacher' && status !== 'active') {
+      await signOut(auth);
+      showFormMessage('Your teacher account is pending approval.', 'error');
+      return;
+    }
+
+    if (role === 'student') {
+      window.location.href = 'dashboard.html';
+      return;
+    }
+
+    await signOut(auth);
+    showFormMessage('Unable to determine account access. Please contact support.', 'error');
   } catch (error) {
     console.error('Login failed:', error);
 
