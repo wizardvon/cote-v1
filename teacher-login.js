@@ -1,5 +1,6 @@
 import { signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
-import { auth } from './firebase.js';
+import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+import { auth, db, signOut } from './firebase.js';
 
 const teacherLoginForm = document.getElementById('teacher-login-form');
 const teacherFormMessage = document.getElementById('teacher-form-message');
@@ -24,7 +25,40 @@ teacherLoginForm?.addEventListener('submit', async (event) => {
   }
 
   try {
-    await signInWithEmailAndPassword(auth, email, password);
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
+
+    const userRef = doc(db, 'users', user.uid);
+    const userSnap = await getDoc(userRef);
+
+    if (!userSnap.exists()) {
+      await signOut(auth);
+      showFormMessage('User record not found. Please contact support.', 'error');
+      return;
+    }
+
+    const userData = userSnap.data();
+    const role = String(userData.role || '').trim();
+    const status = String(userData.status || '').trim();
+
+    if (role === 'superAdmin') {
+      showFormMessage('Login successful. Redirecting to super admin panel...', 'success');
+      teacherLoginForm.reset();
+      window.location.replace('super-admin.html');
+      return;
+    }
+
+    if (role !== 'teacher') {
+      await signOut(auth);
+      showFormMessage('This login is for teacher accounts only.', 'error');
+      return;
+    }
+
+    if (status !== 'active') {
+      await signOut(auth);
+      showFormMessage('Your teacher account is pending approval.', 'error');
+      return;
+    }
 
     showFormMessage('Login successful. Redirecting to admin page...', 'success');
     teacherLoginForm.reset();

@@ -1,6 +1,6 @@
 import { signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
-import { auth, db } from './firebase.js';
+import { auth, db, signOut } from './firebase.js';
 
 const loginForm = document.getElementById('login-form');
 const formMessage = document.getElementById('form-message');
@@ -28,26 +28,38 @@ loginForm?.addEventListener('submit', async (event) => {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
 
-    // 🔥 GET ROLE FROM FIRESTORE
     const userRef = doc(db, 'users', user.uid);
     const userSnap = await getDoc(userRef);
 
     if (!userSnap.exists()) {
+      await signOut(auth);
       showFormMessage('User record not found.', 'error');
       return;
     }
 
-    const role = userSnap.data().role;
+    const userData = userSnap.data();
+    const role = String(userData.role || '').trim();
+    const status = String(userData.status || '').trim();
 
     showFormMessage(`Login successful. Welcome back, ${user.email}.`, 'success');
 
-    // 🔥 ROLE-BASED REDIRECT
-    if (role === 'teacher') {
-      window.location.href = 'admin.html';
-    } else {
-      window.location.href = 'dashboard.html';
+    if (role === 'superAdmin') {
+      window.location.href = 'super-admin.html';
+      return;
     }
 
+    if (role === 'teacher') {
+      if (status === 'active') {
+        window.location.href = 'admin.html';
+      } else {
+        await signOut(auth);
+        showFormMessage('Your teacher account is pending approval.', 'error');
+      }
+
+      return;
+    }
+
+    window.location.href = 'dashboard.html';
   } catch (error) {
     console.error('Login failed:', error);
 

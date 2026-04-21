@@ -71,7 +71,7 @@ teacherRegistrationForm?.addEventListener('submit', async (event) => {
       createdAt: serverTimestamp(),
     });
 
-    showFormMessage('Teacher registration submitted successfully.', 'success');
+    showFormMessage('Teacher registration submitted successfully. Your account is pending approval.', 'success');
     teacherRegistrationForm.reset();
     console.log('Teacher registration submitted:', { uid, ...payload, email });
   } catch (error) {
