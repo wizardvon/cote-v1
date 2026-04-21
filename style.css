@@ -178,6 +178,20 @@ button:active {
   width: min(100%, 520px);
 }
 
+.login-branding {
+  display: grid;
+  place-items: center;
+  margin-bottom: 0.8rem;
+}
+
+.login-brand-logo {
+  width: clamp(92px, 24vw, 140px);
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 0 20px rgba(231, 188, 88, 0.42));
+  animation: brandPulse 2.8s ease-in-out infinite;
+}
+
 .auth-form {
   gap: 0.9rem;
 }
@@ -206,6 +220,73 @@ button:active {
 .teacher-login-link a:hover,
 .teacher-login-link a:focus {
   text-decoration: underline;
+}
+
+/* SYSTEM LOADING OVERLAY */
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: radial-gradient(circle at 50% 14%, rgba(58, 190, 255, 0.14), transparent 35%), rgba(2, 8, 17, 0.96);
+  z-index: 999;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  transition: opacity 0.34s ease, visibility 0.34s ease;
+}
+
+.loading-overlay-visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: all;
+}
+
+.loading-overlay-content {
+  text-align: center;
+  display: grid;
+  gap: 0.92rem;
+  justify-items: center;
+}
+
+.loading-logo {
+  width: clamp(140px, 28vw, 230px);
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 0 26px rgba(231, 188, 88, 0.54)) drop-shadow(0 0 18px rgba(58, 190, 255, 0.24));
+  animation: logoPulse 2.1s ease-in-out infinite;
+}
+
+.loading-text {
+  margin: 0;
+  color: #dcecff;
+  letter-spacing: 0.04em;
+  font-weight: 700;
+  font-size: clamp(0.94rem, 2.6vw, 1.08rem);
+  text-shadow: 0 0 12px rgba(56, 189, 248, 0.36);
+}
+
+@keyframes logoPulse {
+  0%,
+  100% {
+    opacity: 0.78;
+    transform: scale(0.985);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes brandPulse {
+  0%,
+  100% {
+    transform: scale(0.99);
+  }
+  50% {
+    transform: scale(1);
+  }
 }
 
 /* DASHBOARD */

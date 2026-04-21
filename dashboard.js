@@ -39,6 +39,7 @@ const burgerButton = document.getElementById('burger-button');
 const menuButtons = Array.from(document.querySelectorAll('.menu-btn'));
 const pages = Array.from(document.querySelectorAll('.page'));
 const recordsPageElement = document.getElementById('page-records');
+const loadingOverlay = document.getElementById('loadingOverlay');
 
 const pageTitles = {
   home: 'Home',
@@ -47,6 +48,25 @@ const pageTitles = {
   resources: 'Resources',
   quest: 'Quest',
 };
+
+function showLoadingOverlay(text = 'Initializing C.O.T.E System...') {
+  if (!loadingOverlay) return;
+
+  const loadingTextElement = loadingOverlay.querySelector('.loading-text');
+  if (loadingTextElement) {
+    loadingTextElement.textContent = text;
+  }
+
+  loadingOverlay.classList.add('loading-overlay-visible');
+  loadingOverlay.setAttribute('aria-hidden', 'false');
+}
+
+function hideLoadingOverlay() {
+  if (!loadingOverlay) return;
+
+  loadingOverlay.classList.remove('loading-overlay-visible');
+  loadingOverlay.setAttribute('aria-hidden', 'true');
+}
 
 function safe(value) {
   if (value === undefined || value === null) return 'Not provided';
@@ -436,6 +456,7 @@ messagesButton?.addEventListener('click', () => {
 
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
+    showLoadingOverlay('Session expired. Returning to login...');
     window.location.replace('index.html');
     return;
   }
@@ -516,6 +537,7 @@ onAuthStateChanged(auth, async (user) => {
 
 logoutButton?.addEventListener('click', async () => {
   try {
+    showLoadingOverlay('Signing out...');
     await signOut(auth);
     window.location.replace('index.html');
   } catch (error) {
@@ -531,6 +553,10 @@ if ('serviceWorker' in navigator) {
       .catch((error) => console.error('SW registration failed:', error));
   });
 }
+
+window.addEventListener('load', () => {
+  setTimeout(() => hideLoadingOverlay(), 450);
+});
 
 window.toggleSidebar = toggleSidebar;
 window.closeSidebar = closeSidebar;

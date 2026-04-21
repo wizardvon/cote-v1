@@ -9,8 +9,18 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
+    <div id="loadingOverlay" class="loading-overlay" aria-hidden="true">
+      <div class="loading-overlay-content">
+        <img src="icons/cote-logo.png" alt="C.O.T.E System Logo" class="loading-logo" />
+        <p class="loading-text">Initializing C.O.T.E System...</p>
+      </div>
+    </div>
+
     <main class="container auth-container" aria-labelledby="form-title">
-      <h1 id="form-title">C.O.T.E Login</h1>
+      <div class="login-branding" aria-hidden="true">
+        <img src="icons/cote-logo.png" alt="" class="login-brand-logo" />
+      </div>
+      <h1 id="form-title">C.O.T.E</h1>
       <p class="subtitle">Sign in with your registered email and password.</p>
 
       <form id="login-form" class="auth-form" novalidate>
