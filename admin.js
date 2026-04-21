@@ -48,18 +48,26 @@ const pageTitles = {
 function showLoadingOverlay(text = 'Initializing C.O.T.E System...') {
   if (!loadingOverlay) return;
 
-  const loadingTextElement = loadingOverlay.querySelector('.loading-text');
-  if (loadingTextElement) {
-    loadingTextElement.textContent = text;
-  }
+  loadingOverlay.classList.remove('loading-overlay-fade-out');
+  updateLoadingText(text);
 
   loadingOverlay.classList.add('loading-overlay-visible');
   loadingOverlay.setAttribute('aria-hidden', 'false');
 }
 
+function updateLoadingText(text) {
+  if (!loadingOverlay) return;
+
+  const loadingTextElement = loadingOverlay.querySelector('.loading-text');
+  if (loadingTextElement) {
+    loadingTextElement.textContent = text;
+  }
+}
+
 function hideLoadingOverlay() {
   if (!loadingOverlay) return;
 
+  loadingOverlay.classList.add('loading-overlay-fade-out');
   loadingOverlay.classList.remove('loading-overlay-visible');
   loadingOverlay.setAttribute('aria-hidden', 'true');
 }
@@ -547,7 +555,6 @@ deductPointsButton?.addEventListener('click', () => {
 
 logoutButton?.addEventListener('click', async () => {
   try {
-    showLoadingOverlay('Signing out...');
     await signOut(auth);
     window.location.replace('index.html');
   } catch (error) {
@@ -557,7 +564,6 @@ logoutButton?.addEventListener('click', async () => {
 
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
-    showLoadingOverlay('Session expired. Returning to login...');
     window.location.replace('index.html');
     return;
   }
@@ -567,7 +573,6 @@ onAuthStateChanged(auth, async (user) => {
     const userSnap = await getDoc(userRef);
 
     if (!userSnap.exists()) {
-      showLoadingOverlay('Checking access...');
       window.location.replace('dashboard.html');
       return;
     }
@@ -577,7 +582,6 @@ onAuthStateChanged(auth, async (user) => {
     const status = String(userData.status || '').trim();
 
     if (role !== 'teacher' || status !== 'active') {
-      showLoadingOverlay('Checking access...');
       window.location.replace('dashboard.html');
       return;
     }
@@ -604,7 +608,6 @@ onAuthStateChanged(auth, async (user) => {
     }
   } catch (error) {
     console.error('Failed to validate teacher role:', error);
-    showLoadingOverlay('Checking access...');
     window.location.replace('dashboard.html');
   }
 });
@@ -618,5 +621,7 @@ if ('serviceWorker' in navigator) {
 }
 
 window.addEventListener('load', () => {
-  setTimeout(() => hideLoadingOverlay(), 450);
+  showLoadingOverlay('Initializing System...');
+  setTimeout(() => updateLoadingText('Syncing Data...'), 320);
+  setTimeout(() => hideLoadingOverlay(), 780);
 });

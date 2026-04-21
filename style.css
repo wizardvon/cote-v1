@@ -279,6 +279,12 @@ button:active {
   pointer-events: all;
 }
 
+.loading-overlay-fade-out {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .loading-overlay-content {
   text-align: center;
   display: grid;
@@ -292,6 +298,7 @@ button:active {
   object-fit: contain;
   filter: drop-shadow(0 0 26px rgba(231, 188, 88, 0.54)) drop-shadow(0 0 18px rgba(58, 190, 255, 0.24));
   animation: logoPulse 2.1s ease-in-out infinite;
+  will-change: transform, opacity, filter;
 }
 
 .loading-text {
