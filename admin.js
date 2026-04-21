@@ -34,6 +34,14 @@ const reasonInput = document.getElementById('reason-input');
 const addPointsButton = document.getElementById('add-points-button');
 const deductPointsButton = document.getElementById('deduct-points-button');
 const messageElement = document.getElementById('admin-message');
+const scoreSectionFilterElement = document.getElementById('score-section-filter');
+const scoreTypeElement = document.getElementById('score-type');
+const scoreTitleElement = document.getElementById('score-title');
+const scoreMaxElement = document.getElementById('score-max');
+const loadScoreStudentsButton = document.getElementById('load-score-students-button');
+const saveScoresButton = document.getElementById('save-scores-button');
+const scoresTableBody = document.getElementById('scoresTableBody');
+const scoreMessageElement = document.getElementById('score-message');
 let overlaySequenceJob = 0;
 
 const TABLE_COLUMN_COUNT = 5;
@@ -95,6 +103,8 @@ async function playLoadingSequence(messages, interval = 430) {
 
 let allStudents = [];
 let visibleStudents = [];
+let scoreStudents = [];
+let currentTeacherProfile = null;
 
 function normalizePoints(points) {
   return typeof points === 'number' && Number.isFinite(points) ? points : 0;
@@ -133,6 +143,16 @@ function setMessage(message, type = '') {
 
   if (type) {
     messageElement.classList.add(type);
+  }
+}
+
+function setScoreMessage(message, type = '') {
+  if (!scoreMessageElement) return;
+  scoreMessageElement.textContent = message;
+  scoreMessageElement.classList.remove('success', 'error');
+
+  if (type) {
+    scoreMessageElement.classList.add(type);
   }
 }
 
@@ -190,6 +210,234 @@ function showPage(pageName) {
 
   closeSidebar();
   window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function populateScoreSectionFilter(students) {
+  if (!scoreSectionFilterElement) return;
+
+  const sections = [...new Set(students.map((student) => safeText(student.section, '')).filter(Boolean))].sort(
+    (a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })
+  );
+
+  const previousValue = scoreSectionFilterElement.value;
+  scoreSectionFilterElement.innerHTML = '<option value="">Select Section</option>';
+
+  sections.forEach((section) => {
+    const option = document.createElement('option');
+    option.value = section;
+    option.textContent = section;
+    scoreSectionFilterElement.append(option);
+  });
+
+  if (previousValue && sections.includes(previousValue)) {
+    scoreSectionFilterElement.value = previousValue;
+  }
+}
+
+function renderScoreStudentsTable(emptyMessage = 'No students found for the selected section.') {
+  if (!scoresTableBody) return;
+
+  if (!scoreStudents.length) {
+    scoresTableBody.innerHTML = `
+      <tr>
+        <td colspan="3" class="empty-cell">${emptyMessage}</td>
+      </tr>
+    `;
+    return;
+  }
+
+  scoresTableBody.innerHTML = scoreStudents
+    .map((student) => {
+      return `
+        <tr>
+          <td>${formatFullName(student)}</td>
+          <td>${safeText(student.lrn)}</td>
+          <td>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              inputmode="decimal"
+              class="score-input"
+              data-score-student-id="${student.id}"
+              placeholder="Enter score"
+            />
+          </td>
+        </tr>
+      `;
+    })
+    .join('');
+}
+
+async function ensureStudentsLoadedForScores() {
+  if (allStudents.length > 0) {
+    return true;
+  }
+
+  const loaded = await loadStudents({ showStatusMessage: false });
+  if (!loaded) {
+    setScoreMessage('Unable to load students. Please try again.', 'error');
+    return false;
+  }
+
+  return true;
+}
+
+async function loadStudentsForScores() {
+  if (!scoreSectionFilterElement || !loadScoreStudentsButton) return;
+
+  const section = scoreSectionFilterElement.value;
+  if (!section) {
+    setScoreMessage('Please select a section first.', 'error');
+    return;
+  }
+
+  const hasStudents = await ensureStudentsLoadedForScores();
+  if (!hasStudents) return;
+
+  loadScoreStudentsButton.disabled = true;
+  loadScoreStudentsButton.textContent = 'Loading...';
+
+  try {
+    scoreStudents = allStudents.filter((student) => safeText(student.section, '') === section);
+    renderScoreStudentsTable();
+
+    if (!scoreStudents.length) {
+      setScoreMessage('No students found for the selected section.', 'error');
+      return;
+    }
+
+    setScoreMessage(`Loaded ${scoreStudents.length} students for ${section}.`, 'success');
+  } finally {
+    loadScoreStudentsButton.disabled = false;
+    loadScoreStudentsButton.textContent = 'Load Students';
+  }
+}
+
+function collectScoreInputs() {
+  if (!scoresTableBody) return [];
+
+  const maxScore = Number(scoreMaxElement?.value);
+  const scoreInputs = Array.from(scoresTableBody.querySelectorAll('input[data-score-student-id]'));
+
+  return scoreInputs
+    .map((input) => {
+      const rawValue = String(input.value || '').trim();
+      if (!rawValue) return null;
+
+      const value = Number(rawValue);
+      if (!Number.isFinite(value) || value < 0) return null;
+      if (Number.isFinite(maxScore) && maxScore > 0 && value > maxScore) return null;
+
+      const studentId = input.dataset.scoreStudentId || '';
+      const student = scoreStudents.find((item) => item.id === studentId);
+
+      if (!student) return null;
+
+      return {
+        student,
+        score: value
+      };
+    })
+    .filter(Boolean);
+}
+
+async function saveAllScores() {
+  if (!saveScoresButton) return;
+
+  const section = String(scoreSectionFilterElement?.value || '').trim();
+  const type = String(scoreTypeElement?.value || '').trim();
+  const title = String(scoreTitleElement?.value || '').trim();
+  const maxScore = Number(scoreMaxElement?.value);
+
+  if (!section) {
+    setScoreMessage('Please select a section.', 'error');
+    return;
+  }
+
+  if (!type) {
+    setScoreMessage('Please select a score type.', 'error');
+    return;
+  }
+
+  if (!title) {
+    setScoreMessage('Please enter an activity title.', 'error');
+    return;
+  }
+
+  if (!Number.isFinite(maxScore) || maxScore <= 0) {
+    setScoreMessage('Please enter a valid max score.', 'error');
+    return;
+  }
+
+  if (!scoreStudents.length) {
+    setScoreMessage('Please load students for the selected section.', 'error');
+    return;
+  }
+
+  const enteredScores = collectScoreInputs();
+
+  if (!enteredScores.length) {
+    setScoreMessage('Enter at least one student score before saving.', 'error');
+    return;
+  }
+
+  const invalidInputExists = Array.from(scoresTableBody.querySelectorAll('input[data-score-student-id]')).some((input) => {
+    const rawValue = String(input.value || '').trim();
+    if (!rawValue) return false;
+
+    const value = Number(rawValue);
+    return !Number.isFinite(value) || value < 0 || value > maxScore;
+  });
+
+  if (invalidInputExists) {
+    setScoreMessage('One or more scores are invalid. Check values and max score.', 'error');
+    return;
+  }
+
+  const teacherId = auth.currentUser?.uid || '';
+  const teacherName =
+    String(currentTeacherProfile?.displayName || '').trim() ||
+    String(currentTeacherProfile?.email || '').trim() ||
+    'Unknown Teacher';
+  const teacherEmail = String(currentTeacherProfile?.email || auth.currentUser?.email || '').trim();
+
+  saveScoresButton.disabled = true;
+  saveScoresButton.textContent = 'Saving...';
+
+  try {
+    await Promise.all(
+      enteredScores.map(({ student, score }) =>
+        addDoc(collection(db, 'scores'), {
+          studentId: student.id,
+          studentName: formatFullName(student),
+          lrn: safeText(student.lrn, ''),
+          section,
+          gradeLevel: safeText(student.gradeLevel, ''),
+          type,
+          title,
+          score,
+          maxScore,
+          teacherId,
+          teacherName,
+          teacherEmail,
+          createdAt: serverTimestamp()
+        })
+      )
+    );
+
+    Array.from(scoresTableBody.querySelectorAll('input[data-score-student-id]')).forEach((input) => {
+      input.value = '';
+    });
+
+    setScoreMessage(`Saved ${enteredScores.length} score record(s).`, 'success');
+  } catch (error) {
+    console.error('Failed to save scores:', error);
+    setScoreMessage('Unable to save scores. Please try again.', 'error');
+  } finally {
+    saveScoresButton.disabled = false;
+    saveScoresButton.textContent = 'Save All Scores';
+  }
 }
 
 function getSelectedStudentIds() {
@@ -338,6 +586,7 @@ async function loadStudents({ showStatusMessage = true } = {}) {
 
     const previousSection = sectionFilterElement.value;
     populateSectionFilter(allStudents);
+    populateScoreSectionFilter(allStudents);
 
     if (previousSection && previousSection !== 'all') {
       sectionFilterElement.value = Array.from(sectionFilterElement.options).some(
@@ -574,6 +823,28 @@ deductPointsButton?.addEventListener('click', () => {
   updatePointsForSelected('subtract');
 });
 
+loadScoreStudentsButton?.addEventListener('click', () => {
+  loadStudentsForScores();
+});
+
+scoreSectionFilterElement?.addEventListener('change', () => {
+  scoreStudents = [];
+  renderScoreStudentsTable();
+  setScoreMessage('Section changed. Click "Load Students".', '');
+});
+
+saveScoresButton?.addEventListener('click', () => {
+  saveAllScores();
+});
+
+scoreMaxElement?.addEventListener('input', () => {
+  if (!scoreMaxElement) return;
+  const value = Number(scoreMaxElement.value);
+  if (Number.isFinite(value) && value < 0) {
+    scoreMaxElement.value = '';
+  }
+});
+
 logoutButton?.addEventListener('click', async () => {
   try {
     await signOut(auth);
@@ -610,6 +881,11 @@ onAuthStateChanged(auth, async (user) => {
     const displayEmail = userData.email || user.email || 'No email available';
     const displayName = `${safeText(userData.firstName, '')} ${safeText(userData.lastName, '')}`.replace(/\s+/g, ' ').trim();
 
+    currentTeacherProfile = {
+      displayName: displayName || 'Teacher Panel',
+      email: displayEmail
+    };
+
     if (adminEmailElement) {
       adminEmailElement.textContent = displayEmail;
     }
@@ -627,6 +903,9 @@ onAuthStateChanged(auth, async (user) => {
         </tr>
       `;
     }
+
+    renderScoreStudentsTable();
+    setScoreMessage('Select section, type, title, max score, then load students.', '');
   } catch (error) {
     console.error('Failed to validate teacher role:', error);
     window.location.replace('dashboard.html');

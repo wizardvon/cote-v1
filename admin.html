@@ -198,21 +198,69 @@
 
       <section id="page-scores" class="page" data-page="scores" aria-label="Scores">
         <article class="app-card">
-          <h3>Written Works</h3>
-          <p>Prepare quizzes, short tests, and written assessments per section.</p>
-          <p><strong>Coming soon:</strong> Score encoding and release flow.</p>
+          <h2>Score Recording</h2>
+          <p>Record Written Work, Performance Task, and Exam scores by section.</p>
+
+          <div class="admin-toolbar score-toolbar">
+            <div class="field">
+              <label for="score-section-filter">Section</label>
+              <select id="score-section-filter">
+                <option value="">Select Section</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="score-type">Score Type</label>
+              <select id="score-type">
+                <option value="">Select Score Type</option>
+                <option value="Written Work">Written Work</option>
+                <option value="Performance Task">Performance Task</option>
+                <option value="Exam">Exam</option>
+              </select>
+            </div>
+
+            <div class="field admin-load-field">
+              <label for="load-score-students-button">Load Students</label>
+              <button id="load-score-students-button" type="button">Load Students</button>
+            </div>
+
+            <div class="field">
+              <label for="score-title">Activity Title</label>
+              <input id="score-title" type="text" placeholder="e.g. Quiz 1" autocomplete="off" />
+            </div>
+
+            <div class="field">
+              <label for="score-max">Max Score / Total Items</label>
+              <input id="score-max" type="number" min="1" step="1" inputmode="numeric" placeholder="e.g. 50" />
+            </div>
+
+            <div class="field admin-load-field">
+              <label for="save-scores-button">Save</label>
+              <button id="save-scores-button" type="button">Save All Scores</button>
+            </div>
+          </div>
+
+          <p id="score-message" class="form-message" role="status" aria-live="polite"></p>
         </article>
 
         <article class="app-card">
-          <h3>Performance Tasks</h3>
-          <p>Plan performance outputs, activity rubrics, and project-based evaluations.</p>
-          <p><strong>Coming soon:</strong> Rubric scoring and task tracking.</p>
-        </article>
-
-        <article class="app-card">
-          <h3>Quarterly Exam</h3>
-          <p>Quarter exam setup and final period evaluation dashboard placeholder.</p>
-          <p><strong>Coming soon:</strong> Exam result summaries and analytics.</p>
+          <h3>Students for Scoring</h3>
+          <div class="admin-table-wrap" role="region" aria-label="Students for scoring" tabindex="0">
+            <table class="student-table">
+              <thead>
+                <tr>
+                  <th scope="col">Full Name</th>
+                  <th scope="col">LRN</th>
+                  <th scope="col">Score</th>
+                </tr>
+              </thead>
+              <tbody id="scoresTableBody">
+                <tr>
+                  <td colspan="3" class="empty-cell">Select a section and click "Load Students".</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </article>
       </section>
 
@@ -257,6 +305,6 @@
       </section>
     </main>
 
-    <script type="module" src="admin.js?v=6"></script>
+    <script type="module" src="admin.js?v=7"></script>
   </body>
 </html>
