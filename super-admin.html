@@ -28,7 +28,7 @@
               <p class="brand-title">C.O.T.E App</p>
             </div>
           </div>
-          
+
           <h2 id="sidebar-super-admin-name">Super Admin</h2>
           <p class="sidebar-email" id="super-admin-email">Loading...</p>
         </div>
@@ -45,6 +45,18 @@
           <button type="button" class="menu-btn" data-target="active-teachers">
             <span aria-hidden="true">👩‍🏫</span>
             <span>Active Teachers</span>
+          </button>
+          <button type="button" class="menu-btn" data-target="academic-setup">
+            <span aria-hidden="true">📅</span>
+            <span>Academic Setup</span>
+          </button>
+          <button type="button" class="menu-btn" data-target="subjects">
+            <span aria-hidden="true">📚</span>
+            <span>Subjects</span>
+          </button>
+          <button type="button" class="menu-btn" data-target="sections">
+            <span aria-hidden="true">🏫</span>
+            <span>Sections</span>
           </button>
         </nav>
       </div>
@@ -105,6 +117,71 @@
           <h2>Active Teachers</h2>
           <p>Currently approved teacher accounts.</p>
           <div id="active-teachers-list" class="super-admin-list"></div>
+        </article>
+      </section>
+
+      <section id="page-academic-setup" class="page" data-page="academic-setup" aria-label="Academic setup">
+        <article class="app-card">
+          <h2>School Years</h2>
+          <p>Manage school years used throughout the C.O.T.E platform.</p>
+          <div class="admin-toolbar">
+            <input id="school-year-name" type="text" placeholder="School Year Name" />
+            <button id="add-school-year-btn" type="button">Add School Year</button>
+          </div>
+          <p id="school-year-message" class="form-message" role="status" aria-live="polite"></p>
+          <div id="school-years-list" class="super-admin-list"></div>
+        </article>
+
+        <article class="app-card">
+          <h2>Terms</h2>
+          <p>Manage academic terms.</p>
+          <div class="admin-toolbar">
+            <input id="term-name" type="text" placeholder="Term Name" />
+            <button id="add-term-btn" type="button">Add Term</button>
+          </div>
+          <p id="term-message" class="form-message" role="status" aria-live="polite"></p>
+          <div id="terms-list" class="super-admin-list"></div>
+        </article>
+      </section>
+
+      <section id="page-subjects" class="page" data-page="subjects" aria-label="Subjects">
+        <article class="app-card">
+          <h2>Subjects</h2>
+          <p>Add and manage subjects with categories.</p>
+          <div class="admin-toolbar">
+            <input id="subject-name" type="text" placeholder="Subject Name" />
+            <input id="subject-code" type="text" placeholder="Subject Code" />
+            <select id="subject-category" aria-label="Subject category">
+              <option value="">Select category</option>
+              <option value="Core Subject">Core Subject</option>
+              <option value="Applied Subject">Applied Subject</option>
+              <option value="Specialized Subject">Specialized Subject</option>
+            </select>
+            <button id="add-subject-btn" type="button">Add Subject</button>
+          </div>
+          <p id="subject-message" class="form-message" role="status" aria-live="polite"></p>
+          <div id="subjects-list" class="super-admin-list"></div>
+        </article>
+      </section>
+
+      <section id="page-sections" class="page" data-page="sections" aria-label="Sections">
+        <article class="app-card">
+          <h2>Sections</h2>
+          <p>Create sections and assign each to a school year.</p>
+          <div class="admin-toolbar">
+            <select id="section-grade-level" aria-label="Grade level">
+              <option value="">Select grade level</option>
+              <option value="Grade 11">Grade 11</option>
+              <option value="Grade 12">Grade 12</option>
+            </select>
+            <select id="section-school-year" aria-label="School year">
+              <option value="">Select school year</option>
+            </select>
+            <input id="section-name" type="text" placeholder="Section Name" />
+            <button id="add-section-btn" type="button">Add Section</button>
+          </div>
+          <p id="section-message" class="form-message" role="status" aria-live="polite"></p>
+          <div id="sections-list" class="super-admin-list"></div>
         </article>
       </section>
     </main>
