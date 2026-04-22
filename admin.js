@@ -284,7 +284,7 @@ async function ensureStudentsLoadedForScores() {
 }
 
 async function loadStudentsForScores() {
-  if (!scoreSectionFilterElement || !loadScoreStudentsButton) return;
+  if (!scoreSectionFilterElement) return;
 
   const section = scoreSectionFilterElement.value;
   if (!section) {
@@ -295,8 +295,10 @@ async function loadStudentsForScores() {
   const hasStudents = await ensureStudentsLoadedForScores();
   if (!hasStudents) return;
 
-  loadScoreStudentsButton.disabled = true;
-  loadScoreStudentsButton.textContent = 'Loading...';
+  if (loadScoreStudentsButton) {
+    loadScoreStudentsButton.disabled = true;
+    loadScoreStudentsButton.textContent = 'Loading...';
+  }
 
   try {
     scoreStudents = allStudents.filter((student) => safeText(student.section, '') === section);
@@ -309,8 +311,10 @@ async function loadStudentsForScores() {
 
     setScoreMessage(`Loaded ${scoreStudents.length} students for ${section}.`, 'success');
   } finally {
-    loadScoreStudentsButton.disabled = false;
-    loadScoreStudentsButton.textContent = 'Load Students';
+    if (loadScoreStudentsButton) {
+      loadScoreStudentsButton.disabled = false;
+      loadScoreStudentsButton.textContent = 'Load Students';
+    }
   }
 }
 
@@ -556,19 +560,22 @@ function populateSectionFilter(students) {
   });
 }
 
-async function loadStudents({ showStatusMessage = true } = {}) {
-  if (!tableBody || !sectionFilterElement || !loadStudentsButton) return false;
+async function loadStudents({ showStatusMessage = true, silent = false } = {}) {
+  if (!tableBody || !sectionFilterElement) return false;
 
-  setMessage('Loading students...');
+  if (!silent) {
+    setMessage('Loading students...');
+    tableBody.innerHTML = `
+      <tr>
+        <td colspan="${TABLE_COLUMN_COUNT}" class="empty-cell">Loading students...</td>
+      </tr>
+    `;
+  }
 
-  loadStudentsButton.disabled = true;
-  loadStudentsButton.textContent = 'Loading...';
-
-  tableBody.innerHTML = `
-    <tr>
-      <td colspan="${TABLE_COLUMN_COUNT}" class="empty-cell">Loading students...</td>
-    </tr>
-  `;
+  if (loadStudentsButton) {
+    loadStudentsButton.disabled = true;
+    loadStudentsButton.textContent = 'Loading...';
+  }
 
   try {
     const studentsSnapshot = await getDocs(collection(db, 'students'));
@@ -585,6 +592,7 @@ async function loadStudents({ showStatusMessage = true } = {}) {
       .sort(compareStudents);
 
     const previousSection = sectionFilterElement.value;
+    const previousScoreSection = scoreSectionFilterElement?.value || '';
     populateSectionFilter(allStudents);
     populateScoreSectionFilter(allStudents);
 
@@ -596,7 +604,19 @@ async function loadStudents({ showStatusMessage = true } = {}) {
         : 'all';
     }
 
+    if (scoreSectionFilterElement && previousScoreSection) {
+      scoreSectionFilterElement.value = Array.from(scoreSectionFilterElement.options).some(
+        (option) => option.value === previousScoreSection
+      )
+        ? previousScoreSection
+        : '';
+    }
+
     applyFiltersAndRender(false);
+
+    if (scoreSectionFilterElement?.value) {
+      await loadStudentsForScores();
+    }
 
     if (showStatusMessage) {
       setMessage(`Loaded ${allStudents.length} students.`, 'success');
@@ -612,8 +632,10 @@ async function loadStudents({ showStatusMessage = true } = {}) {
     setMessage(`Failed to load students: ${errorMessage}`, 'error');
     return false;
   } finally {
-    loadStudentsButton.disabled = false;
-    loadStudentsButton.textContent = 'Load Students';
+    if (loadStudentsButton) {
+      loadStudentsButton.disabled = false;
+      loadStudentsButton.textContent = 'Load Students';
+    }
   }
 }
 
@@ -828,9 +850,14 @@ loadScoreStudentsButton?.addEventListener('click', () => {
 });
 
 scoreSectionFilterElement?.addEventListener('change', () => {
-  scoreStudents = [];
-  renderScoreStudentsTable();
-  setScoreMessage('Section changed. Click "Load Students".', '');
+  if (!scoreSectionFilterElement?.value) {
+    scoreStudents = [];
+    renderScoreStudentsTable('Select a section to view students.');
+    setScoreMessage('Select a section to load students for scoring.', '');
+    return;
+  }
+
+  loadStudentsForScores();
 });
 
 saveScoresButton?.addEventListener('click', () => {
@@ -894,18 +921,20 @@ onAuthStateChanged(auth, async (user) => {
       sidebarTeacherNameElement.textContent = displayName || 'Teacher Panel';
     }
 
-    setMessage('Teacher access granted. Open Give Points and click "Load Students".', 'success');
+    setMessage('Teacher access granted.', 'success');
 
     if (tableBody) {
       tableBody.innerHTML = `
         <tr>
-          <td colspan="${TABLE_COLUMN_COUNT}" class="empty-cell">Click "Load Students" to fetch and display students.</td>
+          <td colspan="${TABLE_COLUMN_COUNT}" class="empty-cell">Loading students...</td>
         </tr>
       `;
     }
 
     renderScoreStudentsTable();
-    setScoreMessage('Select section, type, title, max score, then load students.', '');
+    setScoreMessage('Select section, type, title, then enter scores.', '');
+
+    await loadStudents({ showStatusMessage: false, silent: true });
   } catch (error) {
     console.error('Failed to validate teacher role:', error);
     window.location.replace('dashboard.html');
