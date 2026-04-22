@@ -54,6 +54,10 @@
             <span aria-hidden="true">📂</span>
             <span>Resources</span>
           </button>
+          <button type="button" class="menu-btn" data-target="my-classes">
+            <span aria-hidden="true">🏫</span>
+            <span>My Classes</span>
+          </button>
         </nav>
       </div>
 
@@ -301,6 +305,57 @@
           <h3>Resource Notes / Section Assignment</h3>
           <p>Reserve this area for section-based material assignment notes.</p>
           <button type="button">Coming Soon</button>
+        </article>
+      </section>
+
+      <section id="page-my-classes" class="page" data-page="my-classes" aria-label="My classes">
+        <article class="app-card">
+          <h2>Create Class</h2>
+          <p>Create a class by selecting active Subject, School Year, Term, and Section.</p>
+
+          <div class="admin-toolbar">
+            <div class="field">
+              <label for="class-subject">Subject</label>
+              <select id="class-subject">
+                <option value="">Select Subject</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="class-school-year">School Year</label>
+              <select id="class-school-year">
+                <option value="">Select School Year</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="class-term">Term</label>
+              <select id="class-term">
+                <option value="">Select Term</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="class-section">Section</label>
+              <select id="class-section">
+                <option value="">Select Section</option>
+              </select>
+            </div>
+
+            <div class="field admin-load-field">
+              <label for="create-class-button">Create</label>
+              <button id="create-class-button" type="button">Create Class</button>
+            </div>
+          </div>
+
+          <p id="class-message" class="form-message" role="status" aria-live="polite"></p>
+        </article>
+
+        <article class="app-card">
+          <h3>My Classes</h3>
+          <div id="my-classes-list" class="list-stack">
+            <p class="empty-cell">No classes yet. Create your first class above.</p>
+          </div>
         </article>
       </section>
     </main>
