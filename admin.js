@@ -9,6 +9,9 @@ import {
   collection,
   getDocs,
   addDoc,
+  query,
+  where,
+  orderBy,
   serverTimestamp
 } from './firebase.js';
 
@@ -42,6 +45,13 @@ const loadScoreStudentsButton = document.getElementById('load-score-students-but
 const saveScoresButton = document.getElementById('save-scores-button');
 const scoresTableBody = document.getElementById('scoresTableBody');
 const scoreMessageElement = document.getElementById('score-message');
+const classSubjectElement = document.getElementById('class-subject');
+const classSchoolYearElement = document.getElementById('class-school-year');
+const classTermElement = document.getElementById('class-term');
+const classSectionElement = document.getElementById('class-section');
+const createClassButton = document.getElementById('create-class-button');
+const classMessageElement = document.getElementById('class-message');
+const myClassesListElement = document.getElementById('my-classes-list');
 let overlaySequenceJob = 0;
 
 const TABLE_COLUMN_COUNT = 5;
@@ -51,7 +61,8 @@ const pageTitles = {
   'give-points': 'Give Points',
   scores: 'Scores',
   quest: 'Quest',
-  resources: 'Resources'
+  resources: 'Resources',
+  'my-classes': 'My Classes'
 };
 
 function showLoadingOverlay(text = 'Initializing C.O.T.E System...') {
@@ -105,6 +116,10 @@ let allStudents = [];
 let visibleStudents = [];
 let scoreStudents = [];
 let currentTeacherProfile = null;
+let classSubjects = [];
+let classSchoolYears = [];
+let classTerms = [];
+let classSections = [];
 
 function normalizePoints(points) {
   return typeof points === 'number' && Number.isFinite(points) ? points : 0;
@@ -153,6 +168,16 @@ function setScoreMessage(message, type = '') {
 
   if (type) {
     scoreMessageElement.classList.add(type);
+  }
+}
+
+function setClassMessage(message, type = '') {
+  if (!classMessageElement) return;
+  classMessageElement.textContent = message;
+  classMessageElement.classList.remove('success', 'error');
+
+  if (type) {
+    classMessageElement.classList.add(type);
   }
 }
 
@@ -267,6 +292,239 @@ function renderScoreStudentsTable(emptyMessage = 'No students found for the sele
       `;
     })
     .join('');
+}
+
+function populateSelectOptions(selectElement, data, placeholder, getLabel) {
+  if (!selectElement) return;
+  selectElement.innerHTML = `<option value="">${placeholder}</option>`;
+
+  data.forEach((item) => {
+    const option = document.createElement('option');
+    option.value = item.id;
+    option.textContent = getLabel(item);
+    selectElement.append(option);
+  });
+}
+
+function getDocName(data, fallback = 'Unnamed') {
+  return safeText(
+    data?.name ?? data?.title ?? data?.label ?? data?.schoolYear ?? data?.term ?? data?.section ?? data?.subjectName,
+    fallback
+  );
+}
+
+function formatClassCreatedAt(createdAt) {
+  if (!createdAt) return '—';
+  if (typeof createdAt.toDate === 'function') return createdAt.toDate().toLocaleString();
+  if (createdAt.seconds) return new Date(createdAt.seconds * 1000).toLocaleString();
+  return '—';
+}
+
+async function loadSubjectsForClassForm() {
+  if (!classSubjectElement) return;
+
+  const snapshot = await getDocs(query(collection(db, 'subjects'), where('status', '==', 'active')));
+  classSubjects = snapshot.docs.map((subjectDoc) => {
+    const data = subjectDoc.data();
+    return {
+      id: subjectDoc.id,
+      name: getDocName(data, 'Unnamed Subject'),
+      code: safeText(data.code ?? data.subjectCode, ''),
+      category: safeText(data.category ?? data.subjectCategory, ''),
+      ...data
+    };
+  });
+
+  populateSelectOptions(classSubjectElement, classSubjects, 'Select Subject', (subject) => {
+    const codePart = subject.code ? ` (${subject.code})` : '';
+    return `${subject.name}${codePart}`;
+  });
+}
+
+async function loadSchoolYearsForClassForm() {
+  if (!classSchoolYearElement) return;
+
+  const snapshot = await getDocs(query(collection(db, 'schoolYears'), where('status', '==', 'active')));
+  classSchoolYears = snapshot.docs.map((schoolYearDoc) => {
+    const data = schoolYearDoc.data();
+    return { id: schoolYearDoc.id, name: getDocName(data, 'Unnamed School Year'), ...data };
+  });
+
+  populateSelectOptions(classSchoolYearElement, classSchoolYears, 'Select School Year', (schoolYear) => schoolYear.name);
+}
+
+async function loadTermsForClassForm() {
+  if (!classTermElement) return;
+
+  const snapshot = await getDocs(query(collection(db, 'terms'), where('status', '==', 'active')));
+  classTerms = snapshot.docs.map((termDoc) => {
+    const data = termDoc.data();
+    return { id: termDoc.id, name: getDocName(data, 'Unnamed Term'), ...data };
+  });
+
+  populateSelectOptions(classTermElement, classTerms, 'Select Term', (term) => term.name);
+}
+
+async function loadSectionsForClassForm() {
+  if (!classSectionElement) return;
+
+  const snapshot = await getDocs(query(collection(db, 'sections'), where('status', '==', 'active')));
+  classSections = snapshot.docs.map((sectionDoc) => {
+    const data = sectionDoc.data();
+    return {
+      id: sectionDoc.id,
+      name: getDocName(data, 'Unnamed Section'),
+      gradeLevel: safeText(data.gradeLevel, ''),
+      schoolYearName: safeText(data.schoolYearName ?? data.schoolYear, ''),
+      ...data
+    };
+  });
+
+  populateSelectOptions(classSectionElement, classSections, 'Select Section', (section) => {
+    const labels = [section.gradeLevel && `Grade ${section.gradeLevel}`, section.name, section.schoolYearName].filter(Boolean);
+    return labels.join(' | ');
+  });
+}
+
+function renderMyClasses(classes = []) {
+  if (!myClassesListElement) return;
+
+  if (!classes.length) {
+    myClassesListElement.innerHTML = '<p class="empty-cell">No classes yet. Create your first class above.</p>';
+    return;
+  }
+
+  myClassesListElement.innerHTML = classes
+    .map(
+      (item) => `
+        <article class="app-card">
+          <h4>${safeText(item.subjectName)}</h4>
+          <p><strong>Subject Code:</strong> ${safeText(item.subjectCode)}</p>
+          <p><strong>Category:</strong> ${safeText(item.subjectCategory)}</p>
+          <p><strong>Section:</strong> ${safeText(item.sectionName)}</p>
+          <p><strong>Grade Level:</strong> ${safeText(item.gradeLevel)}</p>
+          <p><strong>School Year:</strong> ${safeText(item.schoolYearName)}</p>
+          <p><strong>Term:</strong> ${safeText(item.termName)}</p>
+          <p><strong>Status:</strong> ${safeText(item.status, 'active')}</p>
+          <p><strong>Created:</strong> ${formatClassCreatedAt(item.createdAt)}</p>
+        </article>
+      `
+    )
+    .join('');
+}
+
+async function loadMyClasses() {
+  if (!auth.currentUser?.uid) return;
+
+  if (myClassesListElement) {
+    myClassesListElement.innerHTML = '<p class="empty-cell">Loading classes...</p>';
+  }
+
+  try {
+    const snapshot = await getDocs(
+      query(collection(db, 'classes'), where('teacherId', '==', auth.currentUser.uid), orderBy('createdAt', 'desc'))
+    );
+
+    const classes = snapshot.docs.map((classDoc) => ({ id: classDoc.id, ...classDoc.data() }));
+    renderMyClasses(classes);
+  } catch (error) {
+    console.error('Failed to load classes:', error);
+    if (myClassesListElement) {
+      myClassesListElement.innerHTML = '<p class="empty-cell">Unable to load classes right now.</p>';
+    }
+    setClassMessage('Unable to load your classes. Please try again.', 'error');
+  }
+}
+
+async function createClass() {
+  const teacher = auth.currentUser;
+
+  if (!teacher?.uid) {
+    setClassMessage('You must be logged in to create a class.', 'error');
+    return;
+  }
+
+  const subjectId = String(classSubjectElement?.value || '').trim();
+  const schoolYearId = String(classSchoolYearElement?.value || '').trim();
+  const termId = String(classTermElement?.value || '').trim();
+  const sectionId = String(classSectionElement?.value || '').trim();
+
+  if (!subjectId || !schoolYearId || !termId || !sectionId) {
+    setClassMessage('Subject, School Year, Term, and Section are required.', 'error');
+    return;
+  }
+
+  const subject = classSubjects.find((item) => item.id === subjectId);
+  const schoolYear = classSchoolYears.find((item) => item.id === schoolYearId);
+  const term = classTerms.find((item) => item.id === termId);
+  const section = classSections.find((item) => item.id === sectionId);
+
+  if (!subject || !schoolYear || !term || !section) {
+    setClassMessage('Please select valid active options from all dropdowns.', 'error');
+    return;
+  }
+
+  const duplicateSnapshot = await getDocs(
+    query(
+      collection(db, 'classes'),
+      where('teacherId', '==', teacher.uid),
+      where('subjectId', '==', subjectId),
+      where('sectionId', '==', sectionId),
+      where('schoolYearId', '==', schoolYearId),
+      where('termId', '==', termId)
+    )
+  );
+
+  if (!duplicateSnapshot.empty) {
+    setClassMessage('This class already exists for the selected subject, section, school year, and term.', 'error');
+    return;
+  }
+
+  const teacherName =
+    String(currentTeacherProfile?.displayName || '').trim() || String(teacher.displayName || '').trim() || 'Unknown Teacher';
+  const teacherEmail = String(currentTeacherProfile?.email || teacher.email || '').trim();
+
+  if (createClassButton) {
+    createClassButton.disabled = true;
+    createClassButton.textContent = 'Creating...';
+  }
+
+  try {
+    await addDoc(collection(db, 'classes'), {
+      subjectId,
+      subjectName: subject.name,
+      subjectCode: safeText(subject.code, ''),
+      subjectCategory: safeText(subject.category, ''),
+      sectionId,
+      sectionName: section.name,
+      gradeLevel: safeText(section.gradeLevel, ''),
+      schoolYearId,
+      schoolYearName: schoolYear.name,
+      termId,
+      termName: term.name,
+      teacherId: teacher.uid,
+      teacherName,
+      teacherEmail,
+      status: 'active',
+      createdAt: serverTimestamp()
+    });
+
+    if (classSubjectElement) classSubjectElement.value = '';
+    if (classSchoolYearElement) classSchoolYearElement.value = '';
+    if (classTermElement) classTermElement.value = '';
+    if (classSectionElement) classSectionElement.value = '';
+
+    setClassMessage('Class created successfully.', 'success');
+    await loadMyClasses();
+  } catch (error) {
+    console.error('Failed to create class:', error);
+    setClassMessage('Unable to create class. Please try again.', 'error');
+  } finally {
+    if (createClassButton) {
+      createClassButton.disabled = false;
+      createClassButton.textContent = 'Create Class';
+    }
+  }
 }
 
 async function ensureStudentsLoadedForScores() {
@@ -783,6 +1041,10 @@ menuButtons.forEach((button) => {
     if (!targetPage) return;
 
     showPage(targetPage);
+
+    if (targetPage === 'my-classes' && auth.currentUser?.uid) {
+      loadMyClasses();
+    }
   });
 });
 
@@ -863,6 +1125,9 @@ scoreSectionFilterElement?.addEventListener('change', () => {
 saveScoresButton?.addEventListener('click', () => {
   saveAllScores();
 });
+createClassButton?.addEventListener('click', () => {
+  createClass();
+});
 
 scoreMaxElement?.addEventListener('input', () => {
   if (!scoreMaxElement) return;
@@ -933,8 +1198,16 @@ onAuthStateChanged(auth, async (user) => {
 
     renderScoreStudentsTable();
     setScoreMessage('Select section, type, title, then enter scores.', '');
+    setClassMessage('Create and manage your own classes here.', '');
 
     await loadStudents({ showStatusMessage: false, silent: true });
+    await Promise.all([
+      loadSubjectsForClassForm(),
+      loadSchoolYearsForClassForm(),
+      loadTermsForClassForm(),
+      loadSectionsForClassForm()
+    ]);
+    await loadMyClasses();
   } catch (error) {
     console.error('Failed to validate teacher role:', error);
     window.location.replace('dashboard.html');

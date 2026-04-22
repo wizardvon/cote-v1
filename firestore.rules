@@ -1,0 +1,178 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ================================
+    // HELPER FUNCTIONS
+    // ================================
+    function isLoggedIn() {
+      return request.auth != null;
+    }
+
+    function userDocExists() {
+      return isLoggedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function getUserRole() {
+      return userDocExists()
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+        : null;
+    }
+
+    function getUserStatus() {
+      return userDocExists()
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status
+        : null;
+    }
+
+    function isStudent() {
+      return isLoggedIn() && getUserRole() == 'student';
+    }
+
+    function isTeacher() {
+      return isLoggedIn() && getUserRole() == 'teacher';
+    }
+
+    function isAdmin() {
+      return isLoggedIn() && getUserRole() == 'superAdmin';
+    }
+
+    function isActiveTeacher() {
+      return isTeacher() && getUserStatus() == 'active';
+    }
+
+    function isActiveAdmin() {
+      return isAdmin() && getUserStatus() == 'active';
+    }
+
+    function isActiveTeacherOrAdmin() {
+      return isActiveTeacher() || isActiveAdmin();
+    }
+
+    // ================================
+    // USERS
+    // ================================
+    match /users/{userId} {
+      allow read: if isLoggedIn() && request.auth.uid == userId;
+      allow write: if isAdmin();
+    }
+
+    // ================================
+    // STUDENTS
+    // ================================
+    match /students/{studentId} {
+      allow read: if isLoggedIn();
+      allow write: if isAdmin() || (isStudent() && request.auth.uid == studentId);
+    }
+
+    // ================================
+    // TEACHERS
+    // ================================
+    match /teachers/{teacherId} {
+      allow read: if isLoggedIn();
+      allow write: if isAdmin();
+    }
+
+    // ================================
+    // POINT LOGS
+    // ================================
+    match /pointLogs/{logId} {
+      allow read: if isLoggedIn();
+      allow create: if isActiveTeacherOrAdmin()
+        && request.resource.data.teacherId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // ================================
+    // SCORES
+    // ================================
+    match /scores/{scoreId} {
+      allow read: if isLoggedIn();
+      allow create: if isActiveTeacherOrAdmin()
+        && request.resource.data.teacherId == request.auth.uid
+        && request.resource.data.studentId is string
+        && request.resource.data.section is string
+        && request.resource.data.type is string
+        && request.resource.data.title is string
+        && request.resource.data.score is number
+        && request.resource.data.maxScore is number
+        && request.resource.data.score >= 0
+        && request.resource.data.maxScore > 0
+        && request.resource.data.score <= request.resource.data.maxScore;
+      allow update, delete: if isAdmin();
+    }
+
+    // ================================
+    // SCHOOL YEARS
+    // ================================
+    match /schoolYears/{id} {
+      allow read: if isLoggedIn();
+      allow write: if isAdmin();
+    }
+
+    // ================================
+    // TERMS
+    // ================================
+    match /terms/{id} {
+      allow read: if isLoggedIn();
+      allow write: if isAdmin();
+    }
+
+    // ================================
+    // SUBJECTS
+    // ================================
+    match /subjects/{id} {
+      allow read: if isLoggedIn();
+      allow write: if isAdmin();
+    }
+
+    // ================================
+    // SECTIONS
+    // ================================
+    match /sections/{id} {
+      allow read: if isLoggedIn();
+      allow write: if isAdmin();
+    }
+
+    // ================================
+    // CLASSES
+    // ================================
+    match /classes/{classId} {
+      // Teacher can read own classes; super admin can read all
+      allow read: if isActiveAdmin()
+        || (isActiveTeacher() && resource.data.teacherId == request.auth.uid);
+
+      // Teacher creates only own class docs; super admin may also create
+      allow create: if isActiveAdmin()
+        || (
+          isActiveTeacher()
+          && request.resource.data.teacherId == request.auth.uid
+          && request.resource.data.subjectId is string
+          && request.resource.data.subjectName is string
+          && request.resource.data.sectionId is string
+          && request.resource.data.sectionName is string
+          && request.resource.data.schoolYearId is string
+          && request.resource.data.schoolYearName is string
+          && request.resource.data.termId is string
+          && request.resource.data.termName is string
+          && request.resource.data.teacherName is string
+          && request.resource.data.teacherEmail is string
+          && request.resource.data.status == 'active'
+        );
+
+      // Teacher can update only own class docs; admin can update any
+      allow update: if isActiveAdmin()
+        || (isActiveTeacher() && resource.data.teacherId == request.auth.uid);
+
+      // Optional: delete restricted to super admin only
+      allow delete: if isActiveAdmin();
+    }
+
+    // ================================
+    // DEFAULT DENY
+    // ================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
