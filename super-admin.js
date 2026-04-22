@@ -7,9 +7,12 @@ import {
   getDoc,
   updateDoc,
   collection,
+  addDoc,
   getDocs,
   query,
-  where
+  orderBy,
+  where,
+  serverTimestamp
 } from './firebase.js';
 
 const superAdminEmailElement = document.getElementById('super-admin-email');
@@ -27,12 +30,41 @@ const activeTeachersListElement = document.getElementById('active-teachers-list'
 const pendingCountElement = document.getElementById('pending-count');
 const activeCountElement = document.getElementById('active-count');
 const messageElement = document.getElementById('super-admin-message');
+
+const schoolYearNameInput = document.getElementById('school-year-name');
+const addSchoolYearButton = document.getElementById('add-school-year-btn');
+const schoolYearMessageElement = document.getElementById('school-year-message');
+const schoolYearsListElement = document.getElementById('school-years-list');
+
+const termNameInput = document.getElementById('term-name');
+const addTermButton = document.getElementById('add-term-btn');
+const termMessageElement = document.getElementById('term-message');
+const termsListElement = document.getElementById('terms-list');
+
+const subjectNameInput = document.getElementById('subject-name');
+const subjectCodeInput = document.getElementById('subject-code');
+const subjectCategorySelect = document.getElementById('subject-category');
+const addSubjectButton = document.getElementById('add-subject-btn');
+const subjectMessageElement = document.getElementById('subject-message');
+const subjectsListElement = document.getElementById('subjects-list');
+
+const sectionGradeLevelSelect = document.getElementById('section-grade-level');
+const sectionSchoolYearSelect = document.getElementById('section-school-year');
+const sectionNameInput = document.getElementById('section-name');
+const addSectionButton = document.getElementById('add-section-btn');
+const sectionMessageElement = document.getElementById('section-message');
+const sectionsListElement = document.getElementById('sections-list');
+
 let overlaySequenceJob = 0;
+let schoolYearOptionsCache = [];
 
 const pageTitles = {
   home: 'Home',
   'teacher-approvals': 'Teacher Approvals',
-  'active-teachers': 'Active Teachers'
+  'active-teachers': 'Active Teachers',
+  'academic-setup': 'Academic Setup',
+  subjects: 'Subjects',
+  sections: 'Sections'
 };
 
 function showLoadingOverlay(text = 'Initializing C.O.T.E System...') {
@@ -82,14 +114,18 @@ async function playLoadingSequence(messages, interval = 430) {
   }
 }
 
-function setMessage(message, type = '') {
-  if (!messageElement) return;
+function setMessageOnElement(element, message, type = '') {
+  if (!element) return;
 
-  messageElement.textContent = message;
-  messageElement.classList.remove('success', 'error');
+  element.textContent = message;
+  element.classList.remove('success', 'error');
   if (type) {
-    messageElement.classList.add(type);
+    element.classList.add(type);
   }
+}
+
+function setMessage(message, type = '') {
+  setMessageOnElement(messageElement, message, type);
 }
 
 function safeText(value, fallback = '—') {
@@ -183,6 +219,121 @@ function renderActiveTeachers(records) {
     .join('');
 }
 
+function renderSchoolYears(records) {
+  if (!schoolYearsListElement) return;
+
+  if (!records.length) {
+    schoolYearsListElement.innerHTML = '<p class="empty-cell">No school years yet.</p>';
+    return;
+  }
+
+  schoolYearsListElement.innerHTML = records
+    .map((record) => {
+      const nextStatus = record.status === 'active' ? 'inactive' : 'active';
+      return `
+      <article class="app-card super-admin-item">
+        <p><strong>Name:</strong> ${safeText(record.name)}</p>
+        <p><strong>Status:</strong> <span class="status-pill ${record.status === 'active' ? 'status-active' : 'status-pending'}">${safeText(record.status)}</span></p>
+        <button type="button" class="approve-button" data-school-year-id="${record.id}" data-current-status="${record.status}">
+          Mark as ${nextStatus}
+        </button>
+      </article>
+    `;
+    })
+    .join('');
+}
+
+function renderTerms(records) {
+  if (!termsListElement) return;
+
+  if (!records.length) {
+    termsListElement.innerHTML = '<p class="empty-cell">No terms yet.</p>';
+    return;
+  }
+
+  termsListElement.innerHTML = records
+    .map((record) => {
+      const nextStatus = record.status === 'active' ? 'inactive' : 'active';
+      return `
+      <article class="app-card super-admin-item">
+        <p><strong>Name:</strong> ${safeText(record.name)}</p>
+        <p><strong>Status:</strong> <span class="status-pill ${record.status === 'active' ? 'status-active' : 'status-pending'}">${safeText(record.status)}</span></p>
+        <button type="button" class="approve-button" data-term-id="${record.id}" data-current-status="${record.status}">
+          Mark as ${nextStatus}
+        </button>
+      </article>
+    `;
+    })
+    .join('');
+}
+
+function renderSubjects(records) {
+  if (!subjectsListElement) return;
+
+  if (!records.length) {
+    subjectsListElement.innerHTML = '<p class="empty-cell">No subjects yet.</p>';
+    return;
+  }
+
+  subjectsListElement.innerHTML = records
+    .map((record) => {
+      const nextStatus = record.status === 'active' ? 'inactive' : 'active';
+      return `
+      <article class="app-card super-admin-item">
+        <p><strong>Name:</strong> ${safeText(record.name)}</p>
+        <p><strong>Code:</strong> ${safeText(record.code)}</p>
+        <p><strong>Category:</strong> ${safeText(record.category)}</p>
+        <p><strong>Status:</strong> <span class="status-pill ${record.status === 'active' ? 'status-active' : 'status-pending'}">${safeText(record.status)}</span></p>
+        <button type="button" class="approve-button" data-subject-id="${record.id}" data-current-status="${record.status}">
+          Mark as ${nextStatus}
+        </button>
+      </article>
+    `;
+    })
+    .join('');
+}
+
+function renderSections(records) {
+  if (!sectionsListElement) return;
+
+  if (!records.length) {
+    sectionsListElement.innerHTML = '<p class="empty-cell">No sections yet.</p>';
+    return;
+  }
+
+  sectionsListElement.innerHTML = records
+    .map((record) => {
+      const nextStatus = record.status === 'active' ? 'inactive' : 'active';
+      return `
+      <article class="app-card super-admin-item">
+        <p><strong>Name:</strong> ${safeText(record.name)}</p>
+        <p><strong>Grade Level:</strong> ${safeText(record.gradeLevel)}</p>
+        <p><strong>School Year:</strong> ${safeText(record.schoolYearName)}</p>
+        <p><strong>Status:</strong> <span class="status-pill ${record.status === 'active' ? 'status-active' : 'status-pending'}">${safeText(record.status)}</span></p>
+        <button type="button" class="approve-button" data-section-id="${record.id}" data-current-status="${record.status}">
+          Mark as ${nextStatus}
+        </button>
+      </article>
+    `;
+    })
+    .join('');
+}
+
+function populateSchoolYearSelect(records) {
+  if (!sectionSchoolYearSelect) return;
+
+  const currentValue = sectionSchoolYearSelect.value;
+  const options = records
+    .map((record) => `<option value="${record.id}">${safeText(record.name)}</option>`)
+    .join('');
+
+  sectionSchoolYearSelect.innerHTML = '<option value="">Select school year</option>' + options;
+
+  if (currentValue && records.some((record) => record.id === currentValue)) {
+    sectionSchoolYearSelect.value = currentValue;
+  }
+}
+
 async function loadTeacherRecordsByStatus(status) {
   const usersQuery = query(collection(db, 'users'), where('role', '==', 'teacher'), where('status', '==', status));
   const [usersSnapshot, teachersSnapshot] = await Promise.all([
@@ -234,6 +385,271 @@ async function refreshTeacherViews() {
   }
 }
 
+async function addSchoolYear() {
+  const schoolYearName = safeText(schoolYearNameInput?.value, '').trim();
+
+  if (!schoolYearName) {
+    setMessageOnElement(schoolYearMessageElement, 'Please enter a school year name.', 'error');
+    return;
+  }
+
+  try {
+    await addDoc(collection(db, 'schoolYears'), {
+      name: schoolYearName,
+      status: 'active',
+      createdAt: serverTimestamp()
+    });
+
+    if (schoolYearNameInput) {
+      schoolYearNameInput.value = '';
+    }
+
+    setMessageOnElement(schoolYearMessageElement, 'School year added successfully.', 'success');
+    await loadSchoolYears();
+  } catch (error) {
+    console.error('Failed to add school year:', error);
+    setMessageOnElement(schoolYearMessageElement, 'Failed to add school year. Please try again.', 'error');
+  }
+}
+
+async function loadSchoolYears() {
+  try {
+    const schoolYearsQuery = query(collection(db, 'schoolYears'), orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(schoolYearsQuery);
+
+    const records = snapshot.docs.map((item) => ({
+      id: item.id,
+      ...item.data()
+    }));
+
+    schoolYearOptionsCache = records;
+    renderSchoolYears(records);
+    populateSchoolYearSelect(records);
+  } catch (error) {
+    console.error('Failed to load school years:', error);
+    setMessageOnElement(schoolYearMessageElement, 'Unable to load school years right now.', 'error');
+  }
+}
+
+async function toggleSchoolYearStatus(id, currentStatus) {
+  const nextStatus = currentStatus === 'active' ? 'inactive' : 'active';
+
+  try {
+    await updateDoc(doc(db, 'schoolYears', id), { status: nextStatus });
+    setMessageOnElement(schoolYearMessageElement, `School year marked as ${nextStatus}.`, 'success');
+    await loadSchoolYears();
+  } catch (error) {
+    console.error('Failed to update school year status:', error);
+    setMessageOnElement(schoolYearMessageElement, 'Failed to update school year status.', 'error');
+  }
+}
+
+async function addTerm() {
+  const termName = safeText(termNameInput?.value, '').trim();
+
+  if (!termName) {
+    setMessageOnElement(termMessageElement, 'Please enter a term name.', 'error');
+    return;
+  }
+
+  try {
+    await addDoc(collection(db, 'terms'), {
+      name: termName,
+      status: 'active',
+      createdAt: serverTimestamp()
+    });
+
+    if (termNameInput) {
+      termNameInput.value = '';
+    }
+
+    setMessageOnElement(termMessageElement, 'Term added successfully.', 'success');
+    await loadTerms();
+  } catch (error) {
+    console.error('Failed to add term:', error);
+    setMessageOnElement(termMessageElement, 'Failed to add term. Please try again.', 'error');
+  }
+}
+
+async function loadTerms() {
+  try {
+    const termsQuery = query(collection(db, 'terms'), orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(termsQuery);
+
+    const records = snapshot.docs.map((item) => ({
+      id: item.id,
+      ...item.data()
+    }));
+
+    renderTerms(records);
+  } catch (error) {
+    console.error('Failed to load terms:', error);
+    setMessageOnElement(termMessageElement, 'Unable to load terms right now.', 'error');
+  }
+}
+
+async function toggleTermStatus(id, currentStatus) {
+  const nextStatus = currentStatus === 'active' ? 'inactive' : 'active';
+
+  try {
+    await updateDoc(doc(db, 'terms', id), { status: nextStatus });
+    setMessageOnElement(termMessageElement, `Term marked as ${nextStatus}.`, 'success');
+    await loadTerms();
+  } catch (error) {
+    console.error('Failed to update term status:', error);
+    setMessageOnElement(termMessageElement, 'Failed to update term status.', 'error');
+  }
+}
+
+async function addSubject() {
+  const name = safeText(subjectNameInput?.value, '').trim();
+  const code = safeText(subjectCodeInput?.value, '').trim();
+  const category = safeText(subjectCategorySelect?.value, '').trim();
+
+  if (!name || !code || !category) {
+    setMessageOnElement(subjectMessageElement, 'Please fill in all subject fields.', 'error');
+    return;
+  }
+
+  try {
+    await addDoc(collection(db, 'subjects'), {
+      name,
+      code,
+      category,
+      status: 'active',
+      createdAt: serverTimestamp()
+    });
+
+    if (subjectNameInput) subjectNameInput.value = '';
+    if (subjectCodeInput) subjectCodeInput.value = '';
+    if (subjectCategorySelect) subjectCategorySelect.value = '';
+
+    setMessageOnElement(subjectMessageElement, 'Subject added successfully.', 'success');
+    await loadSubjects();
+  } catch (error) {
+    console.error('Failed to add subject:', error);
+    setMessageOnElement(subjectMessageElement, 'Failed to add subject. Please try again.', 'error');
+  }
+}
+
+async function loadSubjects() {
+  try {
+    const subjectsQuery = query(collection(db, 'subjects'), orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(subjectsQuery);
+
+    const records = snapshot.docs.map((item) => ({
+      id: item.id,
+      ...item.data()
+    }));
+
+    renderSubjects(records);
+  } catch (error) {
+    console.error('Failed to load subjects:', error);
+    setMessageOnElement(subjectMessageElement, 'Unable to load subjects right now.', 'error');
+  }
+}
+
+async function toggleSubjectStatus(id, currentStatus) {
+  const nextStatus = currentStatus === 'active' ? 'inactive' : 'active';
+
+  try {
+    await updateDoc(doc(db, 'subjects', id), { status: nextStatus });
+    setMessageOnElement(subjectMessageElement, `Subject marked as ${nextStatus}.`, 'success');
+    await loadSubjects();
+  } catch (error) {
+    console.error('Failed to update subject status:', error);
+    setMessageOnElement(subjectMessageElement, 'Failed to update subject status.', 'error');
+  }
+}
+
+async function addSection() {
+  const gradeLevel = safeText(sectionGradeLevelSelect?.value, '').trim();
+  const schoolYearId = safeText(sectionSchoolYearSelect?.value, '').trim();
+  const sectionName = safeText(sectionNameInput?.value, '').trim();
+
+  if (!gradeLevel || !schoolYearId || !sectionName) {
+    setMessageOnElement(sectionMessageElement, 'Please complete all section fields.', 'error');
+    return;
+  }
+
+  const schoolYearRecord = schoolYearOptionsCache.find((item) => item.id === schoolYearId);
+
+  if (!schoolYearRecord) {
+    setMessageOnElement(sectionMessageElement, 'Selected school year is no longer available.', 'error');
+    return;
+  }
+
+  try {
+    const duplicateQuery = query(
+      collection(db, 'sections'),
+      where('schoolYearId', '==', schoolYearId),
+      where('name', '==', sectionName)
+    );
+    const duplicateSnapshot = await getDocs(duplicateQuery);
+
+    if (!duplicateSnapshot.empty) {
+      setMessageOnElement(
+        sectionMessageElement,
+        'Section name already exists under this school year.',
+        'error'
+      );
+      return;
+    }
+
+    await addDoc(collection(db, 'sections'), {
+      name: sectionName,
+      gradeLevel,
+      schoolYearId,
+      schoolYearName: safeText(schoolYearRecord.name),
+      status: 'active',
+      totalPoints: 0,
+      rank: null,
+      tier: null,
+      createdAt: serverTimestamp()
+    });
+
+    if (sectionNameInput) sectionNameInput.value = '';
+    if (sectionGradeLevelSelect) sectionGradeLevelSelect.value = '';
+    if (sectionSchoolYearSelect) sectionSchoolYearSelect.value = '';
+
+    setMessageOnElement(sectionMessageElement, 'Section added successfully.', 'success');
+    await loadSections();
+  } catch (error) {
+    console.error('Failed to add section:', error);
+    setMessageOnElement(sectionMessageElement, 'Failed to add section. Please try again.', 'error');
+  }
+}
+
+async function loadSections() {
+  try {
+    const sectionsQuery = query(collection(db, 'sections'), orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(sectionsQuery);
+
+    const records = snapshot.docs.map((item) => ({
+      id: item.id,
+      ...item.data()
+    }));
+
+    renderSections(records);
+  } catch (error) {
+    console.error('Failed to load sections:', error);
+    setMessageOnElement(sectionMessageElement, 'Unable to load sections right now.', 'error');
+  }
+}
+
+async function toggleSectionStatus(id, currentStatus) {
+  const nextStatus = currentStatus === 'active' ? 'inactive' : 'active';
+
+  try {
+    await updateDoc(doc(db, 'sections', id), { status: nextStatus });
+    setMessageOnElement(sectionMessageElement, `Section marked as ${nextStatus}.`, 'success');
+    await loadSections();
+  } catch (error) {
+    console.error('Failed to update section status:', error);
+    setMessageOnElement(sectionMessageElement, 'Failed to update section status.', 'error');
+  }
+}
+
 pendingTeachersListElement?.addEventListener('click', async (event) => {
   const target = event.target;
 
@@ -265,6 +681,59 @@ pendingTeachersListElement?.addEventListener('click', async (event) => {
     target.textContent = 'Approve';
   }
 });
+
+schoolYearsListElement?.addEventListener('click', async (event) => {
+  const target = event.target;
+
+  if (!(target instanceof HTMLButtonElement) || !target.dataset.schoolYearId) {
+    return;
+  }
+
+  target.disabled = true;
+
+  await toggleSchoolYearStatus(target.dataset.schoolYearId, target.dataset.currentStatus || 'inactive');
+});
+
+termsListElement?.addEventListener('click', async (event) => {
+  const target = event.target;
+
+  if (!(target instanceof HTMLButtonElement) || !target.dataset.termId) {
+    return;
+  }
+
+  target.disabled = true;
+
+  await toggleTermStatus(target.dataset.termId, target.dataset.currentStatus || 'inactive');
+});
+
+subjectsListElement?.addEventListener('click', async (event) => {
+  const target = event.target;
+
+  if (!(target instanceof HTMLButtonElement) || !target.dataset.subjectId) {
+    return;
+  }
+
+  target.disabled = true;
+
+  await toggleSubjectStatus(target.dataset.subjectId, target.dataset.currentStatus || 'inactive');
+});
+
+sectionsListElement?.addEventListener('click', async (event) => {
+  const target = event.target;
+
+  if (!(target instanceof HTMLButtonElement) || !target.dataset.sectionId) {
+    return;
+  }
+
+  target.disabled = true;
+
+  await toggleSectionStatus(target.dataset.sectionId, target.dataset.currentStatus || 'inactive');
+});
+
+addSchoolYearButton?.addEventListener('click', addSchoolYear);
+addTermButton?.addEventListener('click', addTerm);
+addSubjectButton?.addEventListener('click', addSubject);
+addSectionButton?.addEventListener('click', addSection);
 
 menuButtons.forEach((button) => {
   button.addEventListener('click', () => {
@@ -317,7 +786,13 @@ onAuthStateChanged(auth, async (user) => {
       sidebarSuperAdminNameElement.textContent = makeFullName({}, userData) || 'Super Admin';
     }
 
-    await refreshTeacherViews();
+    await Promise.all([
+      refreshTeacherViews(),
+      loadSchoolYears(),
+      loadTerms(),
+      loadSubjects(),
+      loadSections()
+    ]);
   } catch (error) {
     console.error('Failed to validate super admin role:', error);
     window.location.replace('index.html');
