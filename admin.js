@@ -27,7 +27,7 @@ const menuButtons = Array.from(document.querySelectorAll('.menu-btn'));
 const pages = Array.from(document.querySelectorAll('.page'));
 const loadingOverlay = document.getElementById('loadingOverlay');
 
-const sectionFilterElement = document.getElementById('section-filter');
+const teacherClassFilterElement = document.getElementById('teacher-class-filter');
 const searchInput = document.getElementById('student-search');
 const loadStudentsButton = document.getElementById('load-students-button');
 const selectAllCheckbox = document.getElementById('selectAll') || document.getElementById('select-all');
@@ -37,7 +37,7 @@ const reasonInput = document.getElementById('reason-input');
 const addPointsButton = document.getElementById('add-points-button');
 const deductPointsButton = document.getElementById('deduct-points-button');
 const messageElement = document.getElementById('admin-message');
-const scoreSectionFilterElement = document.getElementById('score-section-filter');
+const scoreClassFilterElement = document.getElementById('score-class-filter');
 const scoreTypeElement = document.getElementById('score-type');
 const scoreTitleElement = document.getElementById('score-title');
 const scoreMaxElement = document.getElementById('score-max');
@@ -116,6 +116,9 @@ let allStudents = [];
 let visibleStudents = [];
 let scoreStudents = [];
 let currentTeacherProfile = null;
+let teacherClasses = [];
+let selectedTeacherClassId = '';
+let selectedScoreClassId = '';
 let classSubjects = [];
 let classSchoolYears = [];
 let classTerms = [];
@@ -237,26 +240,33 @@ function showPage(pageName) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function populateScoreSectionFilter(students) {
-  if (!scoreSectionFilterElement) return;
+function formatClassLabel(classItem) {
+  const subject = safeText(classItem.subjectName, 'Untitled Subject');
+  const section = safeText(classItem.sectionName, 'No Section');
+  const term = safeText(classItem.termName, '');
+  const schoolYear = safeText(classItem.schoolYearName, '');
+  const details = [section, term, schoolYear].filter(Boolean).join(' • ');
+  return details ? `${subject} — ${details}` : subject;
+}
 
-  const sections = [...new Set(students.map((student) => safeText(student.section, '')).filter(Boolean))].sort(
-    (a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })
-  );
+function populateTeacherClassSelectors(classes = []) {
+  const selectors = [teacherClassFilterElement, scoreClassFilterElement].filter(Boolean);
 
-  const previousValue = scoreSectionFilterElement.value;
-  scoreSectionFilterElement.innerHTML = '<option value="">Select Section</option>';
+  selectors.forEach((selectElement) => {
+    const previousValue = selectElement.value;
+    selectElement.innerHTML = '<option value="">Select a class first</option>';
 
-  sections.forEach((section) => {
-    const option = document.createElement('option');
-    option.value = section;
-    option.textContent = section;
-    scoreSectionFilterElement.append(option);
+    classes.forEach((classItem) => {
+      const option = document.createElement('option');
+      option.value = classItem.id;
+      option.textContent = formatClassLabel(classItem);
+      selectElement.append(option);
+    });
+
+    if (previousValue && classes.some((item) => item.id === previousValue)) {
+      selectElement.value = previousValue;
+    }
   });
-
-  if (previousValue && sections.includes(previousValue)) {
-    scoreSectionFilterElement.value = previousValue;
-  }
 }
 
 function renderScoreStudentsTable(emptyMessage = 'No students found for the selected section.') {
@@ -436,6 +446,51 @@ async function loadMyClasses() {
   }
 }
 
+async function loadTeacherClassesForSelection() {
+  if (!auth.currentUser?.uid) return [];
+
+  const snapshot = await getDocs(
+    query(collection(db, 'classes'), where('teacherId', '==', auth.currentUser.uid), orderBy('createdAt', 'desc'))
+  );
+
+  teacherClasses = snapshot.docs.map((classDoc) => ({ id: classDoc.id, ...classDoc.data() }));
+  populateTeacherClassSelectors(teacherClasses);
+  return teacherClasses;
+}
+
+async function loadApprovedEnrollmentsByClass(classId) {
+  if (!classId) return [];
+
+  const enrollmentSnapshot = await getDocs(
+    query(collection(db, 'classEnrollments'), where('classId', '==', classId), where('status', '==', 'approved'))
+  );
+
+  return enrollmentSnapshot.docs.map((enrollmentDoc) => ({ id: enrollmentDoc.id, ...enrollmentDoc.data() }));
+}
+
+async function loadStudentsFromApprovedEnrollments(classId) {
+  const enrollments = await loadApprovedEnrollmentsByClass(classId);
+  const uniqueStudentIds = [...new Set(enrollments.map((item) => String(item.studentId || '').trim()).filter(Boolean))];
+
+  if (!uniqueStudentIds.length) {
+    return [];
+  }
+
+  const studentSnapshots = await Promise.all(uniqueStudentIds.map((studentId) => getDoc(doc(db, 'students', studentId))));
+
+  return studentSnapshots
+    .filter((studentSnap) => studentSnap.exists())
+    .map((studentSnap) => {
+      const data = studentSnap.data();
+      return {
+        id: studentSnap.id,
+        ...data,
+        points: normalizePoints(data.points)
+      };
+    })
+    .sort(compareStudents);
+}
+
 async function createClass() {
   const teacher = auth.currentUser;
 
@@ -532,7 +587,7 @@ async function ensureStudentsLoadedForScores() {
     return true;
   }
 
-  const loaded = await loadStudents({ showStatusMessage: false });
+  const loaded = await loadStudents({ showStatusMessage: false, classId: selectedScoreClassId });
   if (!loaded) {
     setScoreMessage('Unable to load students. Please try again.', 'error');
     return false;
@@ -542,11 +597,11 @@ async function ensureStudentsLoadedForScores() {
 }
 
 async function loadStudentsForScores() {
-  if (!scoreSectionFilterElement) return;
+  if (!scoreClassFilterElement) return;
 
-  const section = scoreSectionFilterElement.value;
-  if (!section) {
-    setScoreMessage('Please select a section first.', 'error');
+  const classId = scoreClassFilterElement.value;
+  if (!classId) {
+    setScoreMessage('Select a class first.', 'error');
     return;
   }
 
@@ -559,15 +614,23 @@ async function loadStudentsForScores() {
   }
 
   try {
-    scoreStudents = allStudents.filter((student) => safeText(student.section, '') === section);
-    renderScoreStudentsTable();
+    selectedScoreClassId = classId;
+    const loaded = await loadStudents({ showStatusMessage: false, classId, silent: true });
 
-    if (!scoreStudents.length) {
-      setScoreMessage('No students found for the selected section.', 'error');
+    if (!loaded) {
+      setScoreMessage('Unable to load students for the selected class.', 'error');
       return;
     }
 
-    setScoreMessage(`Loaded ${scoreStudents.length} students for ${section}.`, 'success');
+    scoreStudents = [...allStudents];
+    renderScoreStudentsTable();
+
+    if (!scoreStudents.length) {
+      setScoreMessage('No approved enrolled students found for the selected class.', 'error');
+      return;
+    }
+
+    setScoreMessage(`Loaded ${scoreStudents.length} students for the selected class.`, 'success');
   } finally {
     if (loadScoreStudentsButton) {
       loadScoreStudentsButton.disabled = false;
@@ -607,13 +670,13 @@ function collectScoreInputs() {
 async function saveAllScores() {
   if (!saveScoresButton) return;
 
-  const section = String(scoreSectionFilterElement?.value || '').trim();
+  const classId = String(scoreClassFilterElement?.value || '').trim();
   const type = String(scoreTypeElement?.value || '').trim();
   const title = String(scoreTitleElement?.value || '').trim();
   const maxScore = Number(scoreMaxElement?.value);
 
-  if (!section) {
-    setScoreMessage('Please select a section.', 'error');
+  if (!classId) {
+    setScoreMessage('Select a class first.', 'error');
     return;
   }
 
@@ -633,7 +696,7 @@ async function saveAllScores() {
   }
 
   if (!scoreStudents.length) {
-    setScoreMessage('Please load students for the selected section.', 'error');
+    setScoreMessage('Please load students for the selected class.', 'error');
     return;
   }
 
@@ -663,6 +726,7 @@ async function saveAllScores() {
     String(currentTeacherProfile?.email || '').trim() ||
     'Unknown Teacher';
   const teacherEmail = String(currentTeacherProfile?.email || auth.currentUser?.email || '').trim();
+  const selectedClass = teacherClasses.find((classItem) => classItem.id === classId);
 
   saveScoresButton.disabled = true;
   saveScoresButton.textContent = 'Saving...';
@@ -671,10 +735,12 @@ async function saveAllScores() {
     await Promise.all(
       enteredScores.map(({ student, score }) =>
         addDoc(collection(db, 'scores'), {
+          classId,
+          className: formatClassLabel(selectedClass || {}),
           studentId: student.id,
           studentName: formatFullName(student),
           lrn: safeText(student.lrn, ''),
-          section,
+          section: safeText(selectedClass?.sectionName || student.section, ''),
           gradeLevel: safeText(student.gradeLevel, ''),
           type,
           title,
@@ -759,18 +825,10 @@ function renderTableRows() {
 }
 
 function getFilteredStudents() {
-  if (!sectionFilterElement || !searchInput) return [];
-
-  const selectedSection = sectionFilterElement.value;
+  if (!searchInput) return [];
   const keyword = searchInput.value.trim().toLowerCase();
 
   return allStudents.filter((student) => {
-    const matchesSection = selectedSection === 'all' || safeText(student.section, '') === selectedSection;
-
-    if (!matchesSection) {
-      return false;
-    }
-
     if (!keyword) {
       return true;
     }
@@ -802,24 +860,24 @@ function applyFiltersAndRender(showStatusMessage = true) {
 }
 
 function populateSectionFilter(students) {
-  if (!sectionFilterElement) return;
-
-  const sections = [...new Set(students.map((student) => safeText(student.section, '')).filter(Boolean))].sort(
-    (a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })
-  );
-
-  sectionFilterElement.innerHTML = '<option value="all">All Sections</option>';
-
-  sections.forEach((section) => {
-    const option = document.createElement('option');
-    option.value = section;
-    option.textContent = section;
-    sectionFilterElement.append(option);
-  });
+  return students;
 }
 
-async function loadStudents({ showStatusMessage = true, silent = false } = {}) {
-  if (!tableBody || !sectionFilterElement) return false;
+async function loadStudents({ showStatusMessage = true, silent = false, classId = '' } = {}) {
+  if (!tableBody) return false;
+  const activeClassId = String(classId || selectedTeacherClassId || '').trim();
+
+  if (!activeClassId) {
+    allStudents = [];
+    visibleStudents = [];
+    renderTableRows();
+    scoreStudents = [];
+    renderScoreStudentsTable('Select a class first.');
+    if (showStatusMessage) {
+      setMessage('Select a class first.', 'error');
+    }
+    return false;
+  }
 
   if (!silent) {
     setMessage('Loading students...');
@@ -836,45 +894,10 @@ async function loadStudents({ showStatusMessage = true, silent = false } = {}) {
   }
 
   try {
-    const studentsSnapshot = await getDocs(collection(db, 'students'));
-
-    allStudents = studentsSnapshot.docs
-      .map((studentDoc) => {
-        const data = studentDoc.data();
-        return {
-          id: studentDoc.id,
-          ...data,
-          points: normalizePoints(data.points)
-        };
-      })
-      .sort(compareStudents);
-
-    const previousSection = sectionFilterElement.value;
-    const previousScoreSection = scoreSectionFilterElement?.value || '';
+    allStudents = await loadStudentsFromApprovedEnrollments(activeClassId);
     populateSectionFilter(allStudents);
-    populateScoreSectionFilter(allStudents);
-
-    if (previousSection && previousSection !== 'all') {
-      sectionFilterElement.value = Array.from(sectionFilterElement.options).some(
-        (option) => option.value === previousSection
-      )
-        ? previousSection
-        : 'all';
-    }
-
-    if (scoreSectionFilterElement && previousScoreSection) {
-      scoreSectionFilterElement.value = Array.from(scoreSectionFilterElement.options).some(
-        (option) => option.value === previousScoreSection
-      )
-        ? previousScoreSection
-        : '';
-    }
 
     applyFiltersAndRender(false);
-
-    if (scoreSectionFilterElement?.value) {
-      await loadStudentsForScores();
-    }
 
     if (showStatusMessage) {
       setMessage(`Loaded ${allStudents.length} students.`, 'success');
@@ -975,6 +998,7 @@ async function updatePointsForSelected(action) {
       await updateDoc(studentRef, { points: currentPoints + delta });
 
       await addDoc(collection(db, 'pointLogs'), {
+        classId: selectedTeacherClassId,
         studentId,
         studentName: `${safeText(current?.firstName, '')} ${safeText(current?.middleName, '')} ${safeText(
           current?.lastName,
@@ -1052,12 +1076,23 @@ burgerButton?.addEventListener('click', toggleSidebar);
 sidebarOverlay?.addEventListener('click', closeSidebar);
 
 loadStudentsButton?.addEventListener('click', () => {
-  loadStudents();
+  const classId = String(teacherClassFilterElement?.value || '').trim();
+  selectedTeacherClassId = classId;
+  loadStudents({ classId });
 });
 
-sectionFilterElement?.addEventListener('change', () => {
-  if (!allStudents.length) return;
-  applyFiltersAndRender(false);
+teacherClassFilterElement?.addEventListener('change', () => {
+  selectedTeacherClassId = String(teacherClassFilterElement?.value || '').trim();
+
+  if (!selectedTeacherClassId) {
+    allStudents = [];
+    visibleStudents = [];
+    renderTableRows();
+    setMessage('Select a class first.', 'error');
+    return;
+  }
+
+  loadStudents({ classId: selectedTeacherClassId });
 });
 
 searchInput?.addEventListener('input', () => {
@@ -1111,11 +1146,13 @@ loadScoreStudentsButton?.addEventListener('click', () => {
   loadStudentsForScores();
 });
 
-scoreSectionFilterElement?.addEventListener('change', () => {
-  if (!scoreSectionFilterElement?.value) {
+scoreClassFilterElement?.addEventListener('change', () => {
+  selectedScoreClassId = String(scoreClassFilterElement?.value || '').trim();
+
+  if (!selectedScoreClassId) {
     scoreStudents = [];
-    renderScoreStudentsTable('Select a section to view students.');
-    setScoreMessage('Select a section to load students for scoring.', '');
+    renderScoreStudentsTable('Select a class first.');
+    setScoreMessage('Select a class first.', '');
     return;
   }
 
@@ -1196,11 +1233,11 @@ onAuthStateChanged(auth, async (user) => {
       `;
     }
 
-    renderScoreStudentsTable();
-    setScoreMessage('Select section, type, title, then enter scores.', '');
+    renderScoreStudentsTable('Select a class first.');
+    setScoreMessage('Select class, type, title, then enter scores.', '');
     setClassMessage('Create and manage your own classes here.', '');
 
-    await loadStudents({ showStatusMessage: false, silent: true });
+    await loadTeacherClassesForSelection();
     await Promise.all([
       loadSubjectsForClassForm(),
       loadSchoolYearsForClassForm(),

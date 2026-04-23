@@ -94,7 +94,7 @@
           <div class="info-grid">
             <p><strong>Active module:</strong> Give Points</p>
             <p><strong>Current access:</strong> Teacher/Admin</p>
-            <p><strong>Student source:</strong> Firestore students collection</p>
+            <p><strong>Student source:</strong> Approved class enrollments</p>
             <p><strong>Point logs:</strong> Saved in pointLogs</p>
           </div>
         </article>
@@ -127,9 +127,9 @@
 
           <div class="admin-toolbar">
             <div class="field">
-              <label for="section-filter">Filter by Section</label>
-              <select id="section-filter">
-                <option value="all">All Sections</option>
+              <label for="teacher-class-filter">Select Class</label>
+              <select id="teacher-class-filter">
+                <option value="">Select a class first</option>
               </select>
             </div>
 
@@ -203,13 +203,13 @@
       <section id="page-scores" class="page" data-page="scores" aria-label="Scores">
         <article class="app-card">
           <h2>Score Recording</h2>
-          <p>Record Written Work, Performance Task, and Exam scores by section.</p>
+          <p>Record Written Work, Performance Task, and Exam scores by class.</p>
 
           <div class="admin-toolbar score-toolbar">
             <div class="field">
-              <label for="score-section-filter">Section</label>
-              <select id="score-section-filter">
-                <option value="">Select Section</option>
+              <label for="score-class-filter">Select Class</label>
+              <select id="score-class-filter">
+                <option value="">Select a class first</option>
               </select>
             </div>
 
@@ -260,7 +260,7 @@
               </thead>
               <tbody id="scoresTableBody">
                 <tr>
-                  <td colspan="3" class="empty-cell">Select a section and click "Load Students".</td>
+                  <td colspan="3" class="empty-cell">Select a class and click "Load Students".</td>
                 </tr>
               </tbody>
             </table>
@@ -360,6 +360,6 @@
       </section>
     </main>
 
-    <script type="module" src="admin.js?v=7"></script>
+    <script type="module" src="admin.js?v=8"></script>
   </body>
 </html>
