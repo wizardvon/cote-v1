@@ -81,10 +81,13 @@ registrationForm?.addEventListener('submit', async (event) => {
     return;
   }
 
-  const gradeMatchesSection = selectedSection.gradeLevel === payload.gradeLevel;
-
-  if (!gradeMatchesSection) {
+  if (selectedSection.gradeLevel !== payload.gradeLevel) {
     showFormMessage('Selected section does not match the chosen grade level.', 'error');
+    return;
+  }
+
+  if (selectedSection.schoolYearId !== payload.schoolYearId) {
+    showFormMessage('Selected section does not match the chosen school year.', 'error');
     return;
   }
 
@@ -135,14 +138,9 @@ registrationForm?.addEventListener('submit', async (event) => {
 
     showFormMessage('Student registration submitted successfully.', 'success');
     registrationForm.reset();
+    schoolYearSelect.innerHTML = '<option value="" selected disabled>Select school year</option>';
     resetSectionSelect('Select school year and grade level first', true);
-    console.log('Student registration submitted:', {
-      uid,
-      ...payload,
-      email,
-      schoolYearName: selectedSchoolYear.name,
-      sectionName: selectedSection.name,
-    });
+    await loadSchoolYears();
   } catch (error) {
     console.error('Registration failed:', error);
 
@@ -154,7 +152,10 @@ registrationForm?.addEventListener('submit', async (event) => {
       errorMessage = 'Please enter a valid email address.';
     } else if (error?.code === 'auth/weak-password') {
       errorMessage = 'Password must be at least 6 characters long.';
-    } else if (error?.code === 'permission-denied' || error?.code === 'firestore/permission-denied') {
+    } else if (
+      error?.code === 'permission-denied' ||
+      error?.code === 'firestore/permission-denied'
+    ) {
       errorMessage = 'Database permission denied. Check your Firestore security rules.';
     }
 
@@ -168,30 +169,21 @@ registrationForm?.addEventListener('submit', async (event) => {
 });
 
 function showFormMessage(message, type) {
-  if (!formMessage) {
-    return;
-  }
-
+  if (!formMessage) return;
   formMessage.textContent = message;
   formMessage.classList.remove('success', 'error');
   formMessage.classList.add(type);
 }
 
 function clearFormMessage() {
-  if (!formMessage) {
-    return;
-  }
-
+  if (!formMessage) return;
   formMessage.textContent = '';
   formMessage.classList.remove('success', 'error');
 }
 
 function resetSectionSelect(placeholder, disabled) {
-  if (!sectionSelect) {
-    return;
-  }
-
-  sectionSelect.innerHTML = `<option value="" selected>${placeholder}</option>`;
+  if (!sectionSelect) return;
+  sectionSelect.innerHTML = `<option value="" selected disabled>${placeholder}</option>`;
   sectionSelect.disabled = disabled;
 }
 
@@ -205,7 +197,9 @@ function refreshSectionOptions() {
   }
 
   const filteredSections = sectionRecords.filter(
-    (item) => item.schoolYearId === selectedSchoolYearId && item.gradeLevel === selectedGradeLevel
+    (item) =>
+      item.schoolYearId === selectedSchoolYearId &&
+      item.gradeLevel === selectedGradeLevel
   );
 
   if (!filteredSections.length) {
@@ -213,20 +207,17 @@ function refreshSectionOptions() {
     return;
   }
 
-  if (!sectionSelect) {
-    return;
-  }
+  if (!sectionSelect) return;
 
   const options = filteredSections
     .map(
       (item) =>
-        `<option value="${escapeHtml(item.id)}">${escapeHtml(
-          `${item.gradeLevel} | ${item.name} | ${item.schoolYearName}`
-        )}</option>`
+        `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`
     )
     .join('');
 
-  sectionSelect.innerHTML = '<option value="" selected disabled>Select section</option>' + options;
+  sectionSelect.innerHTML =
+    '<option value="" selected disabled>Select section</option>' + options;
   sectionSelect.disabled = false;
 }
 
@@ -243,27 +234,28 @@ async function initializeRegistrationDependencies() {
 }
 
 async function loadSchoolYears() {
-  if (!schoolYearSelect) {
-    return;
-  }
+  if (!schoolYearSelect) return;
 
   const schoolYearsSnapshot = await getDocs(
     query(collection(db, 'schoolYears'), where('status', '==', 'active'))
   );
 
-  schoolYearRecords = schoolYearsSnapshot.docs.map((item) => {
-    const data = item.data();
-    return {
-      id: item.id,
-      name: String(data.name || '').trim(),
-    };
-  });
+  schoolYearRecords = schoolYearsSnapshot.docs
+    .map((item) => {
+      const data = item.data();
+      return {
+        id: item.id,
+        name: String(data.name || '').trim(),
+      };
+    })
+    .filter((item) => item.name);
 
   const options = schoolYearRecords
     .map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`)
     .join('');
 
-  schoolYearSelect.innerHTML = '<option value="" selected disabled>Select school year</option>' + options;
+  schoolYearSelect.innerHTML =
+    '<option value="" selected disabled>Select school year</option>' + options;
 }
 
 async function loadSections() {
