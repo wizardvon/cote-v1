@@ -55,6 +55,11 @@ const myClassesListElement = document.getElementById('my-classes-list');
 const enrollmentClassFilterElement = document.getElementById('enrollment-class-filter');
 const enrollmentRequestsListElement = document.getElementById('enrollment-requests-list');
 const enrollmentMessageElement = document.getElementById('enrollment-message');
+const classRecordFilterElement = document.getElementById('class-record-filter');
+const classRecordTableElement = document.getElementById('class-record-table');
+const classRecordDownloadButton = document.getElementById('class-record-download-button');
+const classRecordPrintButton = document.getElementById('class-record-print-button');
+const classRecordMessageElement = document.getElementById('class-record-message');
 let overlaySequenceJob = 0;
 
 const TABLE_COLUMN_COUNT = 5;
@@ -66,6 +71,7 @@ const pageTitles = {
   quest: 'Quest',
   resources: 'Resources',
   'my-classes': 'My Classes',
+  'class-record': 'Class Record',
   'enrollment-requests': 'Enrollment Requests'
 };
 
@@ -128,6 +134,9 @@ let classSchoolYears = [];
 let classTerms = [];
 let classSections = [];
 let enrollmentRequests = [];
+let currentClassRecordClassId = '';
+let currentClassRecordRows = [];
+let currentClassRecordClassName = '';
 
 function normalizePoints(points) {
   return typeof points === 'number' && Number.isFinite(points) ? points : 0;
@@ -199,6 +208,16 @@ function setEnrollmentMessage(message, type = '') {
   }
 }
 
+function setClassRecordMessage(message, type = '') {
+  if (!classRecordMessageElement) return;
+  classRecordMessageElement.textContent = message;
+  classRecordMessageElement.classList.remove('success', 'error');
+
+  if (type) {
+    classRecordMessageElement.classList.add(type);
+  }
+}
+
 function compareStudents(a, b) {
   const sectionCompare = safeText(a.section, '').localeCompare(safeText(b.section, ''), undefined, {
     sensitivity: 'base'
@@ -265,7 +284,7 @@ function formatClassLabel(classItem) {
 }
 
 function populateTeacherClassSelectors(classes = []) {
-  const selectors = [teacherClassFilterElement, scoreClassFilterElement].filter(Boolean);
+  const selectors = [teacherClassFilterElement, scoreClassFilterElement, classRecordFilterElement].filter(Boolean);
 
   selectors.forEach((selectElement) => {
     const previousValue = selectElement.value;
@@ -636,6 +655,337 @@ async function rejectEnrollmentRequest(enrollmentId) {
     console.error('Failed to reject enrollment request:', error);
     setEnrollmentMessage('Unable to reject request. Please try again.', 'error');
   }
+}
+
+
+function getScoreTypeKey(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return '';
+  if (raw === 'ww' || raw === 'written work' || raw === 'written works') return 'WW';
+  if (raw === 'pt' || raw === 'performance task' || raw === 'performance tasks') return 'PT';
+  if (raw === 'exam' || raw === 'examination') return 'Exam';
+  return '';
+}
+
+function renderClassRecordTable(data = [], emptyMessage = 'No approved enrolled students found for this class.') {
+  if (!classRecordTableElement) return;
+
+  if (!data.length) {
+    classRecordTableElement.innerHTML = `
+      <table class="student-table">
+        <thead>
+          <tr>
+            <th scope="col">Name</th>
+            <th scope="col">Written Works</th>
+            <th scope="col">Performance Task</th>
+            <th scope="col">Exam</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td colspan="4" class="empty-cell">${safeText(emptyMessage, 'No records found.')}</td>
+          </tr>
+        </tbody>
+      </table>
+    `;
+    return;
+  }
+
+  classRecordTableElement.innerHTML = `
+    <table class="student-table">
+      <thead>
+        <tr>
+          <th scope="col">Name</th>
+          <th scope="col">Written Works</th>
+          <th scope="col">Performance Task</th>
+          <th scope="col">Exam</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${data
+          .map(
+            (item) => `
+              <tr>
+                <td>${safeText(item.name)}</td>
+                <td class="class-record-score-cell" data-student-id="${item.studentId}" data-score-type="WW" tabindex="0" role="button" aria-label="Edit written works score for ${safeText(item.name, 'student')}">${item.WW}</td>
+                <td class="class-record-score-cell" data-student-id="${item.studentId}" data-score-type="PT" tabindex="0" role="button" aria-label="Edit performance task score for ${safeText(item.name, 'student')}">${item.PT}</td>
+                <td class="class-record-score-cell" data-student-id="${item.studentId}" data-score-type="Exam" tabindex="0" role="button" aria-label="Edit exam score for ${safeText(item.name, 'student')}">${item.Exam}</td>
+              </tr>
+            `
+          )
+          .join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+async function computeStudentScores(classId) {
+  const students = await loadStudentsFromApprovedEnrollments(classId);
+
+  if (!students.length) {
+    return [];
+  }
+
+  const scoreSnapshot = await getDocs(query(collection(db, 'scores'), where('classId', '==', classId)));
+  const baseMap = new Map(
+    students.map((student) => [
+      student.id,
+      {
+        studentId: student.id,
+        name: formatFullName(student),
+        WW: 0,
+        PT: 0,
+        Exam: 0,
+        overrides: {}
+      }
+    ])
+  );
+
+  scoreSnapshot.docs.forEach((scoreDoc) => {
+    const data = scoreDoc.data();
+    const studentId = String(data.studentId || '').trim();
+    const row = baseMap.get(studentId);
+
+    if (!row) return;
+
+    const scoreType = getScoreTypeKey(data.componentType || data.type);
+    if (!scoreType) return;
+
+    const value = Number(data.score);
+    if (!Number.isFinite(value)) return;
+
+    if (data.isClassRecordTotal === true) {
+      row.overrides[scoreType] = { id: scoreDoc.id, score: value };
+      return;
+    }
+
+    row[scoreType] += value;
+  });
+
+  return Array.from(baseMap.values())
+    .map((row) => {
+      const WW = row.overrides.WW ? row.overrides.WW.score : row.WW;
+      const PT = row.overrides.PT ? row.overrides.PT.score : row.PT;
+      const Exam = row.overrides.Exam ? row.overrides.Exam.score : row.Exam;
+      return {
+        studentId: row.studentId,
+        name: row.name,
+        WW: Number(WW.toFixed(2)),
+        PT: Number(PT.toFixed(2)),
+        Exam: Number(Exam.toFixed(2))
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+}
+
+async function loadClassRecord(classId) {
+  const selectedClassId = String(classId || '').trim();
+  currentClassRecordClassId = selectedClassId;
+
+  if (!selectedClassId) {
+    currentClassRecordRows = [];
+    currentClassRecordClassName = '';
+    renderClassRecordTable([], 'Select a class first.');
+    setClassRecordMessage('Select a class first.', '');
+    return;
+  }
+
+  renderClassRecordTable([], 'Loading class record...');
+  setClassRecordMessage('Loading class record...');
+
+  try {
+    const selectedClass = teacherClasses.find((classItem) => classItem.id === selectedClassId) || {};
+    currentClassRecordClassName = formatClassLabel(selectedClass);
+    currentClassRecordRows = await computeStudentScores(selectedClassId);
+
+    if (!currentClassRecordRows.length) {
+      renderClassRecordTable([], 'No approved enrolled students found for this class.');
+      setClassRecordMessage('No approved enrolled students found for this class.');
+      return;
+    }
+
+    renderClassRecordTable(currentClassRecordRows);
+    setClassRecordMessage(`Loaded ${currentClassRecordRows.length} student score summaries.`, 'success');
+  } catch (error) {
+    console.error('Failed to load class record:', error);
+    currentClassRecordRows = [];
+    renderClassRecordTable([], 'Unable to load class record right now.');
+    setClassRecordMessage('Unable to load class record. Please try again.', 'error');
+  }
+}
+
+async function loadClassRecordClasses() {
+  if (!classRecordFilterElement) return;
+
+  if (!teacherClasses.length) {
+    await loadTeacherClassesForSelection();
+    await loadClassRecordClasses();
+  }
+
+  const selectedClassId = String(classRecordFilterElement.value || '').trim();
+  if (selectedClassId) {
+    await loadClassRecord(selectedClassId);
+  } else {
+    renderClassRecordTable([], 'Select a class first.');
+    setClassRecordMessage('Select a class first.');
+  }
+}
+
+async function editScore(studentId, type) {
+  const classId = String(currentClassRecordClassId || '').trim();
+  const normalizedType = getScoreTypeKey(type);
+
+  if (!classId || !studentId || !normalizedType) {
+    setClassRecordMessage('Unable to edit score due to missing information.', 'error');
+    return;
+  }
+
+  const row = currentClassRecordRows.find((item) => item.studentId === studentId);
+  if (!row) return;
+
+  const nextScoreRaw = window.prompt(`Enter ${normalizedType} total for ${row.name}:`, String(row[normalizedType] ?? 0));
+  if (nextScoreRaw === null) return;
+
+  const nextScore = Number(nextScoreRaw);
+  if (!Number.isFinite(nextScore) || nextScore < 0) {
+    setClassRecordMessage('Please enter a valid non-negative number.', 'error');
+    return;
+  }
+
+  try {
+    const existingSnapshot = await getDocs(
+      query(
+        collection(db, 'scores'),
+        where('classId', '==', classId),
+        where('studentId', '==', studentId),
+        where('type', '==', normalizedType),
+        where('isClassRecordTotal', '==', true)
+      )
+    );
+
+    const payload = {
+      classId,
+      studentId,
+      studentName: row.name,
+      type: normalizedType,
+      componentType: normalizedType,
+      score: Number(nextScore.toFixed(2)),
+      maxScore: null,
+      title: `${normalizedType} Total`,
+      teacherId: auth.currentUser?.uid || '',
+      teacherEmail: String(currentTeacherProfile?.email || auth.currentUser?.email || '').trim(),
+      teacherName:
+        String(currentTeacherProfile?.displayName || '').trim() || String(auth.currentUser?.displayName || '').trim() || 'Unknown Teacher',
+      isClassRecordTotal: true,
+      updatedAt: serverTimestamp()
+    };
+
+    if (existingSnapshot.empty) {
+      await addDoc(collection(db, 'scores'), {
+        ...payload,
+        createdAt: serverTimestamp()
+      });
+    } else {
+      await updateDoc(doc(db, 'scores', existingSnapshot.docs[0].id), payload);
+    }
+
+    setClassRecordMessage(`${normalizedType} total updated for ${row.name}.`, 'success');
+    await loadClassRecord(classId);
+  } catch (error) {
+    console.error('Failed to edit class record score:', error);
+    setClassRecordMessage('Unable to update score right now. Please try again.', 'error');
+  }
+}
+
+function downloadCSV() {
+  if (!currentClassRecordRows.length) {
+    setClassRecordMessage('No class record data to download.', 'error');
+    return;
+  }
+
+  const rows = [
+    ['Name', 'Written Works', 'Performance Task', 'Exam'],
+    ...currentClassRecordRows.map((row) => [row.name, row.WW, row.PT, row.Exam])
+  ];
+
+  const csv = rows
+    .map((columns) =>
+      columns
+        .map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`)
+        .join(',')
+    )
+    .join('\n');
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const safeClassName = safeText(currentClassRecordClassName || 'class', 'class').replace(/[^a-z0-9-_]+/gi, '-');
+
+  link.href = url;
+  link.download = `class-record-${safeClassName}.csv`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+
+  setClassRecordMessage('Class record CSV downloaded.', 'success');
+}
+
+function printClassRecord() {
+  if (!currentClassRecordRows.length) {
+    setClassRecordMessage('No class record data to print.', 'error');
+    return;
+  }
+
+  const printableTable = `
+    <table border="1" cellspacing="0" cellpadding="8" style="width:100%;border-collapse:collapse;">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Written Works</th>
+          <th>Performance Task</th>
+          <th>Exam</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${currentClassRecordRows
+          .map(
+            (row) => `
+              <tr>
+                <td>${row.name}</td>
+                <td>${row.WW}</td>
+                <td>${row.PT}</td>
+                <td>${row.Exam}</td>
+              </tr>
+            `
+          )
+          .join('')}
+      </tbody>
+    </table>
+  `;
+
+  const printWindow = window.open('', '_blank', 'width=960,height=720');
+  if (!printWindow) {
+    setClassRecordMessage('Unable to open print view. Please allow popups and try again.', 'error');
+    return;
+  }
+
+  printWindow.document.write(`
+    <!doctype html>
+    <html>
+      <head>
+        <title>Class Record - ${safeText(currentClassRecordClassName, 'Class')}</title>
+      </head>
+      <body>
+        <h2>Class Record Summary</h2>
+        <p><strong>Class:</strong> ${safeText(currentClassRecordClassName, 'Class')}</p>
+        ${printableTable}
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+  printWindow.focus();
+  printWindow.print();
 }
 
 async function loadApprovedEnrollmentsByClass(classId) {
@@ -1250,6 +1600,10 @@ menuButtons.forEach((button) => {
       loadMyClasses();
     }
 
+    if (targetPage === 'class-record' && auth.currentUser?.uid) {
+      loadClassRecordClasses();
+    }
+
     if (targetPage === 'enrollment-requests' && auth.currentUser?.uid) {
       loadEnrollmentRequests();
     }
@@ -1341,6 +1695,42 @@ scoreClassFilterElement?.addEventListener('change', () => {
   }
 
   loadStudentsForScores();
+});
+
+
+classRecordFilterElement?.addEventListener('change', () => {
+  const classId = String(classRecordFilterElement.value || '').trim();
+  loadClassRecord(classId);
+});
+
+classRecordTableElement?.addEventListener('click', (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+
+  const scoreCell = target.closest('.class-record-score-cell');
+  if (!(scoreCell instanceof HTMLElement)) return;
+
+  editScore(String(scoreCell.dataset.studentId || '').trim(), String(scoreCell.dataset.scoreType || '').trim());
+});
+
+classRecordTableElement?.addEventListener('keydown', (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+
+  if ((event.key !== 'Enter' && event.key !== ' ') || !target.classList.contains('class-record-score-cell')) {
+    return;
+  }
+
+  event.preventDefault();
+  editScore(String(target.dataset.studentId || '').trim(), String(target.dataset.scoreType || '').trim());
+});
+
+classRecordDownloadButton?.addEventListener('click', () => {
+  downloadCSV();
+});
+
+classRecordPrintButton?.addEventListener('click', () => {
+  printClassRecord();
 });
 
 enrollmentClassFilterElement?.addEventListener('change', () => {
@@ -1456,8 +1846,11 @@ onAuthStateChanged(auth, async (user) => {
     setScoreMessage('Select class, type, title, then enter scores.', '');
     setClassMessage('Create and manage your own classes here.', '');
     setEnrollmentMessage('Review pending enrollment requests for your classes.', '');
+    renderClassRecordTable([], 'Select a class first.');
+    setClassRecordMessage('Select a class first.', '');
 
     await loadTeacherClassesForSelection();
+    await loadClassRecordClasses();
     await Promise.all([
       loadSubjectsForClassForm(),
       loadSchoolYearsForClassForm(),

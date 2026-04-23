@@ -58,6 +58,10 @@
             <span aria-hidden="true">🏫</span>
             <span>My Classes</span>
           </button>
+          <button type="button" class="menu-btn" data-target="class-record">
+            <span aria-hidden="true">📊</span>
+            <span>Class Record</span>
+          </button>
           <button type="button" class="menu-btn" data-target="enrollment-requests">
             <span aria-hidden="true">📥</span>
             <span>Enrollment Requests</span>
@@ -363,6 +367,56 @@
         </article>
       </section>
 
+      
+      <section id="page-class-record" class="page" data-page="class-record" aria-label="Class record">
+        <article class="app-card">
+          <h2>Class Record (Score Summary)</h2>
+          <p>Review, edit, download, and print score summaries by class.</p>
+
+          <div class="admin-toolbar score-toolbar">
+            <div class="field">
+              <label for="class-record-filter">Select Class</label>
+              <select id="class-record-filter">
+                <option value="">Select a class first</option>
+              </select>
+            </div>
+
+            <div class="field admin-load-field">
+              <label for="class-record-download-button">Download CSV</label>
+              <button id="class-record-download-button" type="button">Download CSV</button>
+            </div>
+
+            <div class="field admin-load-field">
+              <label for="class-record-print-button">Print</label>
+              <button id="class-record-print-button" type="button">Print</button>
+            </div>
+          </div>
+
+          <p id="class-record-message" class="form-message" role="status" aria-live="polite"></p>
+        </article>
+
+        <article class="app-card">
+          <h3>Score Summary</h3>
+          <div id="class-record-table" class="admin-table-wrap" role="region" aria-label="Class record table" tabindex="0">
+            <table class="student-table">
+              <thead>
+                <tr>
+                  <th scope="col">Name</th>
+                  <th scope="col">Written Works</th>
+                  <th scope="col">Performance Task</th>
+                  <th scope="col">Exam</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td colspan="4" class="empty-cell">Select a class to view score summary.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
       <section
         id="page-enrollment-requests"
         class="page"
@@ -394,6 +448,6 @@
       </section>
     </main>
 
-    <script type="module" src="admin.js?v=8"></script>
+    <script type="module" src="admin.js?v=9"></script>
   </body>
 </html>
