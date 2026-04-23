@@ -45,6 +45,10 @@
             <span aria-hidden="true">📘</span>
             <span>Records</span>
           </button>
+          <button type="button" class="menu-btn" data-target="my-classes">
+            <span aria-hidden="true">🏫</span>
+            <span>My Classes</span>
+          </button>
           <button type="button" class="menu-btn" data-target="resources">
             <span aria-hidden="true">📂</span>
             <span>Resources</span>
@@ -202,6 +206,25 @@
           <p>
             Future attendance notes, conduct remarks, or adviser observations may also be included here.
           </p>
+        </article>
+      </section>
+
+      <section id="page-my-classes" class="page" data-page="my-classes" aria-label="My Classes">
+        <article class="app-card">
+          <h3>Available Classes</h3>
+          <p>Browse active classes available for enrollment.</p>
+          <div id="my-classes-feedback" aria-live="polite"></div>
+          <div id="available-classes-list" class="list-stack" aria-live="polite">
+            <p>Loading available classes...</p>
+          </div>
+        </article>
+
+        <article class="app-card">
+          <h3>My Class Enrollments</h3>
+          <p>Track the status of your submitted class enrollment requests.</p>
+          <div id="my-enrollments-list" class="list-stack" aria-live="polite">
+            <p>Loading enrollments...</p>
+          </div>
         </article>
       </section>
 

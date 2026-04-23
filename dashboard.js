@@ -7,10 +7,12 @@ import {
   getDoc,
   updateDoc,
   collection,
+  addDoc,
   getDocs,
   query,
   where,
   orderBy,
+  serverTimestamp,
 } from './firebase.js';
 
 const profileDataElement = document.getElementById('profileData');
@@ -40,13 +42,20 @@ const menuButtons = Array.from(document.querySelectorAll('.menu-btn'));
 const pages = Array.from(document.querySelectorAll('.page'));
 const recordsPageElement = document.getElementById('page-records');
 const studentScoresListElement = document.getElementById('student-scores-list');
+const availableClassesListElement = document.getElementById('available-classes-list');
+const myEnrollmentsListElement = document.getElementById('my-enrollments-list');
+const myClassesFeedbackElement = document.getElementById('my-classes-feedback');
 const loadingOverlay = document.getElementById('loadingOverlay');
 let overlaySequenceJob = 0;
+let currentStudentProfile = null;
+let currentStudentUser = null;
+let enrolledClassIds = new Set();
 
 const pageTitles = {
   home: 'Home',
   profile: 'Profile',
   records: 'Records',
+  'my-classes': 'My Classes',
   resources: 'Resources',
   quest: 'Quest',
 };
@@ -146,6 +155,283 @@ function makeLeaderboardName(data) {
     .map((value) => String(value || '').trim())
     .filter(Boolean)
     .join(' ');
+}
+
+function showMyClassesFeedback(message, type = 'success') {
+  if (!myClassesFeedbackElement) return;
+
+  const color = type === 'error' ? '#fca5a5' : '#86efac';
+  const background = type === 'error' ? 'rgba(127, 29, 29, 0.35)' : 'rgba(20, 83, 45, 0.35)';
+  myClassesFeedbackElement.innerHTML = `
+    <p style="margin: 0 0 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid ${color}; background: ${background};">
+      ${escapeHtml(message)}
+    </p>
+  `;
+}
+
+function clearMyClassesFeedback() {
+  if (myClassesFeedbackElement) {
+    myClassesFeedbackElement.innerHTML = '';
+  }
+}
+
+function isClassActive(classData) {
+  const status = String(classData.status || '').trim().toLowerCase();
+  if (!status) return true;
+  return status === 'active' || status === 'open';
+}
+
+function getTeacherName(classData) {
+  return (
+    String(classData.teacherName || '').trim() ||
+    String(classData.teacherFullName || '').trim() ||
+    String(classData.teacherEmail || '').trim() ||
+    'Not assigned'
+  );
+}
+
+function renderMyEnrollments(enrollments) {
+  if (!myEnrollmentsListElement) return;
+
+  if (!enrollments.length) {
+    myEnrollmentsListElement.innerHTML = '<p>No class enrollments yet.</p>';
+    return;
+  }
+
+  myEnrollmentsListElement.innerHTML = enrollments
+    .map((enrollment) => {
+      const classData = enrollment.classData || {};
+      const subjectName = classData.subjectName || classData.subject || 'Unknown Subject';
+      const sectionName = classData.sectionName || enrollment.sectionName || 'Not provided';
+      const schoolYear = classData.schoolYear || 'Not provided';
+      const term = classData.term || 'Not provided';
+      const teacherName = getTeacherName(classData);
+      const status = String(enrollment.status || 'pending').toLowerCase();
+      const statusText = status.charAt(0).toUpperCase() + status.slice(1);
+
+      return `
+        <article class="app-card">
+          <p><strong>Subject:</strong> ${escapeHtml(subjectName)}</p>
+          <p><strong>Section:</strong> ${escapeHtml(sectionName)}</p>
+          <p><strong>School Year:</strong> ${escapeHtml(schoolYear)}</p>
+          <p><strong>Term:</strong> ${escapeHtml(term)}</p>
+          <p><strong>Teacher:</strong> ${escapeHtml(teacherName)}</p>
+          <p><strong>Status:</strong> ${escapeHtml(statusText)}</p>
+        </article>
+      `;
+    })
+    .join('');
+}
+
+async function checkExistingEnrollment(classId) {
+  if (!currentStudentUser?.uid || !classId) return false;
+
+  if (enrolledClassIds.has(classId)) return true;
+
+  const enrollmentQuery = query(
+    collection(db, 'classEnrollments'),
+    where('studentId', '==', currentStudentUser.uid),
+    where('classId', '==', classId)
+  );
+  const enrollmentSnapshot = await getDocs(enrollmentQuery);
+  const hasEnrollment = !enrollmentSnapshot.empty;
+
+  if (hasEnrollment) {
+    enrolledClassIds.add(classId);
+  }
+
+  return hasEnrollment;
+}
+
+async function enrollInClass(classData) {
+  if (!currentStudentUser?.uid) {
+    showMyClassesFeedback('You must be logged in to enroll.', 'error');
+    return;
+  }
+
+  if (!classData?.id) {
+    showMyClassesFeedback('Class information is invalid.', 'error');
+    return;
+  }
+
+  try {
+    clearMyClassesFeedback();
+    const alreadyEnrolled = await checkExistingEnrollment(classData.id);
+    if (alreadyEnrolled) {
+      showMyClassesFeedback('You already have an enrollment request for this class.', 'error');
+      await loadAvailableClasses();
+      await loadMyEnrollments();
+      return;
+    }
+
+    const displayName = safe(makeFullName(currentStudentProfile || {}));
+    const sectionId = String(
+      currentStudentProfile?.sectionId || classData.sectionId || ''
+    ).trim();
+    const sectionName = String(
+      currentStudentProfile?.section || currentStudentProfile?.sectionName || classData.sectionName || ''
+    ).trim();
+
+    await addDoc(collection(db, 'classEnrollments'), {
+      classId: classData.id,
+      studentId: currentStudentUser.uid,
+      studentName: displayName,
+      studentEmail: currentStudentUser.email || '',
+      sectionId,
+      sectionName,
+      status: 'pending',
+      requestedAt: serverTimestamp(),
+    });
+
+    enrolledClassIds.add(classData.id);
+    showMyClassesFeedback('Enrollment request submitted. Please wait for teacher approval.');
+    await loadAvailableClasses();
+    await loadMyEnrollments();
+  } catch (error) {
+    console.error('Failed to enroll in class:', error);
+    showMyClassesFeedback('Unable to submit enrollment request. Please try again later.', 'error');
+  }
+}
+
+function renderAvailableClasses(classes) {
+  if (!availableClassesListElement) return;
+
+  if (!classes.length) {
+    availableClassesListElement.innerHTML = '<p>No available classes for enrollment.</p>';
+    return;
+  }
+
+  availableClassesListElement.innerHTML = classes
+    .map((classData) => {
+      const sectionName = classData.sectionName || 'Not provided';
+      const teacherName = getTeacherName(classData);
+      const status = classData.status || 'Active';
+      const isBlocked = classData.hasExistingEnrollment;
+
+      return `
+        <article class="app-card">
+          <p><strong>Subject:</strong> ${escapeHtml(classData.subjectName || classData.subject || 'Untitled')}</p>
+          <p><strong>Subject Code:</strong> ${escapeHtml(classData.subjectCode || 'Not provided')}</p>
+          <p><strong>Category:</strong> ${escapeHtml(classData.subjectCategory || 'Not provided')}</p>
+          <p><strong>Section:</strong> ${escapeHtml(sectionName)}</p>
+          <p><strong>Grade Level:</strong> ${escapeHtml(classData.gradeLevel || 'Not provided')}</p>
+          <p><strong>School Year:</strong> ${escapeHtml(classData.schoolYear || 'Not provided')}</p>
+          <p><strong>Term:</strong> ${escapeHtml(classData.term || 'Not provided')}</p>
+          <p><strong>Teacher:</strong> ${escapeHtml(teacherName)}</p>
+          <p><strong>Status:</strong> ${escapeHtml(status)}</p>
+          <button type="button" class="enroll-btn" data-class-id="${escapeHtml(classData.id)}" ${
+            isBlocked ? 'disabled' : ''
+          }>
+            ${isBlocked ? 'Already Requested' : 'Enroll'}
+          </button>
+        </article>
+      `;
+    })
+    .join('');
+
+  const enrollButtons = availableClassesListElement.querySelectorAll('.enroll-btn');
+  enrollButtons.forEach((button) => {
+    button.addEventListener('click', async () => {
+      const classId = button.dataset.classId;
+      const selectedClass = classes.find((item) => item.id === classId);
+      await enrollInClass(selectedClass);
+    });
+  });
+}
+
+async function loadMyEnrollments() {
+  if (!myEnrollmentsListElement || !currentStudentUser?.uid) return;
+
+  myEnrollmentsListElement.innerHTML = '<p>Loading enrollments...</p>';
+
+  try {
+    let enrollmentsSnapshot;
+    try {
+      const enrollmentsQuery = query(
+        collection(db, 'classEnrollments'),
+        where('studentId', '==', currentStudentUser.uid),
+        orderBy('requestedAt', 'desc')
+      );
+      enrollmentsSnapshot = await getDocs(enrollmentsQuery);
+    } catch (error) {
+      const fallbackSnapshot = await getDocs(
+        query(collection(db, 'classEnrollments'), where('studentId', '==', currentStudentUser.uid))
+      );
+      const docs = [...fallbackSnapshot.docs].sort((a, b) => {
+        const aTime = a.data().requestedAt?.toMillis?.() || 0;
+        const bTime = b.data().requestedAt?.toMillis?.() || 0;
+        return bTime - aTime;
+      });
+      enrollmentsSnapshot = { docs, empty: docs.length === 0 };
+      console.error('Failed to query enrollments with orderBy:', error);
+    }
+
+    const enrollments = enrollmentsSnapshot.docs.map((enrollmentDoc) => ({
+      id: enrollmentDoc.id,
+      ...enrollmentDoc.data(),
+    }));
+
+    enrolledClassIds = new Set(enrollments.map((enrollment) => enrollment.classId).filter(Boolean));
+
+    const classesSnapshot = await getDocs(collection(db, 'classes'));
+    const classMap = new Map(
+      classesSnapshot.docs.map((classDoc) => [classDoc.id, { id: classDoc.id, ...classDoc.data() }])
+    );
+
+    const enrollmentsWithClassData = enrollments.map((enrollment) => ({
+      ...enrollment,
+      classData: classMap.get(enrollment.classId) || null,
+    }));
+
+    renderMyEnrollments(enrollmentsWithClassData);
+  } catch (error) {
+    console.error('Failed to load enrollments:', error);
+    myEnrollmentsListElement.innerHTML = '<p>Unable to load enrollments. Please try again later.</p>';
+  }
+}
+
+async function loadAvailableClasses() {
+  if (!availableClassesListElement || !currentStudentUser?.uid) return;
+
+  availableClassesListElement.innerHTML = '<p>Loading available classes...</p>';
+
+  try {
+    const classesSnapshot = await getDocs(collection(db, 'classes'));
+    const studentSectionId = String(currentStudentProfile?.sectionId || '').trim();
+    const studentSectionName = String(
+      currentStudentProfile?.sectionName || currentStudentProfile?.section || ''
+    ).trim().toLowerCase();
+
+    const availableClasses = classesSnapshot.docs
+      .map((classDoc) => ({ id: classDoc.id, ...classDoc.data() }))
+      .filter((classData) => isClassActive(classData))
+      .filter((classData) => {
+        const classSectionId = String(classData.sectionId || '').trim();
+        const classSectionName = String(classData.sectionName || '').trim().toLowerCase();
+
+        if (studentSectionId) {
+          return !classSectionId || classSectionId === studentSectionId;
+        }
+
+        if (studentSectionName) {
+          return !classSectionName || classSectionName === studentSectionName;
+        }
+
+        return true;
+      });
+
+    const classesWithEnrollmentCheck = await Promise.all(
+      availableClasses.map(async (classData) => ({
+        ...classData,
+        hasExistingEnrollment: await checkExistingEnrollment(classData.id),
+      }))
+    );
+
+    renderAvailableClasses(classesWithEnrollmentCheck.filter((item) => !item.hasExistingEnrollment));
+  } catch (error) {
+    console.error('Failed to load available classes:', error);
+    availableClassesListElement.innerHTML = '<p>Unable to load available classes. Please try again later.</p>';
+  }
 }
 
 async function loadLeaderboard() {
@@ -553,6 +839,7 @@ onAuthStateChanged(auth, async (user) => {
     window.location.replace('index.html');
     return;
   }
+  currentStudentUser = user;
 
   loadLeaderboard();
 
@@ -570,6 +857,7 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     const studentData = studentSnap.data();
+    currentStudentProfile = studentData;
     const points = normalizePoints(studentData.points);
 
     if (studentData.points === undefined) {
@@ -582,6 +870,8 @@ onAuthStateChanged(auth, async (user) => {
     setStudentData(studentData, user.email);
     loadPointLogs(user.uid);
     loadStudentScores(user.uid);
+    loadMyEnrollments();
+    loadAvailableClasses();
   } catch (error) {
     console.error('Failed to load profile:', error);
 
