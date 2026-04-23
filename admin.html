@@ -58,6 +58,10 @@
             <span aria-hidden="true">🏫</span>
             <span>My Classes</span>
           </button>
+          <button type="button" class="menu-btn" data-target="enrollment-requests">
+            <span aria-hidden="true">📥</span>
+            <span>Enrollment Requests</span>
+          </button>
         </nav>
       </div>
 
@@ -355,6 +359,36 @@
           <h3>My Classes</h3>
           <div id="my-classes-list" class="list-stack">
             <p class="empty-cell">No classes yet. Create your first class above.</p>
+          </div>
+        </article>
+      </section>
+
+      <section
+        id="page-enrollment-requests"
+        class="page"
+        data-page="enrollment-requests"
+        aria-label="Enrollment requests"
+      >
+        <article class="app-card">
+          <h2>Enrollment Requests</h2>
+          <p>Review and decide pending student enrollment requests for your classes.</p>
+
+          <div class="admin-toolbar">
+            <div class="field">
+              <label for="enrollment-class-filter">Filter by Class</label>
+              <select id="enrollment-class-filter">
+                <option value="">All My Classes</option>
+              </select>
+            </div>
+          </div>
+
+          <p id="enrollment-message" class="form-message" role="status" aria-live="polite"></p>
+        </article>
+
+        <article class="app-card">
+          <h3>Pending Requests</h3>
+          <div id="enrollment-requests-list" class="list-stack">
+            <p class="empty-cell">No pending enrollment requests.</p>
           </div>
         </article>
       </section>

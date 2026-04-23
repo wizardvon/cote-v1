@@ -52,6 +52,9 @@ const classSectionElement = document.getElementById('class-section');
 const createClassButton = document.getElementById('create-class-button');
 const classMessageElement = document.getElementById('class-message');
 const myClassesListElement = document.getElementById('my-classes-list');
+const enrollmentClassFilterElement = document.getElementById('enrollment-class-filter');
+const enrollmentRequestsListElement = document.getElementById('enrollment-requests-list');
+const enrollmentMessageElement = document.getElementById('enrollment-message');
 let overlaySequenceJob = 0;
 
 const TABLE_COLUMN_COUNT = 5;
@@ -62,7 +65,8 @@ const pageTitles = {
   scores: 'Scores',
   quest: 'Quest',
   resources: 'Resources',
-  'my-classes': 'My Classes'
+  'my-classes': 'My Classes',
+  'enrollment-requests': 'Enrollment Requests'
 };
 
 function showLoadingOverlay(text = 'Initializing C.O.T.E System...') {
@@ -123,6 +127,7 @@ let classSubjects = [];
 let classSchoolYears = [];
 let classTerms = [];
 let classSections = [];
+let enrollmentRequests = [];
 
 function normalizePoints(points) {
   return typeof points === 'number' && Number.isFinite(points) ? points : 0;
@@ -181,6 +186,16 @@ function setClassMessage(message, type = '') {
 
   if (type) {
     classMessageElement.classList.add(type);
+  }
+}
+
+function setEnrollmentMessage(message, type = '') {
+  if (!enrollmentMessageElement) return;
+  enrollmentMessageElement.textContent = message;
+  enrollmentMessageElement.classList.remove('success', 'error');
+
+  if (type) {
+    enrollmentMessageElement.classList.add(type);
   }
 }
 
@@ -330,6 +345,13 @@ function formatClassCreatedAt(createdAt) {
   return '—';
 }
 
+function formatTimestamp(value) {
+  if (!value) return '—';
+  if (typeof value.toDate === 'function') return value.toDate().toLocaleString();
+  if (value.seconds) return new Date(value.seconds * 1000).toLocaleString();
+  return '—';
+}
+
 async function loadSubjectsForClassForm() {
   if (!classSubjectElement) return;
 
@@ -423,6 +445,24 @@ function renderMyClasses(classes = []) {
     .join('');
 }
 
+function populateEnrollmentClassFilter(classes = []) {
+  if (!enrollmentClassFilterElement) return;
+
+  const previousValue = enrollmentClassFilterElement.value;
+  enrollmentClassFilterElement.innerHTML = '<option value="">All My Classes</option>';
+
+  classes.forEach((classItem) => {
+    const option = document.createElement('option');
+    option.value = classItem.id;
+    option.textContent = formatClassLabel(classItem);
+    enrollmentClassFilterElement.append(option);
+  });
+
+  if (previousValue && classes.some((item) => item.id === previousValue)) {
+    enrollmentClassFilterElement.value = previousValue;
+  }
+}
+
 async function loadMyClasses() {
   if (!auth.currentUser?.uid) return;
 
@@ -455,7 +495,147 @@ async function loadTeacherClassesForSelection() {
 
   teacherClasses = snapshot.docs.map((classDoc) => ({ id: classDoc.id, ...classDoc.data() }));
   populateTeacherClassSelectors(teacherClasses);
+  populateEnrollmentClassFilter(teacherClasses);
   return teacherClasses;
+}
+
+function renderEnrollmentRequests(requests = []) {
+  if (!enrollmentRequestsListElement) return;
+
+  if (!requests.length) {
+    enrollmentRequestsListElement.innerHTML = '<p class="empty-cell">No pending enrollment requests found.</p>';
+    return;
+  }
+
+  enrollmentRequestsListElement.innerHTML = requests
+    .map((requestItem) => {
+      return `
+        <article class="app-card">
+          <h4>${safeText(requestItem.studentName, 'Student')}</h4>
+          <p><strong>Student Email:</strong> ${safeText(requestItem.studentEmail)}</p>
+          <p><strong>Student Section:</strong> ${safeText(requestItem.sectionName)}</p>
+          <p><strong>Subject:</strong> ${safeText(requestItem.classSubjectName)}</p>
+          <p><strong>Class Section:</strong> ${safeText(requestItem.classSectionName)}</p>
+          <p><strong>School Year:</strong> ${safeText(requestItem.classSchoolYearName)}</p>
+          <p><strong>Term:</strong> ${safeText(requestItem.classTermName)}</p>
+          <p><strong>Requested At:</strong> ${formatTimestamp(requestItem.requestedAt)}</p>
+          <div class="admin-actions">
+            <button type="button" data-enrollment-action="approve" data-enrollment-id="${requestItem.id}">
+              Approve
+            </button>
+            <button
+              type="button"
+              class="danger-button"
+              data-enrollment-action="reject"
+              data-enrollment-id="${requestItem.id}"
+            >
+              Reject
+            </button>
+          </div>
+        </article>
+      `;
+    })
+    .join('');
+}
+
+async function loadEnrollmentRequests(selectedClassId = '') {
+  if (!auth.currentUser?.uid) return;
+  if (!enrollmentRequestsListElement) return;
+
+  const classId = String(selectedClassId || enrollmentClassFilterElement?.value || '').trim();
+  const allowedClassIds = new Set(teacherClasses.map((item) => item.id));
+
+  enrollmentRequestsListElement.innerHTML = '<p class="empty-cell">Loading enrollment requests...</p>';
+  setEnrollmentMessage('Loading pending requests...');
+
+  try {
+    let enrollmentQuery = query(collection(db, 'classEnrollments'), where('status', '==', 'pending'));
+
+    if (classId) {
+      if (!allowedClassIds.has(classId)) {
+        enrollmentRequests = [];
+        renderEnrollmentRequests(enrollmentRequests);
+        setEnrollmentMessage('Invalid class selection.', 'error');
+        return;
+      }
+
+      enrollmentQuery = query(
+        collection(db, 'classEnrollments'),
+        where('status', '==', 'pending'),
+        where('classId', '==', classId)
+      );
+    }
+
+    const snapshot = await getDocs(enrollmentQuery);
+    const mappedRequests = snapshot.docs
+      .map((enrollmentDoc) => ({ id: enrollmentDoc.id, ...enrollmentDoc.data() }))
+      .filter((item) => allowedClassIds.has(String(item.classId || '').trim()))
+      .map((item) => {
+        const classItem = teacherClasses.find((teacherClass) => teacherClass.id === item.classId) || {};
+        return {
+          ...item,
+          classSubjectName: safeText(item.subjectName || item.classSubjectName || classItem.subjectName),
+          classSectionName: safeText(item.classSectionName || classItem.sectionName),
+          classSchoolYearName: safeText(item.schoolYearName || item.classSchoolYearName || classItem.schoolYearName),
+          classTermName: safeText(item.termName || item.classTermName || classItem.termName),
+          requestedAt: item.requestedAt || item.createdAt || null
+        };
+      })
+      .sort((a, b) => {
+        const aSeconds = a.requestedAt?.seconds || 0;
+        const bSeconds = b.requestedAt?.seconds || 0;
+        return bSeconds - aSeconds;
+      });
+
+    enrollmentRequests = mappedRequests;
+    renderEnrollmentRequests(enrollmentRequests);
+
+    if (!enrollmentRequests.length) {
+      setEnrollmentMessage('No pending enrollment requests found.');
+      return;
+    }
+
+    setEnrollmentMessage(`Loaded ${enrollmentRequests.length} pending enrollment request(s).`, 'success');
+  } catch (error) {
+    console.error('Failed to load enrollment requests:', error);
+    enrollmentRequests = [];
+    renderEnrollmentRequests(enrollmentRequests);
+    setEnrollmentMessage('Unable to load enrollment requests. Please try again.', 'error');
+  }
+}
+
+async function approveEnrollmentRequest(enrollmentId) {
+  const id = String(enrollmentId || '').trim();
+  if (!id) return;
+
+  try {
+    await updateDoc(doc(db, 'classEnrollments', id), {
+      status: 'approved',
+      approvedAt: serverTimestamp()
+    });
+    setEnrollmentMessage('Enrollment request approved.', 'success');
+    await loadEnrollmentRequests();
+  } catch (error) {
+    console.error('Failed to approve enrollment request:', error);
+    setEnrollmentMessage('Unable to approve request. Please try again.', 'error');
+  }
+}
+
+async function rejectEnrollmentRequest(enrollmentId) {
+  const id = String(enrollmentId || '').trim();
+  if (!id) return;
+
+  try {
+    await updateDoc(doc(db, 'classEnrollments', id), {
+      status: 'rejected',
+      reviewedAt: serverTimestamp()
+    });
+    setEnrollmentMessage('Enrollment request rejected.', 'success');
+    await loadEnrollmentRequests();
+  } catch (error) {
+    console.error('Failed to reject enrollment request:', error);
+    setEnrollmentMessage('Unable to reject request. Please try again.', 'error');
+  }
 }
 
 async function loadApprovedEnrollmentsByClass(classId) {
@@ -1069,6 +1249,10 @@ menuButtons.forEach((button) => {
     if (targetPage === 'my-classes' && auth.currentUser?.uid) {
       loadMyClasses();
     }
+
+    if (targetPage === 'enrollment-requests' && auth.currentUser?.uid) {
+      loadEnrollmentRequests();
+    }
   });
 });
 
@@ -1159,6 +1343,41 @@ scoreClassFilterElement?.addEventListener('change', () => {
   loadStudentsForScores();
 });
 
+enrollmentClassFilterElement?.addEventListener('change', () => {
+  loadEnrollmentRequests(String(enrollmentClassFilterElement.value || '').trim());
+});
+
+enrollmentRequestsListElement?.addEventListener('click', (event) => {
+  const target = event.target;
+
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  const actionButton = target.closest('button[data-enrollment-action][data-enrollment-id]');
+  if (!(actionButton instanceof HTMLButtonElement)) {
+    return;
+  }
+
+  const action = actionButton.dataset.enrollmentAction;
+  const enrollmentId = actionButton.dataset.enrollmentId || '';
+
+  actionButton.disabled = true;
+
+  if (action === 'approve') {
+    approveEnrollmentRequest(enrollmentId).finally(() => {
+      actionButton.disabled = false;
+    });
+    return;
+  }
+
+  if (action === 'reject') {
+    rejectEnrollmentRequest(enrollmentId).finally(() => {
+      actionButton.disabled = false;
+    });
+  }
+});
+
 saveScoresButton?.addEventListener('click', () => {
   saveAllScores();
 });
@@ -1236,6 +1455,7 @@ onAuthStateChanged(auth, async (user) => {
     renderScoreStudentsTable('Select a class first.');
     setScoreMessage('Select class, type, title, then enter scores.', '');
     setClassMessage('Create and manage your own classes here.', '');
+    setEnrollmentMessage('Review pending enrollment requests for your classes.', '');
 
     await loadTeacherClassesForSelection();
     await Promise.all([
@@ -1245,6 +1465,7 @@ onAuthStateChanged(auth, async (user) => {
       loadSectionsForClassForm()
     ]);
     await loadMyClasses();
+    await loadEnrollmentRequests();
   } catch (error) {
     console.error('Failed to validate teacher role:', error);
     window.location.replace('dashboard.html');
