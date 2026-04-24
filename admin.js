@@ -12,7 +12,8 @@ import {
   query,
   where,
   orderBy,
-  serverTimestamp
+  serverTimestamp,
+  runTransaction
 } from './firebase.js';
 
 const adminEmailElement = document.getElementById('admin-email');
@@ -1105,6 +1106,166 @@ async function addClassRecordActivity() {
   }
 }
 
+function calculateAcademicPoints(score, maxScore) {
+  const normalizedScore = Number(score);
+  const normalizedMaxScore = Number(maxScore);
+
+  if (!Number.isFinite(normalizedScore) || !Number.isFinite(normalizedMaxScore) || normalizedMaxScore <= 0) {
+    return 0;
+  }
+
+  const percentage = (normalizedScore / normalizedMaxScore) * 100;
+
+  if (percentage === 100) return 100;
+  if (percentage >= 90) return 75;
+  if (percentage >= 75) return 50;
+  if (percentage >= 50) return 25;
+  return 0;
+}
+
+function buildAcademicPointLogId(classId, activityId, studentId) {
+  return `academic_${classId}_${activityId}_${studentId}`;
+}
+
+async function saveScoreWithAcademicPoints(payload) {
+  const classData = payload?.classData || {};
+  const activity = payload?.activity || {};
+  const student = payload?.student || {};
+  const scoreValue = Number(payload?.score);
+  const maxScore = Number(activity?.maxScore);
+
+  const classId = String(classData.id || '').trim();
+  const activityId = String(activity.id || '').trim();
+  const studentId = String(student.id || '').trim();
+  const componentType = getScoreTypeKey(activity.componentType || activity.type || '');
+  const activityTitle = String(activity.title || '').trim();
+
+  if (!classId || !activityId || !studentId || !componentType || !activityTitle) {
+    throw new Error('Missing class record metadata for score saving.');
+  }
+
+  if (!Number.isFinite(scoreValue) || !Number.isFinite(maxScore) || maxScore <= 0 || scoreValue < 0 || scoreValue > maxScore) {
+    throw new Error(`Score must be between 0 and ${maxScore}.`);
+  }
+
+  const roundedScore = Number(scoreValue.toFixed(2));
+  const percentage = Number(((roundedScore / maxScore) * 100).toFixed(2));
+  const newAwardedPoints = calculateAcademicPoints(roundedScore, maxScore);
+  const scoreKey = `${studentId}::${activityId}`;
+  const existingScore = currentClassRecordScores.get(scoreKey);
+  const scoreRef = existingScore?.id ? doc(db, 'scores', existingScore.id) : doc(collection(db, 'scores'));
+  const pointLogId = buildAcademicPointLogId(classId, activityId, studentId);
+  const pointLogRef = doc(db, 'pointLogs', pointLogId);
+  const studentRef = doc(db, 'students', studentId);
+  const sectionId = String(classData.sectionId || '').trim();
+  const sectionRef = sectionId ? doc(db, 'sections', sectionId) : null;
+  const teacherId = String(auth.currentUser?.uid || '').trim();
+  const teacherName = safeText(classData.teacherName || auth.currentUser?.displayName || auth.currentUser?.email, 'Unknown Teacher');
+  const studentName = formatFullName(student);
+
+  const transactionResult = await runTransaction(db, async (transaction) => {
+    const [studentSnap, pointLogSnap, sectionSnap] = await Promise.all([
+      transaction.get(studentRef),
+      transaction.get(pointLogRef),
+      sectionRef ? transaction.get(sectionRef) : Promise.resolve(null)
+    ]);
+
+    if (!studentSnap.exists()) {
+      throw new Error('Student record does not exist.');
+    }
+    if (sectionRef && !sectionSnap?.exists()) {
+      throw new Error('Section record does not exist.');
+    }
+
+    const studentData = studentSnap.data() || {};
+    const existingPointLog = pointLogSnap.exists() ? pointLogSnap.data() || {} : {};
+    const previousAwardedPoints = Number.isFinite(Number(existingPointLog.awardedPoints))
+      ? Number(existingPointLog.awardedPoints)
+      : 0;
+    const pointDifference = newAwardedPoints - previousAwardedPoints;
+
+    console.log({
+      studentId,
+      previousAwardedPoints,
+      newAwardedPoints,
+      pointDifference
+    });
+
+    const existingStudentPoints = normalizePoints(studentData.points);
+    const nextStudentPoints = existingStudentPoints + pointDifference;
+
+    const scoreDocPayload = {
+      classId,
+      studentId,
+      activityId,
+      teacherId,
+      teacherName,
+      score: roundedScore,
+      maxScore,
+      type: componentType,
+      componentType,
+      title: activityTitle,
+      updatedAt: serverTimestamp(),
+      createdAt: existingScore?.createdAt || serverTimestamp()
+    };
+
+    const pointLogPayload = {
+      studentId,
+      studentName,
+      classId,
+      activityId,
+      activityTitle,
+      componentType,
+      score: roundedScore,
+      maxScore,
+      percentage,
+      awardedPoints: newAwardedPoints,
+      previousAwardedPoints,
+      pointDifference,
+      source: 'academic',
+      teacherId,
+      teacherName,
+      sectionId,
+      sectionName: safeText(classData.sectionName, ''),
+      schoolYearId: safeText(classData.schoolYearId, ''),
+      schoolYearName: safeText(classData.schoolYearName, ''),
+      termId: safeText(classData.termId, ''),
+      termName: safeText(classData.termName, ''),
+      updatedAt: serverTimestamp(),
+      createdAt: pointLogSnap.exists() ? existingPointLog.createdAt || serverTimestamp() : serverTimestamp()
+    };
+
+    transaction.set(scoreRef, scoreDocPayload, { merge: true });
+    transaction.set(pointLogRef, pointLogPayload, { merge: true });
+
+    if (pointDifference !== 0) {
+      transaction.update(studentRef, { points: nextStudentPoints });
+
+      if (sectionRef && sectionSnap?.exists()) {
+        const sectionData = sectionSnap.data() || {};
+        const currentSectionTotalPoints = normalizePoints(sectionData.totalPoints);
+        transaction.update(sectionRef, { totalPoints: currentSectionTotalPoints + pointDifference });
+      }
+    }
+
+    return {
+      scoreId: scoreRef.id,
+      scorePayload: scoreDocPayload,
+      pointDifference
+    };
+  });
+
+  const updatedScore = {
+    ...(existingScore || {}),
+    ...transactionResult.scorePayload,
+    id: transactionResult.scoreId
+  };
+
+  currentClassRecordScores.set(scoreKey, updatedScore);
+
+  return transactionResult;
+}
+
 async function saveClassRecordScore(inputElement, options = {}) {
   if (!(inputElement instanceof HTMLInputElement)) return { ok: false, skipped: true };
 
@@ -1146,37 +1307,22 @@ async function saveClassRecordScore(inputElement, options = {}) {
   }
 
   const student = currentClassRecordStudents.find((item) => item.id === studentId);
-  const scoreKey = `${studentId}::${activityId}`;
-  const existingScore = currentClassRecordScores.get(scoreKey);
-
-  const payload = {
-    classId,
-    studentId,
-    activityId,
-    teacherId: auth.currentUser?.uid || '',
-    score: roundedScore,
-    maxScore,
-    componentType,
-    title,
-    updatedAt: serverTimestamp(),
-    createdAt: existingScore?.createdAt || serverTimestamp()
-  };
+  const selectedClass = teacherClasses.find((classItem) => classItem.id === classId) || {};
 
   if (lockInputAfterSave) {
     inputElement.disabled = true;
   }
 
   try {
-    if (existingScore?.id) {
-      await updateDoc(doc(db, 'scores', existingScore.id), payload);
-      currentClassRecordScores.set(scoreKey, { ...existingScore, ...payload, id: existingScore.id });
-    } else {
-      const ref = await addDoc(collection(db, 'scores'), payload);
-      currentClassRecordScores.set(scoreKey, { ...payload, id: ref.id });
-    }
+    await saveScoreWithAcademicPoints({
+      classData: { id: classId, ...selectedClass },
+      activity: { id: activityId, componentType, title, maxScore },
+      student: { ...(student || {}), id: studentId },
+      score: roundedScore
+    });
 
-    inputElement.dataset.lastSaved = String(payload.score);
-    inputElement.value = String(payload.score);
+    inputElement.dataset.lastSaved = String(roundedScore);
+    inputElement.value = String(roundedScore);
     setClassRecordMessage(`Saved score for ${safeText(formatFullName(student), 'student')} (${title}).`, 'success');
     return { ok: true, skipped: false };
   } catch (error) {
