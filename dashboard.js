@@ -147,14 +147,6 @@ function normalizePoints(points) {
   return typeof points === 'number' && Number.isFinite(points) ? points : 0;
 }
 
-function getTierFromRank(rank) {
-  if (rank === 1) return 'Class A';
-  if (rank === 2) return 'Class B';
-  if (rank === 3) return 'Class C';
-  if (rank === 4) return 'Class D';
-  return 'Class E';
-}
-
 function normalizeNumericValue(value, fallback = 0) {
   const normalized = Number(value);
   return Number.isFinite(normalized) ? normalized : fallback;
@@ -822,10 +814,11 @@ function setStudentData(data, fallbackEmail = '') {
 
 function setSectionStanding(data = {}) {
   const sectionName = safe(data.sectionName || data.name || currentStudentProfile?.sectionName || currentStudentProfile?.section);
+  const tier = String(data.tier || '').trim() || 'Not yet ranked';
   const rankValue = Number(data.rank);
   const rank = Number.isFinite(rankValue) && rankValue > 0 ? rankValue : null;
-  const tier = safe(data.tier || (rank ? getTierFromRank(rank) : null), 'Not assigned');
   const points = normalizePoints(data.totalPoints);
+  const rankLabel = rank ? `#${rank}` : 'Not yet ranked';
 
   if (homeSectionNameElement) {
     homeSectionNameElement.textContent = sectionName;
@@ -836,7 +829,7 @@ function setSectionStanding(data = {}) {
     )}</span>`;
   }
   if (homeSectionRankElement) {
-    homeSectionRankElement.textContent = rank ? `Rank ${rank}` : 'Not ranked';
+    homeSectionRankElement.textContent = rankLabel;
   }
   if (homeSectionPointsElement) {
     homeSectionPointsElement.textContent = `${points.toLocaleString()} pts`;
@@ -845,45 +838,51 @@ function setSectionStanding(data = {}) {
     profileSectionTierElement.textContent = tier;
   }
   if (profileSectionRankElement) {
-    profileSectionRankElement.textContent = rank ? `Rank ${rank}` : 'Not ranked';
+    profileSectionRankElement.textContent = rankLabel;
   }
 }
 
-async function loadSectionStanding(studentData = {}) {
+async function loadStudentSectionStanding(studentData = {}) {
+  const sectionId = String(studentData.sectionId || '').trim();
+  const sectionName = String(studentData.sectionName || studentData.section || '').trim();
+
+  if (!sectionId) {
+    setSectionStanding({
+      sectionName: sectionName || 'No section assigned',
+      tier: 'No section assigned',
+      rank: null,
+      totalPoints: 0,
+    });
+    return;
+  }
+
   try {
-    const sectionId = String(studentData.sectionId || '').trim();
-    if (sectionId) {
-      const sectionSnap = await getDoc(doc(db, 'sections', sectionId));
-      if (sectionSnap.exists()) {
-        setSectionStanding(sectionSnap.data() || {});
-        return;
-      }
-    }
-
-    const fallbackSchoolYearId = String(studentData.schoolYearId || '').trim();
-    const fallbackSectionName = String(studentData.sectionName || studentData.section || '').trim();
-    if (!fallbackSchoolYearId || !fallbackSectionName) {
-      setSectionStanding({ sectionName: fallbackSectionName });
+    const sectionSnap = await getDoc(doc(db, 'sections', sectionId));
+    if (!sectionSnap.exists()) {
+      setSectionStanding({
+        sectionName: sectionName || 'Section record not found',
+        tier: 'Section record not found',
+        rank: null,
+        totalPoints: 0,
+      });
       return;
     }
 
-    const fallbackSnapshot = await getDocs(
-      query(
-        collection(db, 'sections'),
-        where('schoolYearId', '==', fallbackSchoolYearId),
-        where('name', '==', fallbackSectionName)
-      )
-    );
-    const fallbackDoc = fallbackSnapshot.docs[0];
-    if (fallbackDoc) {
-      setSectionStanding(fallbackDoc.data() || {});
-      return;
-    }
-
-    setSectionStanding({ sectionName: fallbackSectionName });
+    const sectionData = sectionSnap.data() || {};
+    setSectionStanding({
+      sectionName: sectionData.name || sectionData.sectionName || sectionName,
+      tier: sectionData.tier,
+      rank: sectionData.rank,
+      totalPoints: sectionData.totalPoints,
+    });
   } catch (error) {
     console.error('Failed to load section standing:', error);
-    setSectionStanding({ sectionName: studentData.sectionName || studentData.section });
+    setSectionStanding({
+      sectionName: sectionName || 'Section record not found',
+      tier: 'Section record not found',
+      rank: null,
+      totalPoints: 0,
+    });
   }
 }
 
@@ -1009,7 +1008,7 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     setStudentData(studentData, user.email);
-    await loadSectionStanding(studentData);
+    await loadStudentSectionStanding(studentData);
     loadPointLogs(user.uid);
     loadMyEnrollments();
     loadAvailableClasses();
