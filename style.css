@@ -640,6 +640,32 @@ button:active {
   gap: 0.7rem;
 }
 
+.my-classes-summary-grid {
+  margin-top: 0.9rem;
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.summary-card {
+  border: 1px solid rgba(58, 190, 255, 0.28);
+  background: rgba(6, 18, 34, 0.7);
+  border-radius: 12px;
+  padding: 0.7rem 0.8rem;
+}
+
+.summary-card p {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-soft);
+}
+
+.summary-card h4 {
+  margin: 0.35rem 0 0;
+  font-size: 1.25rem;
+  color: #f2f8ff;
+}
+
 .resource-card button,
 .quest-card button {
   width: auto;
