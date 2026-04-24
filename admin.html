@@ -110,6 +110,34 @@
             <p>Loading section leaderboard...</p>
           </div>
         </article>
+        <article class="app-card">
+          <h3>Student Rank Preview</h3>
+          <p>Approved students in a selected class with their section rank.</p>
+          <div class="admin-toolbar">
+            <div class="field">
+              <label for="teacher-rank-preview-class-filter">Select Class</label>
+              <select id="teacher-rank-preview-class-filter">
+                <option value="">Select a class first</option>
+              </select>
+            </div>
+          </div>
+          <div class="admin-table-wrap" role="region" aria-label="Student rank preview" tabindex="0">
+            <table class="student-table">
+              <thead>
+                <tr>
+                  <th scope="col">Name</th>
+                  <th scope="col">Points</th>
+                  <th scope="col">Student Rank</th>
+                </tr>
+              </thead>
+              <tbody id="teacher-student-rank-preview-body">
+                <tr>
+                  <td colspan="3" class="empty-cell">Select a class to preview student ranks.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
 
         <article class="app-card">
           <h3>Section Guide</h3>
@@ -200,11 +228,12 @@
                   <th scope="col">LRN</th>
                   <th scope="col">Section</th>
                   <th scope="col">Points</th>
+                  <th scope="col">Student Rank</th>
                 </tr>
               </thead>
               <tbody id="studentTableBody">
                 <tr>
-                  <td colspan="5" class="empty-cell">Click "Load Students" to fetch and display students.</td>
+                  <td colspan="6" class="empty-cell">Click "Load Students" to fetch and display students.</td>
                 </tr>
               </tbody>
             </table>

@@ -12,7 +12,8 @@ import {
   query,
   orderBy,
   where,
-  serverTimestamp
+  serverTimestamp,
+  writeBatch
 } from './firebase.js';
 
 const superAdminEmailElement = document.getElementById('super-admin-email');
@@ -57,6 +58,7 @@ const sectionsListElement = document.getElementById('sections-list');
 const rankingSchoolYearSelect = document.getElementById('ranking-school-year');
 const recomputeRankingsButton = document.getElementById('recompute-rankings-btn');
 const sectionLeaderboardTableBodyElement = document.getElementById('section-leaderboard-body');
+const recomputeStudentRankingsButton = document.getElementById('recompute-student-rankings-btn');
 
 let overlaySequenceJob = 0;
 let schoolYearOptionsCache = [];
@@ -72,6 +74,29 @@ function getTierFromRank(rank) {
 function normalizePoints(value) {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : 0;
+}
+
+async function commitUpdatePayloadsInBatches(payloads = []) {
+  if (!Array.isArray(payloads) || payloads.length === 0) {
+    return;
+  }
+
+  const MAX_BATCH_SIZE = 450;
+  for (let index = 0; index < payloads.length; index += MAX_BATCH_SIZE) {
+    const chunk = payloads.slice(index, index + MAX_BATCH_SIZE);
+    const batch = writeBatch(db);
+
+    chunk.forEach((item) => {
+      batch.update(doc(db, 'students', item.studentId), {
+        studentRank: item.studentRank,
+        sectionRankTotal: item.sectionRankTotal,
+        rankingUpdatedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+    });
+
+    await batch.commit();
+  }
 }
 
 const pageTitles = {
@@ -520,6 +545,85 @@ async function recomputeSectionRankings() {
   }
 }
 
+async function recomputeStudentRankings() {
+  const schoolYearId = safeText(rankingSchoolYearSelect?.value, '').trim();
+  if (!schoolYearId) {
+    setMessageOnElement(sectionMessageElement, 'Please select a school year first.', 'error');
+    return;
+  }
+
+  if (recomputeStudentRankingsButton) {
+    recomputeStudentRankingsButton.disabled = true;
+    recomputeStudentRankingsButton.textContent = 'Recomputing...';
+  }
+
+  try {
+    const studentSnapshot = await getDocs(query(collection(db, 'students'), where('schoolYearId', '==', schoolYearId)));
+    const students = studentSnapshot.docs.map((studentDoc) => ({
+      id: studentDoc.id,
+      ...studentDoc.data(),
+      points: normalizePoints(studentDoc.data()?.points)
+    }));
+
+    const groupedBySection = students.reduce((accumulator, student) => {
+      const sectionId = safeText(student.sectionId, '').trim();
+      if (!sectionId) {
+        return accumulator;
+      }
+
+      if (!accumulator.has(sectionId)) {
+        accumulator.set(sectionId, []);
+      }
+
+      accumulator.get(sectionId).push(student);
+      return accumulator;
+    }, new Map());
+
+    const payloads = [];
+
+    groupedBySection.forEach((sectionStudents) => {
+      const sortedStudents = [...sectionStudents].sort((a, b) => {
+        const pointsDelta = normalizePoints(b.points) - normalizePoints(a.points);
+        if (pointsDelta !== 0) return pointsDelta;
+
+        const lastNameCompare = safeText(a.lastName, '').localeCompare(safeText(b.lastName, ''), undefined, {
+          sensitivity: 'base'
+        });
+        if (lastNameCompare !== 0) return lastNameCompare;
+
+        return safeText(a.firstName, '').localeCompare(safeText(b.firstName, ''), undefined, {
+          sensitivity: 'base'
+        });
+      });
+
+      const sectionRankTotal = sortedStudents.length;
+      sortedStudents.forEach((student, index) => {
+        payloads.push({
+          studentId: student.id,
+          studentRank: index + 1,
+          sectionRankTotal
+        });
+      });
+    });
+
+    await commitUpdatePayloadsInBatches(payloads);
+
+    setMessageOnElement(
+      sectionMessageElement,
+      `Student rankings recomputed successfully for ${groupedBySection.size} section(s).`,
+      'success'
+    );
+  } catch (error) {
+    console.error('Failed to recompute student rankings:', error);
+    setMessageOnElement(sectionMessageElement, 'Failed to recompute student rankings.', 'error');
+  } finally {
+    if (recomputeStudentRankingsButton) {
+      recomputeStudentRankingsButton.disabled = false;
+      recomputeStudentRankingsButton.textContent = 'Recompute Student Rankings';
+    }
+  }
+}
+
 async function loadTeacherRecordsByStatus(status) {
   const usersQuery = query(collection(db, 'users'), where('role', '==', 'teacher'), where('status', '==', status));
   const [usersSnapshot, teachersSnapshot] = await Promise.all([
@@ -923,6 +1027,7 @@ addTermButton?.addEventListener('click', addTerm);
 addSubjectButton?.addEventListener('click', addSubject);
 addSectionButton?.addEventListener('click', addSection);
 recomputeRankingsButton?.addEventListener('click', recomputeSectionRankings);
+recomputeStudentRankingsButton?.addEventListener('click', recomputeStudentRankings);
 rankingSchoolYearSelect?.addEventListener('change', refreshSectionLeaderboard);
 
 menuButtons.forEach((button) => {

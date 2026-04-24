@@ -13,7 +13,8 @@ import {
   where,
   orderBy,
   serverTimestamp,
-  runTransaction
+  runTransaction,
+  writeBatch
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 
 const firebaseConfig = {
@@ -46,5 +47,6 @@ export {
   where,
   orderBy,
   serverTimestamp,
-  runTransaction
+  runTransaction,
+  writeBatch
 };
