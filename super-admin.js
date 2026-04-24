@@ -54,9 +54,25 @@ const sectionNameInput = document.getElementById('section-name');
 const addSectionButton = document.getElementById('add-section-btn');
 const sectionMessageElement = document.getElementById('section-message');
 const sectionsListElement = document.getElementById('sections-list');
+const rankingSchoolYearSelect = document.getElementById('ranking-school-year');
+const recomputeRankingsButton = document.getElementById('recompute-rankings-btn');
+const sectionLeaderboardTableBodyElement = document.getElementById('section-leaderboard-body');
 
 let overlaySequenceJob = 0;
 let schoolYearOptionsCache = [];
+
+function getTierFromRank(rank) {
+  if (rank === 1) return 'Class A';
+  if (rank === 2) return 'Class B';
+  if (rank === 3) return 'Class C';
+  if (rank === 4) return 'Class D';
+  return 'Class E';
+}
+
+function normalizePoints(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
 
 const pageTitles = {
   home: 'Home',
@@ -334,6 +350,135 @@ function populateSchoolYearSelect(records) {
   }
 }
 
+function populateRankingSchoolYearSelect(records) {
+  if (!rankingSchoolYearSelect) return;
+
+  const currentValue = rankingSchoolYearSelect.value;
+  const activeRecords = records.filter((item) => safeText(item.status, '').toLowerCase() === 'active');
+  const options = activeRecords.map((record) => `<option value="${record.id}">${safeText(record.name)}</option>`).join('');
+
+  rankingSchoolYearSelect.innerHTML = '<option value="">Select school year</option>' + options;
+
+  if (currentValue && activeRecords.some((record) => record.id === currentValue)) {
+    rankingSchoolYearSelect.value = currentValue;
+    return;
+  }
+
+  if (activeRecords.length > 0) {
+    rankingSchoolYearSelect.value = activeRecords[0].id;
+  }
+}
+
+function renderSectionLeaderboard(records) {
+  if (!sectionLeaderboardTableBodyElement) return;
+
+  if (!records.length) {
+    sectionLeaderboardTableBodyElement.innerHTML = '<tr><td colspan="5" class="empty-cell">No sections found.</td></tr>';
+    return;
+  }
+
+  sectionLeaderboardTableBodyElement.innerHTML = records
+    .map(
+      (record) => `
+      <tr>
+        <td>${record.rank}</td>
+        <td><span class="tier-pill ${String(record.tier || '').toLowerCase().replace(/\s+/g, '-')}">${safeText(record.tier)}</span></td>
+        <td>${safeText(record.name)}</td>
+        <td>${safeText(record.gradeLevel)}</td>
+        <td>${normalizePoints(record.totalPoints).toLocaleString()}</td>
+      </tr>
+    `
+    )
+    .join('');
+}
+
+async function getRankedSectionsBySchoolYear(schoolYearId) {
+  const sectionQuery = query(
+    collection(db, 'sections'),
+    where('schoolYearId', '==', schoolYearId),
+    where('status', '==', 'active')
+  );
+  const snapshot = await getDocs(sectionQuery);
+
+  const rankedSections = snapshot.docs
+    .map((item) => ({
+      id: item.id,
+      ...item.data()
+    }))
+    .sort((a, b) => {
+      const pointsDelta = normalizePoints(b.totalPoints) - normalizePoints(a.totalPoints);
+      if (pointsDelta !== 0) return pointsDelta;
+      return safeText(a.name, '').localeCompare(safeText(b.name, ''), undefined, { sensitivity: 'base' });
+    })
+    .map((record, index) => {
+      const rank = index + 1;
+      return {
+        ...record,
+        rank,
+        tier: getTierFromRank(rank),
+        totalPoints: normalizePoints(record.totalPoints)
+      };
+    });
+
+  return rankedSections;
+}
+
+async function refreshSectionLeaderboard() {
+  const schoolYearId = safeText(rankingSchoolYearSelect?.value, '').trim();
+
+  if (!schoolYearId) {
+    renderSectionLeaderboard([]);
+    return;
+  }
+
+  try {
+    const rankedSections = await getRankedSectionsBySchoolYear(schoolYearId);
+    renderSectionLeaderboard(rankedSections);
+  } catch (error) {
+    console.error('Failed to load section leaderboard:', error);
+    setMessageOnElement(sectionMessageElement, 'Unable to load section leaderboard right now.', 'error');
+  }
+}
+
+async function recomputeSectionRankings() {
+  const schoolYearId = safeText(rankingSchoolYearSelect?.value, '').trim();
+  if (!schoolYearId) {
+    setMessageOnElement(sectionMessageElement, 'Please select a school year first.', 'error');
+    return;
+  }
+
+  if (recomputeRankingsButton) {
+    recomputeRankingsButton.disabled = true;
+    recomputeRankingsButton.textContent = 'Recomputing...';
+  }
+
+  try {
+    const rankedSections = await getRankedSectionsBySchoolYear(schoolYearId);
+
+    await Promise.all(
+      rankedSections.map((section) =>
+        updateDoc(doc(db, 'sections', section.id), {
+          rank: section.rank,
+          tier: section.tier,
+          updatedAt: serverTimestamp()
+        })
+      )
+    );
+
+    renderSectionLeaderboard(rankedSections);
+    setMessageOnElement(sectionMessageElement, 'Section rankings recomputed successfully.', 'success');
+    await loadSections();
+  } catch (error) {
+    console.error('Failed to recompute rankings:', error);
+    setMessageOnElement(sectionMessageElement, 'Failed to recompute section rankings.', 'error');
+  } finally {
+    if (recomputeRankingsButton) {
+      recomputeRankingsButton.disabled = false;
+      recomputeRankingsButton.textContent = 'Recompute Section Rankings';
+    }
+  }
+}
+
 async function loadTeacherRecordsByStatus(status) {
   const usersQuery = query(collection(db, 'users'), where('role', '==', 'teacher'), where('status', '==', status));
   const [usersSnapshot, teachersSnapshot] = await Promise.all([
@@ -425,6 +570,8 @@ async function loadSchoolYears() {
     schoolYearOptionsCache = records;
     renderSchoolYears(records);
     populateSchoolYearSelect(records);
+    populateRankingSchoolYearSelect(records);
+    await refreshSectionLeaderboard();
   } catch (error) {
     console.error('Failed to load school years:', error);
     setMessageOnElement(schoolYearMessageElement, 'Unable to load school years right now.', 'error');
@@ -734,6 +881,8 @@ addSchoolYearButton?.addEventListener('click', addSchoolYear);
 addTermButton?.addEventListener('click', addTerm);
 addSubjectButton?.addEventListener('click', addSubject);
 addSectionButton?.addEventListener('click', addSection);
+recomputeRankingsButton?.addEventListener('click', recomputeSectionRankings);
+rankingSchoolYearSelect?.addEventListener('change', refreshSectionLeaderboard);
 
 menuButtons.forEach((button) => {
   button.addEventListener('click', () => {

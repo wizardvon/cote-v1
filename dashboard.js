@@ -31,8 +31,14 @@ const messagesButton = document.getElementById('messages-button');
 const homeStudentNameElement = document.getElementById('home-student-name');
 const homeStudentSectionElement = document.getElementById('home-student-section');
 const homeStudentPointsElement = document.getElementById('home-student-points');
+const homeSectionNameElement = document.getElementById('home-section-name');
+const homeSectionTierElement = document.getElementById('home-section-tier');
+const homeSectionRankElement = document.getElementById('home-section-rank');
+const homeSectionPointsElement = document.getElementById('home-section-points');
 const leaderboardListElement = document.getElementById('leaderboard-list');
 const profileRankElement = document.getElementById('profile-rank');
+const profileSectionTierElement = document.getElementById('profile-section-tier');
+const profileSectionRankElement = document.getElementById('profile-section-rank');
 
 const sidebar = document.getElementById('sidebar');
 const sidebarOverlay = document.getElementById('sidebar-overlay');
@@ -139,6 +145,14 @@ function makeInitials(data) {
 
 function normalizePoints(points) {
   return typeof points === 'number' && Number.isFinite(points) ? points : 0;
+}
+
+function getTierFromRank(rank) {
+  if (rank === 1) return 'Class A';
+  if (rank === 2) return 'Class B';
+  if (rank === 3) return 'Class C';
+  if (rank === 4) return 'Class D';
+  return 'Class E';
 }
 
 function normalizeNumericValue(value, fallback = 0) {
@@ -806,6 +820,73 @@ function setStudentData(data, fallbackEmail = '') {
   }
 }
 
+function setSectionStanding(data = {}) {
+  const sectionName = safe(data.sectionName || data.name || currentStudentProfile?.sectionName || currentStudentProfile?.section);
+  const rankValue = Number(data.rank);
+  const rank = Number.isFinite(rankValue) && rankValue > 0 ? rankValue : null;
+  const tier = safe(data.tier || (rank ? getTierFromRank(rank) : null), 'Not assigned');
+  const points = normalizePoints(data.totalPoints);
+
+  if (homeSectionNameElement) {
+    homeSectionNameElement.textContent = sectionName;
+  }
+  if (homeSectionTierElement) {
+    homeSectionTierElement.innerHTML = `<span class="tier-pill ${String(tier).toLowerCase().replace(/\s+/g, '-')}">${escapeHtml(
+      tier
+    )}</span>`;
+  }
+  if (homeSectionRankElement) {
+    homeSectionRankElement.textContent = rank ? `Rank ${rank}` : 'Not ranked';
+  }
+  if (homeSectionPointsElement) {
+    homeSectionPointsElement.textContent = `${points.toLocaleString()} pts`;
+  }
+  if (profileSectionTierElement) {
+    profileSectionTierElement.textContent = tier;
+  }
+  if (profileSectionRankElement) {
+    profileSectionRankElement.textContent = rank ? `Rank ${rank}` : 'Not ranked';
+  }
+}
+
+async function loadSectionStanding(studentData = {}) {
+  try {
+    const sectionId = String(studentData.sectionId || '').trim();
+    if (sectionId) {
+      const sectionSnap = await getDoc(doc(db, 'sections', sectionId));
+      if (sectionSnap.exists()) {
+        setSectionStanding(sectionSnap.data() || {});
+        return;
+      }
+    }
+
+    const fallbackSchoolYearId = String(studentData.schoolYearId || '').trim();
+    const fallbackSectionName = String(studentData.sectionName || studentData.section || '').trim();
+    if (!fallbackSchoolYearId || !fallbackSectionName) {
+      setSectionStanding({ sectionName: fallbackSectionName });
+      return;
+    }
+
+    const fallbackSnapshot = await getDocs(
+      query(
+        collection(db, 'sections'),
+        where('schoolYearId', '==', fallbackSchoolYearId),
+        where('name', '==', fallbackSectionName)
+      )
+    );
+    const fallbackDoc = fallbackSnapshot.docs[0];
+    if (fallbackDoc) {
+      setSectionStanding(fallbackDoc.data() || {});
+      return;
+    }
+
+    setSectionStanding({ sectionName: fallbackSectionName });
+  } catch (error) {
+    console.error('Failed to load section standing:', error);
+    setSectionStanding({ sectionName: studentData.sectionName || studentData.section });
+  }
+}
+
 function renderNoProfile(email = '') {
   const fallback = safe(email);
 
@@ -852,6 +933,7 @@ function renderNoProfile(email = '') {
   if (profileRankElement) {
     profileRankElement.textContent = 'Not ranked';
   }
+  setSectionStanding({});
 
   if (profileDataElement) {
     profileDataElement.innerHTML = `
@@ -927,6 +1009,7 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     setStudentData(studentData, user.email);
+    await loadSectionStanding(studentData);
     loadPointLogs(user.uid);
     loadMyEnrollments();
     loadAvailableClasses();
@@ -974,6 +1057,7 @@ onAuthStateChanged(auth, async (user) => {
     if (profileRankElement) {
       profileRankElement.textContent = 'Not ranked';
     }
+    setSectionStanding({});
   }
 });
 
