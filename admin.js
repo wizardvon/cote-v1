@@ -58,9 +58,11 @@ const classRecordDownloadButton = document.getElementById('class-record-download
 const classRecordPrintButton = document.getElementById('class-record-print-button');
 const classRecordMessageElement = document.getElementById('class-record-message');
 const teacherLeaderboardPreviewElement = document.getElementById('teacher-leaderboard-preview');
+const teacherRankPreviewClassFilterElement = document.getElementById('teacher-rank-preview-class-filter');
+const teacherStudentRankPreviewBodyElement = document.getElementById('teacher-student-rank-preview-body');
 let overlaySequenceJob = 0;
 
-const TABLE_COLUMN_COUNT = 5;
+const TABLE_COLUMN_COUNT = 6;
 
 const pageTitles = {
   home: 'Home',
@@ -392,7 +394,11 @@ function formatClassLabel(classItem) {
 }
 
 function populateTeacherClassSelectors(classes = []) {
-  const selectors = [teacherClassFilterElement, classRecordFilterElement].filter(Boolean);
+  const selectors = [
+    teacherClassFilterElement,
+    classRecordFilterElement,
+    teacherRankPreviewClassFilterElement
+  ].filter(Boolean);
 
   selectors.forEach((selectElement) => {
     const previousValue = selectElement.value;
@@ -409,6 +415,84 @@ function populateTeacherClassSelectors(classes = []) {
       selectElement.value = previousValue;
     }
   });
+}
+
+function renderTeacherStudentRankPreviewRows(students = []) {
+  if (!teacherStudentRankPreviewBodyElement) return;
+
+  if (!students.length) {
+    teacherStudentRankPreviewBodyElement.innerHTML = `
+      <tr>
+        <td colspan="3" class="empty-cell">No approved students found for this class.</td>
+      </tr>
+    `;
+    return;
+  }
+
+  teacherStudentRankPreviewBodyElement.innerHTML = students
+    .map((student) => {
+      const studentRank = Number(student.studentRank);
+      const sectionRankTotal = Number(student.sectionRankTotal);
+      const hasRank = Number.isFinite(studentRank) && studentRank > 0;
+      const hasTotal = Number.isFinite(sectionRankTotal) && sectionRankTotal > 0;
+      const rankLabel = hasRank && hasTotal ? `#${studentRank} of ${sectionRankTotal}` : 'Not yet assigned';
+
+      return `
+        <tr>
+          <td>${formatFullName(student)}</td>
+          <td>${normalizePoints(student.points)}</td>
+          <td>${rankLabel}</td>
+        </tr>
+      `;
+    })
+    .join('');
+}
+
+async function loadTeacherStudentRankPreview(classId = '') {
+  if (!teacherStudentRankPreviewBodyElement) return;
+
+  const selectedClassId = String(classId || teacherRankPreviewClassFilterElement?.value || '').trim();
+  if (!selectedClassId) {
+    teacherStudentRankPreviewBodyElement.innerHTML = `
+      <tr>
+        <td colspan="3" class="empty-cell">Select a class to preview student ranks.</td>
+      </tr>
+    `;
+    return;
+  }
+
+  teacherStudentRankPreviewBodyElement.innerHTML = `
+    <tr>
+      <td colspan="3" class="empty-cell">Loading approved students...</td>
+    </tr>
+  `;
+
+  try {
+    const students = await loadStudentsFromApprovedEnrollments(selectedClassId);
+    const sorted = [...students].sort((a, b) => {
+      const rankA = Number(a.studentRank);
+      const rankB = Number(b.studentRank);
+      const hasRankA = Number.isFinite(rankA) && rankA > 0;
+      const hasRankB = Number.isFinite(rankB) && rankB > 0;
+
+      if (hasRankA && hasRankB && rankA !== rankB) return rankA - rankB;
+      if (hasRankA !== hasRankB) return hasRankA ? -1 : 1;
+
+      const pointsDelta = normalizePoints(b.points) - normalizePoints(a.points);
+      if (pointsDelta !== 0) return pointsDelta;
+
+      return safeText(a.lastName, '').localeCompare(safeText(b.lastName, ''), undefined, { sensitivity: 'base' });
+    });
+
+    renderTeacherStudentRankPreviewRows(sorted);
+  } catch (error) {
+    console.error('Failed to load student rank preview:', error);
+    teacherStudentRankPreviewBodyElement.innerHTML = `
+      <tr>
+        <td colspan="3" class="empty-cell">Unable to load rank preview right now.</td>
+      </tr>
+    `;
+  }
 }
 
 function populateSelectOptions(selectElement, data, placeholder, getLabel) {
@@ -1642,6 +1726,14 @@ function renderTableRows() {
           <td>${safeText(student.lrn)}</td>
           <td>${safeText(student.section)}</td>
           <td>${normalizePoints(student.points)}</td>
+          <td>${
+            Number.isFinite(Number(student.studentRank)) &&
+            Number(student.studentRank) > 0 &&
+            Number.isFinite(Number(student.sectionRankTotal)) &&
+            Number(student.sectionRankTotal) > 0
+              ? `#${Number(student.studentRank)} of ${Number(student.sectionRankTotal)}`
+              : 'Not yet assigned'
+          }</td>
         </tr>
       `;
     })
@@ -1860,6 +1952,8 @@ async function updatePointsForSelected(action) {
       return;
     }
 
+    await loadTeacherStudentRankPreview();
+
     pointsValueInput.value = '';
     reasonInput.value = '';
     selectAllCheckbox.checked = false;
@@ -1921,6 +2015,10 @@ teacherClassFilterElement?.addEventListener('change', () => {
   }
 
   loadStudents({ classId: selectedTeacherClassId });
+});
+
+teacherRankPreviewClassFilterElement?.addEventListener('change', () => {
+  loadTeacherStudentRankPreview();
 });
 
 searchInput?.addEventListener('input', () => {
@@ -2179,6 +2277,7 @@ onAuthStateChanged(auth, async (user) => {
     await loadMyClasses();
     await loadEnrollmentRequests();
     await loadTeacherSectionLeaderboardPreview();
+    await loadTeacherStudentRankPreview();
   } catch (error) {
     console.error('Failed to validate teacher role:', error);
     window.location.replace('dashboard.html');

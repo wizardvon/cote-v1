@@ -37,6 +37,7 @@ const homeSectionRankElement = document.getElementById('home-section-rank');
 const homeSectionPointsElement = document.getElementById('home-section-points');
 const leaderboardListElement = document.getElementById('leaderboard-list');
 const profileRankElement = document.getElementById('profile-rank');
+const profileStudentRankElement = document.getElementById('profile-student-rank');
 const profileSectionTierElement = document.getElementById('profile-section-tier');
 const profileSectionRankElement = document.getElementById('profile-section-rank');
 
@@ -588,6 +589,10 @@ async function loadLeaderboard() {
     if (profileRankElement) {
       profileRankElement.textContent = 'Not ranked';
     }
+
+    if (profileStudentRankElement) {
+      profileStudentRankElement.textContent = 'Not yet assigned';
+    }
   }
 }
 
@@ -782,6 +787,15 @@ function setStudentData(data, fallbackEmail = '') {
 
   if (pointsTotalElement) {
     pointsTotalElement.textContent = String(points);
+  }
+
+  if (profileStudentRankElement) {
+    const studentRank = Number(studentData.studentRank);
+    const sectionRankTotal = Number(studentData.sectionRankTotal);
+    const hasRank = Number.isFinite(studentRank) && studentRank > 0;
+    const hasTotal = Number.isFinite(sectionRankTotal) && sectionRankTotal > 0;
+
+    profileStudentRankElement.textContent = hasRank && hasTotal ? `#${studentRank} of ${sectionRankTotal}` : 'Not yet assigned';
   }
 
   if (homeStudentNameElement) {
@@ -988,6 +1002,10 @@ function renderNoProfile(email = '') {
   if (profileRankElement) {
     profileRankElement.textContent = 'Not ranked';
   }
+
+  if (profileStudentRankElement) {
+    profileStudentRankElement.textContent = 'Not yet assigned';
+  }
   setSectionStanding({});
 
   if (profileDataElement) {
@@ -1111,6 +1129,10 @@ onAuthStateChanged(auth, async (user) => {
 
     if (profileRankElement) {
       profileRankElement.textContent = 'Not ranked';
+    }
+
+    if (profileStudentRankElement) {
+      profileStudentRankElement.textContent = 'Not yet assigned';
     }
     setSectionStanding({});
   }
