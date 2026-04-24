@@ -143,6 +143,7 @@ let currentClassRecordClassName = '';
 let currentClassRecordStudents = [];
 let currentClassRecordActivities = [];
 let currentClassRecordScores = new Map();
+let currentEditingActivityId = '';
 
 function normalizePoints(points) {
   return typeof points === 'number' && Number.isFinite(points) ? points : 0;
@@ -723,38 +724,42 @@ function renderClassRecordTable(students = [], activities = [], scoresMap = new 
   const orderedActivities = [...grouped.WW, ...grouped.PT, ...grouped.Exam];
   const colSpan = Math.max(orderedActivities.length + 1, 2);
 
-  if (!students.length) {
-    const renderGroupHeader = (label, items) => {
-      if (!items.length) return '';
-      return `<th scope="colgroup" colspan="${items.length}">${label}</th>`;
-    };
+  const renderGroupHeader = (label, items) => {
+    if (!items.length) return '';
+    return `<th scope="colgroup" colspan="${items.length}">${label}</th>`;
+  };
 
+  const renderActivityHeaderCell = (activity) => {
+    const isEditing = currentEditingActivityId === activity.id;
+    return `
+      <th scope="col" class="class-record-activity-header-cell">
+        <div class="class-record-activity-header">
+          <span class="class-record-activity-title">${escapeHtml(safeText(activity.title, '-'))}</span>
+          <span class="class-record-activity-max">${escapeHtml(String(activity.maxScore ?? '-'))}</span>
+          <button
+            type="button"
+            class="class-record-activity-edit-btn"
+            data-activity-edit-btn="${escapeHtml(activity.id)}"
+            aria-label="${isEditing ? 'Save' : 'Edit'} scores for ${escapeHtml(safeText(activity.title, 'activity'))}"
+          >${isEditing ? 'Save' : 'Edit'}</button>
+        </div>
+      </th>
+    `;
+  };
+
+  if (!students.length) {
     classRecordTableElement.innerHTML = `
       <table class="student-table">
         <thead>
           <tr>
-            <th scope="col">&nbsp;</th>
+            <th scope="col">Student</th>
             ${renderGroupHeader('Written Works', grouped.WW)}
             ${renderGroupHeader('Performance Task', grouped.PT)}
             ${renderGroupHeader('Exam', grouped.Exam)}
           </tr>
           <tr>
-            <th scope="col">Activities:</th>
-            ${
-              orderedActivities.length
-                ? orderedActivities.map((activity) => `<th scope="col">${escapeHtml(safeText(activity.title, '-'))}</th>`).join('')
-                : '<th scope="col">-</th>'
-            }
-          </tr>
-          <tr>
-            <th scope="col">Name / Highest Possible Score:</th>
-            ${
-              orderedActivities.length
-                ? orderedActivities
-                    .map((activity) => `<th scope="col">${escapeHtml(String(activity.maxScore ?? '-'))}</th>`)
-                    .join('')
-                : '<th scope="col">-</th>'
-            }
+            <th scope="col">Activities</th>
+            ${orderedActivities.length ? orderedActivities.map(renderActivityHeaderCell).join('') : '<th scope="col">-</th>'}
           </tr>
         </thead>
         <tbody>
@@ -770,37 +775,18 @@ function renderClassRecordTable(students = [], activities = [], scoresMap = new 
     return;
   }
 
-  const renderGroupHeader = (label, items) => {
-    if (!items.length) return '';
-    return `<th scope="colgroup" colspan="${items.length}">${label}</th>`;
-  };
-
   classRecordTableElement.innerHTML = `
     <table class="student-table">
       <thead>
         <tr>
-          <th scope="col">&nbsp;</th>
+          <th scope="col">Student</th>
           ${renderGroupHeader('Written Works', grouped.WW)}
           ${renderGroupHeader('Performance Task', grouped.PT)}
           ${renderGroupHeader('Exam', grouped.Exam)}
         </tr>
         <tr>
-          <th scope="col">Activities:</th>
-          ${
-            orderedActivities.length
-              ? orderedActivities.map((activity) => `<th scope="col">${escapeHtml(safeText(activity.title, '-'))}</th>`).join('')
-              : '<th scope="col">No activities yet</th>'
-          }
-        </tr>
-        <tr>
-          <th scope="col">Name / Highest Possible Score:</th>
-          ${
-            orderedActivities.length
-              ? orderedActivities
-                  .map((activity) => `<th scope="col">${escapeHtml(String(activity.maxScore ?? '-'))}</th>`)
-                  .join('')
-              : '<th scope="col">-</th>'
-          }
+          <th scope="col">Activities</th>
+          ${orderedActivities.length ? orderedActivities.map(renderActivityHeaderCell).join('') : '<th scope="col">No activities yet</th>'}
         </tr>
       </thead>
       <tbody>
@@ -816,6 +802,7 @@ function renderClassRecordTable(students = [], activities = [], scoresMap = new 
                           const key = `${student.id}::${activity.id}`;
                           const existing = scoresMap.get(key);
                           const value = existing && Number.isFinite(Number(existing.score)) ? Number(existing.score) : '';
+                          const isEditable = currentEditingActivityId === activity.id;
                           return `
                             <td>
                               <input
@@ -832,6 +819,7 @@ function renderClassRecordTable(students = [], activities = [], scoresMap = new 
                                 data-title="${escapeHtml(activity.title)}"
                                 data-last-saved="${escapeHtml(String(value))}"
                                 value="${escapeHtml(String(value))}"
+                                ${isEditable ? '' : 'readonly disabled'}
                                 aria-label="Score for ${escapeHtml(formatFullName(student))} in ${escapeHtml(activity.title)}"
                               />
                             </td>
@@ -849,9 +837,100 @@ function renderClassRecordTable(students = [], activities = [], scoresMap = new 
   `;
 }
 
+function setClassRecordColumnEditable(activityId, editable) {
+  if (!classRecordTableElement) return;
+
+  const targetActivityId = String(activityId || '').trim();
+  if (!targetActivityId) return;
+
+  const columnInputs = classRecordTableElement.querySelectorAll(
+    `.class-record-score-input[data-activity-id="${CSS.escape(targetActivityId)}"]`
+  );
+
+  columnInputs.forEach((input) => {
+    if (!(input instanceof HTMLInputElement)) return;
+    input.readOnly = !editable;
+    input.disabled = !editable;
+  });
+}
+
+function getClassRecordColumnInputs(activityId) {
+  if (!classRecordTableElement) return [];
+  const targetActivityId = String(activityId || '').trim();
+  if (!targetActivityId) return [];
+
+  return Array.from(
+    classRecordTableElement.querySelectorAll(
+      `.class-record-score-input[data-activity-id="${CSS.escape(targetActivityId)}"]`
+    )
+  ).filter((input) => input instanceof HTMLInputElement);
+}
+
+function updateClassRecordEditButtons() {
+  if (!classRecordTableElement) return;
+
+  classRecordTableElement.querySelectorAll('button[data-activity-edit-btn]').forEach((button) => {
+    if (!(button instanceof HTMLButtonElement)) return;
+    const activityId = String(button.dataset.activityEditBtn || '').trim();
+    const isEditing = currentEditingActivityId && currentEditingActivityId === activityId;
+    button.textContent = isEditing ? 'Save' : 'Edit';
+    button.setAttribute('aria-label', `${isEditing ? 'Save' : 'Edit'} activity column`);
+  });
+}
+
+async function saveClassRecordActivityColumn(activityId) {
+  const inputs = getClassRecordColumnInputs(activityId);
+  if (!inputs.length) return true;
+
+  for (const input of inputs) {
+    const result = await saveClassRecordScore(input, { lockInputAfterSave: false });
+    if (!result.ok) {
+      input.focus();
+      input.select();
+      return false;
+    }
+  }
+
+  return true;
+}
+
+async function toggleClassRecordActivityEdit(activityId) {
+  const targetActivityId = String(activityId || '').trim();
+  if (!targetActivityId) return;
+
+  if (currentEditingActivityId && currentEditingActivityId !== targetActivityId) {
+    setClassRecordMessage('Only one activity can be edited at a time. Save the current column first.', 'error');
+    return;
+  }
+
+  if (currentEditingActivityId === targetActivityId) {
+    const didSave = await saveClassRecordActivityColumn(targetActivityId);
+    if (!didSave) return;
+
+    currentEditingActivityId = '';
+    setClassRecordColumnEditable(targetActivityId, false);
+    updateClassRecordEditButtons();
+    setClassRecordMessage('Activity scores saved and locked.', 'success');
+    return;
+  }
+
+  currentEditingActivityId = targetActivityId;
+  setClassRecordColumnEditable(targetActivityId, true);
+  updateClassRecordEditButtons();
+
+  const [firstInput] = getClassRecordColumnInputs(targetActivityId);
+  if (firstInput) {
+    firstInput.focus();
+    firstInput.select();
+  }
+
+  setClassRecordMessage('Editing enabled for selected activity. Press Enter to move to the next student.', '');
+}
+
 async function loadClassRecord(classId) {
   const selectedClassId = String(classId || '').trim();
   currentClassRecordClassId = selectedClassId;
+  currentEditingActivityId = '';
 
   if (!selectedClassId) {
     currentClassRecordStudents = [];
@@ -1000,9 +1079,10 @@ async function addClassRecordActivity() {
   }
 }
 
-async function saveClassRecordScore(inputElement) {
-  if (!(inputElement instanceof HTMLInputElement)) return;
+async function saveClassRecordScore(inputElement, options = {}) {
+  if (!(inputElement instanceof HTMLInputElement)) return { ok: false, skipped: true };
 
+  const { lockInputAfterSave = true } = options;
   const classId = String(currentClassRecordClassId || '').trim();
   const studentId = String(inputElement.dataset.studentId || '').trim();
   const activityId = String(inputElement.dataset.activityId || '').trim();
@@ -1013,23 +1093,30 @@ async function saveClassRecordScore(inputElement) {
   const previousSavedValue = String(inputElement.dataset.lastSaved || '').trim();
 
   if (!classId || !studentId || !activityId || !Number.isFinite(maxScore) || !componentType || !title) {
-    return;
+    return { ok: false, skipped: true };
   }
 
   if (!rawValue) {
-    inputElement.value = previousSavedValue;
-    return;
+    const hasSavedValue = previousSavedValue !== '';
+    if (hasSavedValue) {
+      inputElement.value = previousSavedValue;
+      setClassRecordMessage('Empty score is allowed only when no score has been recorded yet.', 'error');
+      return { ok: false, skipped: false };
+    }
+
+    return { ok: true, skipped: true };
   }
 
   const scoreValue = Number(rawValue);
   if (!Number.isFinite(scoreValue) || scoreValue < 0 || scoreValue > maxScore) {
     setClassRecordMessage(`Score must be between 0 and ${maxScore}.`, 'error');
     inputElement.value = previousSavedValue;
-    return;
+    return { ok: false, skipped: false };
   }
 
-  if (rawValue === previousSavedValue) {
-    return;
+  const roundedScore = Number(scoreValue.toFixed(2));
+  if (String(roundedScore) === previousSavedValue) {
+    return { ok: true, skipped: true };
   }
 
   const student = currentClassRecordStudents.find((item) => item.id === studentId);
@@ -1041,7 +1128,7 @@ async function saveClassRecordScore(inputElement) {
     studentId,
     activityId,
     teacherId: auth.currentUser?.uid || '',
-    score: Number(scoreValue.toFixed(2)),
+    score: roundedScore,
     maxScore,
     componentType,
     title,
@@ -1049,7 +1136,10 @@ async function saveClassRecordScore(inputElement) {
     createdAt: existingScore?.createdAt || serverTimestamp()
   };
 
-  inputElement.disabled = true;
+  if (lockInputAfterSave) {
+    inputElement.disabled = true;
+  }
+
   try {
     if (existingScore?.id) {
       await updateDoc(doc(db, 'scores', existingScore.id), payload);
@@ -1062,12 +1152,16 @@ async function saveClassRecordScore(inputElement) {
     inputElement.dataset.lastSaved = String(payload.score);
     inputElement.value = String(payload.score);
     setClassRecordMessage(`Saved score for ${safeText(formatFullName(student), 'student')} (${title}).`, 'success');
+    return { ok: true, skipped: false };
   } catch (error) {
     console.error('Failed to save class record score:', error);
     setClassRecordMessage('Unable to save score right now. Please try again.', 'error');
     inputElement.value = previousSavedValue;
+    return { ok: false, skipped: false };
   } finally {
-    inputElement.disabled = false;
+    if (lockInputAfterSave) {
+      inputElement.disabled = false;
+    }
   }
 }
 
@@ -1884,16 +1978,64 @@ classRecordAddActivityButton?.addEventListener('click', () => {
   addClassRecordActivity();
 });
 
-classRecordTableElement?.addEventListener('change', (event) => {
+classRecordTableElement?.addEventListener('click', (event) => {
   const target = event.target;
-  if (!(target instanceof HTMLInputElement) || !target.classList.contains('class-record-score-input')) return;
-  saveClassRecordScore(target);
+  if (!(target instanceof HTMLElement)) return;
+
+  const editButton = target.closest('button[data-activity-edit-btn]');
+  if (!(editButton instanceof HTMLButtonElement)) return;
+
+  const activityId = String(editButton.dataset.activityEditBtn || '').trim();
+  if (!activityId) return;
+
+  toggleClassRecordActivityEdit(activityId);
 });
 
-classRecordTableElement?.addEventListener('focusout', (event) => {
+classRecordTableElement?.addEventListener('keydown', async (event) => {
   const target = event.target;
   if (!(target instanceof HTMLInputElement) || !target.classList.contains('class-record-score-input')) return;
-  saveClassRecordScore(target);
+  if (event.key !== 'Enter') return;
+
+  event.preventDefault();
+
+  const activityId = String(target.dataset.activityId || '').trim();
+  if (!activityId || currentEditingActivityId !== activityId) return;
+
+  const columnInputs = getClassRecordColumnInputs(activityId);
+  const currentIndex = columnInputs.findIndex((input) => input === target);
+  if (currentIndex < 0) return;
+
+  const nextInput = columnInputs[currentIndex + 1];
+  if (nextInput) {
+    nextInput.focus();
+    nextInput.select();
+    return;
+  }
+
+  await toggleClassRecordActivityEdit(activityId);
+});
+
+classRecordTableElement?.addEventListener('input', (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement) || !target.classList.contains('class-record-score-input')) return;
+  const activityId = String(target.dataset.activityId || '').trim();
+  if (!activityId || currentEditingActivityId !== activityId) return;
+
+  const rawValue = String(target.value || '').trim();
+  if (!rawValue) return;
+
+  const scoreValue = Number(rawValue);
+  const maxScore = Number(target.dataset.maxScore);
+  if (!Number.isFinite(scoreValue) || !Number.isFinite(maxScore)) return;
+
+  if (scoreValue < 0) {
+    target.value = '0';
+    return;
+  }
+
+  if (scoreValue > maxScore) {
+    target.value = String(maxScore);
+  }
 });
 
 classRecordDownloadButton?.addEventListener('click', () => {

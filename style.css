@@ -950,3 +950,48 @@ button:active {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+
+.class-record-activity-header-cell {
+  min-width: 130px;
+}
+
+.class-record-activity-header {
+  display: grid;
+  gap: 0.35rem;
+  justify-items: center;
+}
+
+.class-record-activity-title {
+  font-weight: 700;
+}
+
+.class-record-activity-max {
+  color: var(--text-soft);
+  font-size: 0.86rem;
+}
+
+.class-record-activity-edit-btn {
+  width: auto;
+  min-width: 72px;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.82rem;
+}
+
+.class-record-score-input[readonly],
+.class-record-score-input:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+
+.score-input[type='number']::-webkit-outer-spin-button,
+.score-input[type='number']::-webkit-inner-spin-button,
+.class-record-score-input[type='number']::-webkit-outer-spin-button,
+.class-record-score-input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.score-input[type='number'],
+.class-record-score-input[type='number'] {
+  -moz-appearance: textfield;
+}
