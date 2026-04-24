@@ -845,6 +845,7 @@ function setSectionStanding(data = {}) {
 async function loadStudentSectionStanding(studentData = {}) {
   const sectionId = String(studentData.sectionId || '').trim();
   const sectionName = String(studentData.sectionName || studentData.section || '').trim();
+  const studentSchoolYearId = String(studentData.schoolYearId || '').trim();
 
   if (!sectionId) {
     setSectionStanding({
@@ -857,6 +858,8 @@ async function loadStudentSectionStanding(studentData = {}) {
   }
 
   try {
+    let sectionData = null;
+    let resolvedSectionName = sectionName;
     const sectionSnap = await getDoc(doc(db, 'sections', sectionId));
     if (!sectionSnap.exists()) {
       setSectionStanding({
@@ -868,12 +871,65 @@ async function loadStudentSectionStanding(studentData = {}) {
       return;
     }
 
-    const sectionData = sectionSnap.data() || {};
+    sectionData = sectionSnap.data() || {};
+    resolvedSectionName = sectionData.name || sectionData.sectionName || sectionName;
+    console.log('Student section data loaded:', {
+      sectionId,
+      sectionData
+    });
+
+    let tier = sectionData.tier || sectionData.sectionTier || 'Not yet ranked';
+    let rank = sectionData.rank || sectionData.sectionRank || null;
+    let totalPoints = sectionData.totalPoints || 0;
+
+    const hasRank = Number.isFinite(Number(rank)) && Number(rank) > 0;
+    const hasTier = String(tier || '').trim() && String(tier || '').trim() !== 'Not yet ranked';
+    const shouldTryFallback = (!hasRank || !hasTier) && Boolean(resolvedSectionName) && Boolean(studentSchoolYearId);
+
+    if ((!hasRank || !hasTier) && totalPoints > 0) {
+      console.warn('Section has totalPoints but missing rank/tier. Recompute ranking in Super Admin.', sectionData);
+    }
+
+    if (shouldTryFallback) {
+      let matchedSection = null;
+
+      const byNameSnapshot = await getDocs(
+        query(
+          collection(db, 'sections'),
+          where('name', '==', resolvedSectionName),
+          where('schoolYearId', '==', studentSchoolYearId)
+        )
+      );
+      matchedSection = byNameSnapshot.docs
+        .map((item) => item.data())
+        .find((item) => item && (item.rank || item.sectionRank) && (item.tier || item.sectionTier));
+
+      if (!matchedSection) {
+        const bySectionNameSnapshot = await getDocs(
+          query(
+            collection(db, 'sections'),
+            where('sectionName', '==', resolvedSectionName),
+            where('schoolYearId', '==', studentSchoolYearId)
+          )
+        );
+        matchedSection = bySectionNameSnapshot.docs
+          .map((item) => item.data())
+          .find((item) => item && (item.rank || item.sectionRank) && (item.tier || item.sectionTier));
+      }
+
+      if (matchedSection) {
+        sectionData = matchedSection;
+        tier = sectionData.tier || sectionData.sectionTier || tier;
+        rank = sectionData.rank || sectionData.sectionRank || rank;
+        totalPoints = sectionData.totalPoints || totalPoints;
+      }
+    }
+
     setSectionStanding({
-      sectionName: sectionData.name || sectionData.sectionName || sectionName,
-      tier: sectionData.tier,
-      rank: sectionData.rank,
-      totalPoints: sectionData.totalPoints,
+      sectionName: sectionData.name || sectionData.sectionName || resolvedSectionName,
+      tier,
+      rank,
+      totalPoints,
     });
   } catch (error) {
     console.error('Failed to load section standing:', error);
