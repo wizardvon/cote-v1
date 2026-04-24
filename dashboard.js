@@ -50,6 +50,7 @@ let overlaySequenceJob = 0;
 let currentStudentProfile = null;
 let currentStudentUser = null;
 let enrolledClassIds = new Set();
+const teacherNameCache = new Map();
 
 const pageTitles = {
   home: 'Home',
@@ -139,6 +140,60 @@ function makeInitials(data) {
 
 function normalizePoints(points) {
   return typeof points === 'number' && Number.isFinite(points) ? points : 0;
+}
+
+function normalizeNumericValue(value, fallback = 0) {
+  const normalized = Number(value);
+  return Number.isFinite(normalized) ? normalized : fallback;
+}
+
+function buildTeacherFullName(data) {
+  return [data?.firstName, data?.middleName, data?.lastName]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function formatPercentage(value) {
+  const normalized = normalizeNumericValue(value, Number.NaN);
+  if (!Number.isFinite(normalized)) return '';
+  return Number.isInteger(normalized) ? String(normalized) : String(normalized.toFixed(2)).replace(/\.?0+$/, '');
+}
+
+async function resolveTeacherName(log = {}) {
+  const teacherId = String(log.teacherId || '').trim();
+  const existingTeacherName = String(log.teacherName || '').trim();
+  const hasPlaceholderName = !existingTeacherName || existingTeacherName.toLowerCase() === 'teacher panel';
+
+  if (!hasPlaceholderName) {
+    return existingTeacherName;
+  }
+
+  if (!teacherId) {
+    return 'Unknown Teacher';
+  }
+
+  if (teacherNameCache.has(teacherId)) {
+    return teacherNameCache.get(teacherId);
+  }
+
+  try {
+    const teacherSnap = await getDoc(doc(db, 'teachers', teacherId));
+    if (teacherSnap.exists()) {
+      const fullName = buildTeacherFullName(teacherSnap.data() || {});
+      if (fullName) {
+        teacherNameCache.set(teacherId, fullName);
+        return fullName;
+      }
+    }
+  } catch (error) {
+    console.error('Failed to resolve teacher name:', error);
+  }
+
+  teacherNameCache.set(teacherId, 'Unknown Teacher');
+  return 'Unknown Teacher';
 }
 
 function escapeHtml(value) {
@@ -654,21 +709,51 @@ async function loadPointLogs(studentId) {
       return;
     }
 
-   listElement.innerHTML = logsSnapshot.docs
-  .map((logDoc) => {
-    const log = logDoc.data();
-    const points = normalizePoints(log.points);
-    const sign = log.type === 'demerit' ? '-' : '+';
-    const label = log.type === 'demerit' ? 'Demerit' : 'Merit';
-    const reason = String(log.reason || 'No reason provided').trim() || 'No reason provided';
-    const teacherName =
-      String(log.teacherName || '').trim() ||
-      String(log.teacherEmail || '').trim() ||
-      'Unknown Teacher';
+    const renderedLogs = await Promise.all(
+      logsSnapshot.docs.map(async (logDoc) => {
+        const log = logDoc.data() || {};
+        const source = String(log.source || '').trim().toLowerCase();
+        const isAcademic = source === 'academic';
 
-    return `<li>${sign}${points} ${label} — ${reason}<br><strong>Teacher:</strong> ${teacherName}</li>`;
-  })
-  .join('');
+        if (isAcademic) {
+          const pointDifference = normalizeNumericValue(log.pointDifference, 0);
+          if (pointDifference === 0) {
+            return '';
+          }
+
+          const displayPoints = normalizeNumericValue(log.pointDifference ?? log.awardedPoints, 0);
+          const sign = displayPoints > 0 ? '+' : '';
+          const title = String(log.activityTitle || log.title || 'Academic score record').trim() || 'Academic score record';
+          const teacherName = await resolveTeacherName(log);
+          const details = [
+            String(log.componentType || '').trim(),
+            Number.isFinite(Number(log.score)) && Number.isFinite(Number(log.maxScore))
+              ? `${normalizeNumericValue(log.score)}/${normalizeNumericValue(log.maxScore)}`
+              : '',
+            formatPercentage(log.percentage) ? `${formatPercentage(log.percentage)}%` : ''
+          ]
+            .filter(Boolean)
+            .join(' • ');
+
+          return `<li>${sign}${escapeHtml(String(displayPoints))} Academic — ${escapeHtml(title)}${
+            details ? `<br>${escapeHtml(details)}` : ''
+          }<br><strong>Teacher:</strong> ${escapeHtml(teacherName)}</li>`;
+        }
+
+        const points = normalizePoints(log.points);
+        const sign = log.type === 'demerit' ? '-' : '+';
+        const label = log.type === 'demerit' ? 'Demerit' : 'Merit';
+        const reason = String(log.reason || 'No reason provided').trim() || 'No reason provided';
+        const teacherName = await resolveTeacherName(log);
+
+        return `<li>${sign}${points} ${label} — ${escapeHtml(reason)}<br><strong>Teacher:</strong> ${escapeHtml(
+          teacherName
+        )}</li>`;
+      })
+    );
+
+    const filteredLogs = renderedLogs.filter(Boolean);
+    listElement.innerHTML = filteredLogs.length ? filteredLogs.join('') : '<li>No point logs available yet.</li>';
   } catch (error) {
     console.error('Failed to load point logs:', error);
     const message = String(error?.message || error).toLowerCase();

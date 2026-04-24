@@ -163,6 +163,17 @@ function toTitleCase(value) {
     .replace(/\b([a-z])/g, (match) => match.toUpperCase());
 }
 
+function buildTeacherFullName(data, fallback = 'Unknown Teacher') {
+  const fullName = [data?.firstName, data?.middleName, data?.lastName]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return fullName || fallback;
+}
+
 function formatFullName(student) {
   const lastName = toTitleCase(safeText(student.lastName, ''));
   const firstName = toTitleCase(safeText(student.firstName, ''));
@@ -1160,7 +1171,7 @@ async function saveScoreWithAcademicPoints(payload) {
   const sectionId = String(classData.sectionId || '').trim();
   const sectionRef = sectionId ? doc(db, 'sections', sectionId) : null;
   const teacherId = String(auth.currentUser?.uid || '').trim();
-  const teacherName = safeText(classData.teacherName || auth.currentUser?.displayName || auth.currentUser?.email, 'Unknown Teacher');
+  const teacherName = safeText(currentTeacherProfile?.displayName, 'Unknown Teacher');
   const studentName = formatFullName(student);
 
   const transactionResult = await runTransaction(db, async (transaction) => {
@@ -1949,7 +1960,7 @@ async function updatePointsForSelected(action) {
 
   try {
     const teacherUid = auth.currentUser?.uid || '';
-    let teacherName = 'Unknown Teacher';
+    let teacherName = safeText(currentTeacherProfile?.displayName, 'Unknown Teacher');
 
     if (teacherUid) {
       const teacherRef = doc(db, 'teachers', teacherUid);
@@ -1957,9 +1968,7 @@ async function updatePointsForSelected(action) {
 
       if (teacherSnap.exists()) {
         const teacherData = teacherSnap.data();
-        teacherName = `${safeText(teacherData?.firstName, '')} ${safeText(teacherData?.lastName, '')}`
-          .replace(/\s+/g, ' ')
-          .trim() || 'Unknown Teacher';
+        teacherName = buildTeacherFullName(teacherData, teacherName);
       }
     }
 
@@ -2310,10 +2319,20 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     const displayEmail = userData.email || user.email || 'No email available';
-    const displayName = `${safeText(userData.firstName, '')} ${safeText(userData.lastName, '')}`.replace(/\s+/g, ' ').trim();
+    const teacherRef = doc(db, 'teachers', user.uid);
+    const teacherSnap = await getDoc(teacherRef);
+    const teacherData = teacherSnap.exists() ? teacherSnap.data() || {} : {};
+    const displayName = buildTeacherFullName(
+      {
+        firstName: teacherData.firstName ?? userData.firstName,
+        middleName: teacherData.middleName ?? userData.middleName,
+        lastName: teacherData.lastName ?? userData.lastName
+      },
+      'Unknown Teacher'
+    );
 
     currentTeacherProfile = {
-      displayName: displayName || 'Teacher Panel',
+      displayName,
       email: displayEmail
     };
 
@@ -2322,7 +2341,7 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     if (sidebarTeacherNameElement) {
-      sidebarTeacherNameElement.textContent = displayName || 'Teacher Panel';
+      sidebarTeacherNameElement.textContent = displayName;
     }
 
     setMessage('Teacher access granted.', 'success');
