@@ -56,6 +56,10 @@ const enrollmentClassFilterElement = document.getElementById('enrollment-class-f
 const enrollmentRequestsListElement = document.getElementById('enrollment-requests-list');
 const enrollmentMessageElement = document.getElementById('enrollment-message');
 const classRecordFilterElement = document.getElementById('class-record-filter');
+const classRecordActivityTitleElement = document.getElementById('class-record-activity-title');
+const classRecordComponentTypeElement = document.getElementById('class-record-component-type');
+const classRecordMaxScoreElement = document.getElementById('class-record-max-score');
+const classRecordAddActivityButton = document.getElementById('class-record-add-activity-button');
 const classRecordTableElement = document.getElementById('class-record-table');
 const classRecordDownloadButton = document.getElementById('class-record-download-button');
 const classRecordPrintButton = document.getElementById('class-record-print-button');
@@ -135,8 +139,10 @@ let classTerms = [];
 let classSections = [];
 let enrollmentRequests = [];
 let currentClassRecordClassId = '';
-let currentClassRecordRows = [];
 let currentClassRecordClassName = '';
+let currentClassRecordStudents = [];
+let currentClassRecordActivities = [];
+let currentClassRecordScores = new Map();
 
 function normalizePoints(points) {
   return typeof points === 'number' && Number.isFinite(points) ? points : 0;
@@ -667,23 +673,81 @@ function getScoreTypeKey(value) {
   return '';
 }
 
-function renderClassRecordTable(data = [], emptyMessage = 'No approved enrolled students found for this class.') {
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function getActivitiesByComponent(activities = []) {
+  return {
+    WW: activities.filter((activity) => activity.componentType === 'WW'),
+    PT: activities.filter((activity) => activity.componentType === 'PT'),
+    Exam: activities.filter((activity) => activity.componentType === 'Exam')
+  };
+}
+
+function buildScoreMap(scoreDocs = []) {
+  const map = new Map();
+  scoreDocs.forEach((scoreItem) => {
+    const studentId = String(scoreItem.studentId || '').trim();
+    const activityId = String(scoreItem.activityId || '').trim();
+    if (!studentId || !activityId) return;
+    map.set(`${studentId}::${activityId}`, scoreItem);
+  });
+  return map;
+}
+
+function renderClassRecordTable(students = [], activities = [], scoresMap = new Map(), emptyMessage = '') {
   if (!classRecordTableElement) return;
 
-  if (!data.length) {
+  const grouped = getActivitiesByComponent(activities);
+  const orderedActivities = [...grouped.WW, ...grouped.PT, ...grouped.Exam];
+  const colSpan = Math.max(orderedActivities.length + 1, 2);
+
+  if (!students.length) {
+    const renderGroupHeader = (label, items) => {
+      if (!items.length) return '';
+      return `<th scope="colgroup" colspan="${items.length}">${label}</th>`;
+    };
+
     classRecordTableElement.innerHTML = `
       <table class="student-table">
         <thead>
           <tr>
-            <th scope="col">Name</th>
-            <th scope="col">Written Works</th>
-            <th scope="col">Performance Task</th>
-            <th scope="col">Exam</th>
+            <th scope="col">&nbsp;</th>
+            ${renderGroupHeader('Written Works', grouped.WW)}
+            ${renderGroupHeader('Performance Task', grouped.PT)}
+            ${renderGroupHeader('Exam', grouped.Exam)}
+          </tr>
+          <tr>
+            <th scope="col">Activities:</th>
+            ${
+              orderedActivities.length
+                ? orderedActivities.map((activity) => `<th scope="col">${escapeHtml(safeText(activity.title, '-'))}</th>`).join('')
+                : '<th scope="col">-</th>'
+            }
+          </tr>
+          <tr>
+            <th scope="col">Name / Highest Possible Score:</th>
+            ${
+              orderedActivities.length
+                ? orderedActivities
+                    .map((activity) => `<th scope="col">${escapeHtml(String(activity.maxScore ?? '-'))}</th>`)
+                    .join('')
+                : '<th scope="col">-</th>'
+            }
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td colspan="4" class="empty-cell">${safeText(emptyMessage, 'No records found.')}</td>
+            <td colspan="${colSpan}" class="empty-cell">${safeText(
+      emptyMessage || 'No approved enrolled students found for this class.',
+      'No records found.'
+    )}</td>
           </tr>
         </tbody>
       </table>
@@ -691,25 +755,76 @@ function renderClassRecordTable(data = [], emptyMessage = 'No approved enrolled 
     return;
   }
 
+  const renderGroupHeader = (label, items) => {
+    if (!items.length) return '';
+    return `<th scope="colgroup" colspan="${items.length}">${label}</th>`;
+  };
+
   classRecordTableElement.innerHTML = `
     <table class="student-table">
       <thead>
         <tr>
-          <th scope="col">Name</th>
-          <th scope="col">Written Works</th>
-          <th scope="col">Performance Task</th>
-          <th scope="col">Exam</th>
+          <th scope="col">&nbsp;</th>
+          ${renderGroupHeader('Written Works', grouped.WW)}
+          ${renderGroupHeader('Performance Task', grouped.PT)}
+          ${renderGroupHeader('Exam', grouped.Exam)}
+        </tr>
+        <tr>
+          <th scope="col">Activities:</th>
+          ${
+            orderedActivities.length
+              ? orderedActivities.map((activity) => `<th scope="col">${escapeHtml(safeText(activity.title, '-'))}</th>`).join('')
+              : '<th scope="col">No activities yet</th>'
+          }
+        </tr>
+        <tr>
+          <th scope="col">Name / Highest Possible Score:</th>
+          ${
+            orderedActivities.length
+              ? orderedActivities
+                  .map((activity) => `<th scope="col">${escapeHtml(String(activity.maxScore ?? '-'))}</th>`)
+                  .join('')
+              : '<th scope="col">-</th>'
+          }
         </tr>
       </thead>
       <tbody>
-        ${data
+        ${students
           .map(
-            (item) => `
+            (student) => `
               <tr>
-                <td>${safeText(item.name)}</td>
-                <td class="class-record-score-cell" data-student-id="${item.studentId}" data-score-type="WW" tabindex="0" role="button" aria-label="Edit written works score for ${safeText(item.name, 'student')}">${item.WW}</td>
-                <td class="class-record-score-cell" data-student-id="${item.studentId}" data-score-type="PT" tabindex="0" role="button" aria-label="Edit performance task score for ${safeText(item.name, 'student')}">${item.PT}</td>
-                <td class="class-record-score-cell" data-student-id="${item.studentId}" data-score-type="Exam" tabindex="0" role="button" aria-label="Edit exam score for ${safeText(item.name, 'student')}">${item.Exam}</td>
+                <th scope="row">${escapeHtml(formatFullName(student))}</th>
+                ${
+                  orderedActivities.length
+                    ? orderedActivities
+                        .map((activity) => {
+                          const key = `${student.id}::${activity.id}`;
+                          const existing = scoresMap.get(key);
+                          const value = existing && Number.isFinite(Number(existing.score)) ? Number(existing.score) : '';
+                          return `
+                            <td>
+                              <input
+                                type="number"
+                                min="0"
+                                max="${escapeHtml(String(activity.maxScore))}"
+                                step="0.01"
+                                inputmode="decimal"
+                                class="score-input class-record-score-input"
+                                data-student-id="${escapeHtml(student.id)}"
+                                data-activity-id="${escapeHtml(activity.id)}"
+                                data-max-score="${escapeHtml(String(activity.maxScore))}"
+                                data-component-type="${escapeHtml(activity.componentType)}"
+                                data-title="${escapeHtml(activity.title)}"
+                                data-last-saved="${escapeHtml(String(value))}"
+                                value="${escapeHtml(String(value))}"
+                                aria-label="Score for ${escapeHtml(formatFullName(student))} in ${escapeHtml(activity.title)}"
+                              />
+                            </td>
+                          `;
+                        })
+                        .join('')
+                    : '<td class="empty-cell">No activities added yet.</td>'
+                }
               </tr>
             `
           )
@@ -719,97 +834,77 @@ function renderClassRecordTable(data = [], emptyMessage = 'No approved enrolled 
   `;
 }
 
-async function computeStudentScores(classId) {
-  const students = await loadStudentsFromApprovedEnrollments(classId);
-
-  if (!students.length) {
-    return [];
-  }
-
-  const scoreSnapshot = await getDocs(query(collection(db, 'scores'), where('classId', '==', classId)));
-  const baseMap = new Map(
-    students.map((student) => [
-      student.id,
-      {
-        studentId: student.id,
-        name: formatFullName(student),
-        WW: 0,
-        PT: 0,
-        Exam: 0,
-        overrides: {}
-      }
-    ])
-  );
-
-  scoreSnapshot.docs.forEach((scoreDoc) => {
-    const data = scoreDoc.data();
-    const studentId = String(data.studentId || '').trim();
-    const row = baseMap.get(studentId);
-
-    if (!row) return;
-
-    const scoreType = getScoreTypeKey(data.componentType || data.type);
-    if (!scoreType) return;
-
-    const value = Number(data.score);
-    if (!Number.isFinite(value)) return;
-
-    if (data.isClassRecordTotal === true) {
-      row.overrides[scoreType] = { id: scoreDoc.id, score: value };
-      return;
-    }
-
-    row[scoreType] += value;
-  });
-
-  return Array.from(baseMap.values())
-    .map((row) => {
-      const WW = row.overrides.WW ? row.overrides.WW.score : row.WW;
-      const PT = row.overrides.PT ? row.overrides.PT.score : row.PT;
-      const Exam = row.overrides.Exam ? row.overrides.Exam.score : row.Exam;
-      return {
-        studentId: row.studentId,
-        name: row.name,
-        WW: Number(WW.toFixed(2)),
-        PT: Number(PT.toFixed(2)),
-        Exam: Number(Exam.toFixed(2))
-      };
-    })
-    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
-}
-
 async function loadClassRecord(classId) {
   const selectedClassId = String(classId || '').trim();
   currentClassRecordClassId = selectedClassId;
 
   if (!selectedClassId) {
-    currentClassRecordRows = [];
+    currentClassRecordStudents = [];
+    currentClassRecordActivities = [];
+    currentClassRecordScores = new Map();
     currentClassRecordClassName = '';
-    renderClassRecordTable([], 'Select a class first.');
+    renderClassRecordTable([], [], new Map(), 'Select a class first.');
     setClassRecordMessage('Select a class first.', '');
     return;
   }
 
-  renderClassRecordTable([], 'Loading class record...');
+  renderClassRecordTable([], [], new Map(), 'Loading class record...');
   setClassRecordMessage('Loading class record...');
 
   try {
     const selectedClass = teacherClasses.find((classItem) => classItem.id === selectedClassId) || {};
     currentClassRecordClassName = formatClassLabel(selectedClass);
-    currentClassRecordRows = await computeStudentScores(selectedClassId);
 
-    if (!currentClassRecordRows.length) {
-      renderClassRecordTable([], 'No approved enrolled students found for this class.');
+    const [students, activitySnapshot, scoreSnapshot] = await Promise.all([
+      loadStudentsFromApprovedEnrollments(selectedClassId),
+      getDocs(query(collection(db, 'activities'), where('classId', '==', selectedClassId))),
+      getDocs(query(collection(db, 'scores'), where('classId', '==', selectedClassId)))
+    ]);
+
+    currentClassRecordStudents = students;
+    currentClassRecordActivities = activitySnapshot.docs
+      .map((activityDoc) => ({
+        id: activityDoc.id,
+        ...activityDoc.data(),
+        componentType: getScoreTypeKey(activityDoc.data().componentType),
+        maxScore: Number(activityDoc.data().maxScore)
+      }))
+      .filter((activity) => ['WW', 'PT', 'Exam'].includes(activity.componentType) && Number.isFinite(activity.maxScore))
+      .sort((a, b) => {
+        const order = { WW: 1, PT: 2, Exam: 3 };
+        const componentCompare = order[a.componentType] - order[b.componentType];
+        if (componentCompare !== 0) return componentCompare;
+        const aTime = a.createdAt?.seconds || 0;
+        const bTime = b.createdAt?.seconds || 0;
+        if (aTime !== bTime) return aTime - bTime;
+        return safeText(a.title, '').localeCompare(safeText(b.title, ''), undefined, { sensitivity: 'base' });
+      });
+
+    currentClassRecordScores = buildScoreMap(
+      scoreSnapshot.docs
+        .map((scoreDoc) => ({ id: scoreDoc.id, ...scoreDoc.data() }))
+        .filter((scoreItem) => String(scoreItem.activityId || '').trim())
+    );
+
+    if (!currentClassRecordStudents.length) {
+      renderClassRecordTable([], currentClassRecordActivities, currentClassRecordScores, 'No approved enrolled students found for this class.');
       setClassRecordMessage('No approved enrolled students found for this class.');
       return;
     }
 
-    renderClassRecordTable(currentClassRecordRows);
-    setClassRecordMessage(`Loaded ${currentClassRecordRows.length} student score summaries.`, 'success');
+    renderClassRecordTable(currentClassRecordStudents, currentClassRecordActivities, currentClassRecordScores);
+    setClassRecordMessage(
+      `Loaded ${currentClassRecordStudents.length} student(s) and ${currentClassRecordActivities.length} activit${
+        currentClassRecordActivities.length === 1 ? 'y' : 'ies'
+      }.`,
+      'success'
+    );
   } catch (error) {
     console.error('Failed to load class record:', error);
-    currentClassRecordRows = [];
-    renderClassRecordTable([], 'Unable to load class record right now.');
+    currentClassRecordStudents = [];
+    currentClassRecordActivities = [];
+    currentClassRecordScores = new Map();
+    renderClassRecordTable([], [], new Map(), 'Unable to load class record right now.');
     setClassRecordMessage('Unable to load class record. Please try again.', 'error');
   }
 }
@@ -826,86 +921,166 @@ async function loadClassRecordClasses() {
   if (selectedClassId) {
     await loadClassRecord(selectedClassId);
   } else {
-    renderClassRecordTable([], 'Select a class first.');
+    renderClassRecordTable([], [], new Map(), 'Select a class first.');
     setClassRecordMessage('Select a class first.');
   }
 }
 
-async function editScore(studentId, type) {
-  const classId = String(currentClassRecordClassId || '').trim();
-  const normalizedType = getScoreTypeKey(type);
+async function addClassRecordActivity() {
+  const classId = String(classRecordFilterElement?.value || '').trim();
+  const title = String(classRecordActivityTitleElement?.value || '').trim();
+  const componentType = getScoreTypeKey(classRecordComponentTypeElement?.value);
+  const maxScore = Number(classRecordMaxScoreElement?.value);
 
-  if (!classId || !studentId || !normalizedType) {
-    setClassRecordMessage('Unable to edit score due to missing information.', 'error');
+  if (!classId) {
+    setClassRecordMessage('Select a class first.', 'error');
     return;
   }
 
-  const row = currentClassRecordRows.find((item) => item.studentId === studentId);
-  if (!row) return;
-
-  const nextScoreRaw = window.prompt(`Enter ${normalizedType} total for ${row.name}:`, String(row[normalizedType] ?? 0));
-  if (nextScoreRaw === null) return;
-
-  const nextScore = Number(nextScoreRaw);
-  if (!Number.isFinite(nextScore) || nextScore < 0) {
-    setClassRecordMessage('Please enter a valid non-negative number.', 'error');
+  if (!title) {
+    setClassRecordMessage('Activity title is required.', 'error');
     return;
+  }
+
+  if (!componentType) {
+    setClassRecordMessage('Please select a valid component type.', 'error');
+    return;
+  }
+
+  if (!Number.isFinite(maxScore) || maxScore <= 0) {
+    setClassRecordMessage('Highest possible score must be greater than 0.', 'error');
+    return;
+  }
+
+  if (classRecordAddActivityButton) {
+    classRecordAddActivityButton.disabled = true;
+    classRecordAddActivityButton.textContent = 'Adding...';
   }
 
   try {
-    const existingSnapshot = await getDocs(
-      query(
-        collection(db, 'scores'),
-        where('classId', '==', classId),
-        where('studentId', '==', studentId),
-        where('type', '==', normalizedType),
-        where('isClassRecordTotal', '==', true)
-      )
-    );
-
-    const payload = {
+    await addDoc(collection(db, 'activities'), {
       classId,
-      studentId,
-      studentName: row.name,
-      type: normalizedType,
-      componentType: normalizedType,
-      score: Number(nextScore.toFixed(2)),
-      maxScore: null,
-      title: `${normalizedType} Total`,
       teacherId: auth.currentUser?.uid || '',
-      teacherEmail: String(currentTeacherProfile?.email || auth.currentUser?.email || '').trim(),
-      teacherName:
-        String(currentTeacherProfile?.displayName || '').trim() || String(auth.currentUser?.displayName || '').trim() || 'Unknown Teacher',
-      isClassRecordTotal: true,
-      updatedAt: serverTimestamp()
-    };
+      title,
+      componentType,
+      maxScore: Number(maxScore.toFixed(2)),
+      createdAt: serverTimestamp()
+    });
 
-    if (existingSnapshot.empty) {
-      await addDoc(collection(db, 'scores'), {
-        ...payload,
-        createdAt: serverTimestamp()
-      });
-    } else {
-      await updateDoc(doc(db, 'scores', existingSnapshot.docs[0].id), payload);
-    }
+    if (classRecordActivityTitleElement) classRecordActivityTitleElement.value = '';
+    if (classRecordComponentTypeElement) classRecordComponentTypeElement.value = '';
+    if (classRecordMaxScoreElement) classRecordMaxScoreElement.value = '';
 
-    setClassRecordMessage(`${normalizedType} total updated for ${row.name}.`, 'success');
+    setClassRecordMessage('Activity added successfully.', 'success');
     await loadClassRecord(classId);
   } catch (error) {
-    console.error('Failed to edit class record score:', error);
-    setClassRecordMessage('Unable to update score right now. Please try again.', 'error');
+    console.error('Failed to add class record activity:', error);
+    setClassRecordMessage('Unable to add activity right now. Please try again.', 'error');
+  } finally {
+    if (classRecordAddActivityButton) {
+      classRecordAddActivityButton.disabled = false;
+      classRecordAddActivityButton.textContent = 'Add Activity';
+    }
+  }
+}
+
+async function saveClassRecordScore(inputElement) {
+  if (!(inputElement instanceof HTMLInputElement)) return;
+
+  const classId = String(currentClassRecordClassId || '').trim();
+  const studentId = String(inputElement.dataset.studentId || '').trim();
+  const activityId = String(inputElement.dataset.activityId || '').trim();
+  const maxScore = Number(inputElement.dataset.maxScore);
+  const componentType = getScoreTypeKey(inputElement.dataset.componentType || '');
+  const title = String(inputElement.dataset.title || '').trim();
+  const rawValue = String(inputElement.value || '').trim();
+  const previousSavedValue = String(inputElement.dataset.lastSaved || '').trim();
+
+  if (!classId || !studentId || !activityId || !Number.isFinite(maxScore) || !componentType || !title) {
+    return;
+  }
+
+  if (!rawValue) {
+    inputElement.value = previousSavedValue;
+    return;
+  }
+
+  const scoreValue = Number(rawValue);
+  if (!Number.isFinite(scoreValue) || scoreValue < 0 || scoreValue > maxScore) {
+    setClassRecordMessage(`Score must be between 0 and ${maxScore}.`, 'error');
+    inputElement.value = previousSavedValue;
+    return;
+  }
+
+  if (rawValue === previousSavedValue) {
+    return;
+  }
+
+  const student = currentClassRecordStudents.find((item) => item.id === studentId);
+  const scoreKey = `${studentId}::${activityId}`;
+  const existingScore = currentClassRecordScores.get(scoreKey);
+
+  const payload = {
+    classId,
+    studentId,
+    activityId,
+    teacherId: auth.currentUser?.uid || '',
+    score: Number(scoreValue.toFixed(2)),
+    maxScore,
+    componentType,
+    title,
+    updatedAt: serverTimestamp(),
+    createdAt: existingScore?.createdAt || serverTimestamp()
+  };
+
+  inputElement.disabled = true;
+  try {
+    if (existingScore?.id) {
+      await updateDoc(doc(db, 'scores', existingScore.id), payload);
+      currentClassRecordScores.set(scoreKey, { ...existingScore, ...payload, id: existingScore.id });
+    } else {
+      const ref = await addDoc(collection(db, 'scores'), payload);
+      currentClassRecordScores.set(scoreKey, { ...payload, id: ref.id });
+    }
+
+    inputElement.dataset.lastSaved = String(payload.score);
+    inputElement.value = String(payload.score);
+    setClassRecordMessage(`Saved score for ${safeText(formatFullName(student), 'student')} (${title}).`, 'success');
+  } catch (error) {
+    console.error('Failed to save class record score:', error);
+    setClassRecordMessage('Unable to save score right now. Please try again.', 'error');
+    inputElement.value = previousSavedValue;
+  } finally {
+    inputElement.disabled = false;
   }
 }
 
 function downloadCSV() {
-  if (!currentClassRecordRows.length) {
+  if (!currentClassRecordStudents.length) {
     setClassRecordMessage('No class record data to download.', 'error');
     return;
   }
 
+  const grouped = getActivitiesByComponent(currentClassRecordActivities);
+  const orderedActivities = [...grouped.WW, ...grouped.PT, ...grouped.Exam];
+  if (!orderedActivities.length) {
+    setClassRecordMessage('Add at least one activity before downloading CSV.', 'error');
+    return;
+  }
+
   const rows = [
-    ['Name', 'Written Works', 'Performance Task', 'Exam'],
-    ...currentClassRecordRows.map((row) => [row.name, row.WW, row.PT, row.Exam])
+    ['', ...orderedActivities.map((activity) =>
+      activity.componentType === 'WW' ? 'Written Works' : activity.componentType === 'PT' ? 'Performance Task' : 'Exam'
+    )],
+    ['Activities:', ...orderedActivities.map((activity) => safeText(activity.title, ''))],
+    ['Name / Highest Possible Score:', ...orderedActivities.map((activity) => activity.maxScore)],
+    ...currentClassRecordStudents.map((student) => [
+      formatFullName(student),
+      ...orderedActivities.map((activity) => {
+        const scoreItem = currentClassRecordScores.get(`${student.id}::${activity.id}`);
+        return scoreItem && Number.isFinite(Number(scoreItem.score)) ? Number(scoreItem.score) : '';
+      })
+    ])
   ];
 
   const csv = rows
@@ -932,37 +1107,23 @@ function downloadCSV() {
 }
 
 function printClassRecord() {
-  if (!currentClassRecordRows.length) {
+  if (!currentClassRecordStudents.length) {
     setClassRecordMessage('No class record data to print.', 'error');
     return;
   }
 
-  const printableTable = `
-    <table border="1" cellspacing="0" cellpadding="8" style="width:100%;border-collapse:collapse;">
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Written Works</th>
-          <th>Performance Task</th>
-          <th>Exam</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${currentClassRecordRows
-          .map(
-            (row) => `
-              <tr>
-                <td>${row.name}</td>
-                <td>${row.WW}</td>
-                <td>${row.PT}</td>
-                <td>${row.Exam}</td>
-              </tr>
-            `
-          )
-          .join('')}
-      </tbody>
-    </table>
-  `;
+  const table = classRecordTableElement?.querySelector('table');
+  if (!table) {
+    setClassRecordMessage('Nothing to print yet.', 'error');
+    return;
+  }
+
+  const printableTable = table.cloneNode(true);
+  printableTable.querySelectorAll('input.class-record-score-input').forEach((input) => {
+    const parent = input.parentElement;
+    if (!parent) return;
+    parent.textContent = String(input.value || '');
+  });
 
   const printWindow = window.open('', '_blank', 'width=960,height=720');
   if (!printWindow) {
@@ -977,9 +1138,9 @@ function printClassRecord() {
         <title>Class Record - ${safeText(currentClassRecordClassName, 'Class')}</title>
       </head>
       <body>
-        <h2>Class Record Summary</h2>
+        <h2>Class Record</h2>
         <p><strong>Class:</strong> ${safeText(currentClassRecordClassName, 'Class')}</p>
-        ${printableTable}
+        ${printableTable.outerHTML}
       </body>
     </html>
   `);
@@ -1703,26 +1864,20 @@ classRecordFilterElement?.addEventListener('change', () => {
   loadClassRecord(classId);
 });
 
-classRecordTableElement?.addEventListener('click', (event) => {
-  const target = event.target;
-  if (!(target instanceof HTMLElement)) return;
-
-  const scoreCell = target.closest('.class-record-score-cell');
-  if (!(scoreCell instanceof HTMLElement)) return;
-
-  editScore(String(scoreCell.dataset.studentId || '').trim(), String(scoreCell.dataset.scoreType || '').trim());
+classRecordAddActivityButton?.addEventListener('click', () => {
+  addClassRecordActivity();
 });
 
-classRecordTableElement?.addEventListener('keydown', (event) => {
+classRecordTableElement?.addEventListener('change', (event) => {
   const target = event.target;
-  if (!(target instanceof HTMLElement)) return;
+  if (!(target instanceof HTMLInputElement) || !target.classList.contains('class-record-score-input')) return;
+  saveClassRecordScore(target);
+});
 
-  if ((event.key !== 'Enter' && event.key !== ' ') || !target.classList.contains('class-record-score-cell')) {
-    return;
-  }
-
-  event.preventDefault();
-  editScore(String(target.dataset.studentId || '').trim(), String(target.dataset.scoreType || '').trim());
+classRecordTableElement?.addEventListener('focusout', (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement) || !target.classList.contains('class-record-score-input')) return;
+  saveClassRecordScore(target);
 });
 
 classRecordDownloadButton?.addEventListener('click', () => {
@@ -1731,6 +1886,14 @@ classRecordDownloadButton?.addEventListener('click', () => {
 
 classRecordPrintButton?.addEventListener('click', () => {
   printClassRecord();
+});
+
+classRecordMaxScoreElement?.addEventListener('input', () => {
+  if (!classRecordMaxScoreElement) return;
+  const value = Number(classRecordMaxScoreElement.value);
+  if (Number.isFinite(value) && value < 0) {
+    classRecordMaxScoreElement.value = '';
+  }
 });
 
 enrollmentClassFilterElement?.addEventListener('change', () => {
@@ -1846,7 +2009,7 @@ onAuthStateChanged(auth, async (user) => {
     setScoreMessage('Select class, type, title, then enter scores.', '');
     setClassMessage('Create and manage your own classes here.', '');
     setEnrollmentMessage('Review pending enrollment requests for your classes.', '');
-    renderClassRecordTable([], 'Select a class first.');
+    renderClassRecordTable([], [], new Map(), 'Select a class first.');
     setClassRecordMessage('Select a class first.', '');
 
     await loadTeacherClassesForSelection();
