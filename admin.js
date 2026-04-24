@@ -944,8 +944,9 @@ async function loadClassRecordClasses() {
 async function addClassRecordActivity() {
   const classId = String(classRecordFilterElement?.value || '').trim();
   const title = String(classRecordActivityTitleElement?.value || '').trim();
-  const componentType = getScoreTypeKey(classRecordComponentTypeElement?.value);
+  const selectedType = String(classRecordComponentTypeElement?.value || '').trim();
   const maxScore = Number(classRecordMaxScoreElement?.value);
+  const validTypes = ['WW', 'PT', 'Exam'];
 
   if (!classId) {
     setClassRecordMessage('Select a class first.', 'error');
@@ -957,8 +958,8 @@ async function addClassRecordActivity() {
     return;
   }
 
-  if (!componentType) {
-    setClassRecordMessage('Please select a valid component type.', 'error');
+  if (!validTypes.includes(selectedType)) {
+    setClassRecordMessage('Component type must be WW, PT, or Exam.', 'error');
     return;
   }
 
@@ -977,13 +978,13 @@ async function addClassRecordActivity() {
       classId,
       teacherId: auth.currentUser?.uid || '',
       title,
-      componentType,
+      type: selectedType,
+      componentType: selectedType,
       maxScore: Number(maxScore.toFixed(2)),
       createdAt: serverTimestamp()
     });
 
     if (classRecordActivityTitleElement) classRecordActivityTitleElement.value = '';
-    if (classRecordComponentTypeElement) classRecordComponentTypeElement.value = '';
     if (classRecordMaxScoreElement) classRecordMaxScoreElement.value = '';
 
     setClassRecordMessage('Activity added successfully.', 'success');
