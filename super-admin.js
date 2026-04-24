@@ -423,6 +423,35 @@ async function getRankedSectionsBySchoolYear(schoolYearId) {
   return rankedSections;
 }
 
+async function getSavedSectionLeaderboardBySchoolYear(schoolYearId) {
+  const sectionQuery = query(
+    collection(db, 'sections'),
+    where('schoolYearId', '==', schoolYearId),
+    where('status', '==', 'active')
+  );
+  const snapshot = await getDocs(sectionQuery);
+
+  return snapshot.docs
+    .map((item) => ({
+      id: item.id,
+      ...item.data(),
+      totalPoints: normalizePoints(item.data()?.totalPoints)
+    }))
+    .sort((a, b) => {
+      const rankA = Number(a.rank);
+      const rankB = Number(b.rank);
+      const hasRankA = Number.isFinite(rankA) && rankA > 0;
+      const hasRankB = Number.isFinite(rankB) && rankB > 0;
+
+      if (hasRankA && hasRankB && rankA !== rankB) return rankA - rankB;
+      if (hasRankA !== hasRankB) return hasRankA ? -1 : 1;
+
+      const pointsDelta = normalizePoints(b.totalPoints) - normalizePoints(a.totalPoints);
+      if (pointsDelta !== 0) return pointsDelta;
+      return safeText(a.name, '').localeCompare(safeText(b.name, ''), undefined, { sensitivity: 'base' });
+    });
+}
+
 async function refreshSectionLeaderboard() {
   const schoolYearId = safeText(rankingSchoolYearSelect?.value, '').trim();
 
@@ -432,8 +461,8 @@ async function refreshSectionLeaderboard() {
   }
 
   try {
-    const rankedSections = await getRankedSectionsBySchoolYear(schoolYearId);
-    renderSectionLeaderboard(rankedSections);
+    const savedSections = await getSavedSectionLeaderboardBySchoolYear(schoolYearId);
+    renderSectionLeaderboard(savedSections);
   } catch (error) {
     console.error('Failed to load section leaderboard:', error);
     setMessageOnElement(sectionMessageElement, 'Unable to load section leaderboard right now.', 'error');
@@ -456,16 +485,28 @@ async function recomputeSectionRankings() {
     const rankedSections = await getRankedSectionsBySchoolYear(schoolYearId);
 
     await Promise.all(
-      rankedSections.map((section) =>
-        updateDoc(doc(db, 'sections', section.id), {
+      rankedSections.map((section) => {
+        console.log('Saving section ranking:', {
+          sectionId: section.id,
+          sectionName: section.name,
           rank: section.rank,
           tier: section.tier,
+          totalPoints: section.totalPoints
+        });
+
+        return updateDoc(doc(db, 'sections', section.id), {
+          rank: section.rank,
+          tier: section.tier,
+          totalPoints: section.totalPoints || 0,
+          rankingSchoolYearId: schoolYearId,
+          rankingUpdatedAt: serverTimestamp(),
           updatedAt: serverTimestamp()
-        })
-      )
+        });
+      })
     );
 
-    renderSectionLeaderboard(rankedSections);
+    const savedSections = await getSavedSectionLeaderboardBySchoolYear(schoolYearId);
+    renderSectionLeaderboard(savedSections);
     setMessageOnElement(sectionMessageElement, 'Section rankings recomputed successfully.', 'success');
     await loadSections();
   } catch (error) {
