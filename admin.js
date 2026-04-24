@@ -57,6 +57,7 @@ const classRecordTableElement = document.getElementById('class-record-table');
 const classRecordDownloadButton = document.getElementById('class-record-download-button');
 const classRecordPrintButton = document.getElementById('class-record-print-button');
 const classRecordMessageElement = document.getElementById('class-record-message');
+const teacherLeaderboardPreviewElement = document.getElementById('teacher-leaderboard-preview');
 let overlaySequenceJob = 0;
 
 const TABLE_COLUMN_COUNT = 5;
@@ -139,6 +140,14 @@ function normalizePoints(points) {
   return typeof points === 'number' && Number.isFinite(points) ? points : 0;
 }
 
+function getTierFromRank(rank) {
+  if (rank === 1) return 'Class A';
+  if (rank === 2) return 'Class B';
+  if (rank === 3) return 'Class C';
+  if (rank === 4) return 'Class D';
+  return 'Class E';
+}
+
 function safeText(value, fallback = '—') {
   if (value === undefined || value === null) return fallback;
   const text = String(value).trim();
@@ -213,6 +222,81 @@ function setClassRecordMessage(message, type = '') {
 
   if (type) {
     classRecordMessageElement.classList.add(type);
+  }
+}
+
+function renderTeacherSectionLeaderboardPreview(records) {
+  if (!teacherLeaderboardPreviewElement) return;
+
+  if (!records.length) {
+    teacherLeaderboardPreviewElement.innerHTML = '<p>No section leaderboard data available yet.</p>';
+    return;
+  }
+
+  teacherLeaderboardPreviewElement.innerHTML = records
+    .slice(0, 8)
+    .map((record) => {
+      const tierClass = String(record.tier || '').toLowerCase().replace(/\s+/g, '-');
+      return `
+        <p><strong>${safeText(record.name)}</strong> —
+          <span class="tier-pill ${tierClass}">${safeText(record.tier)}</span>
+          • ${normalizePoints(record.totalPoints).toLocaleString()} pts • Rank ${record.rank}
+        </p>
+      `;
+    })
+    .join('');
+}
+
+async function loadTeacherSectionLeaderboardPreview() {
+  if (!teacherLeaderboardPreviewElement) return;
+
+  teacherLeaderboardPreviewElement.innerHTML = '<p>Loading section leaderboard...</p>';
+
+  try {
+    const activeSchoolYearsSnapshot = await getDocs(query(collection(db, 'schoolYears'), where('status', '==', 'active')));
+    const sortedActiveSchoolYears = activeSchoolYearsSnapshot.docs.sort((a, b) => {
+      const aTime = a.data()?.createdAt?.toMillis?.() || 0;
+      const bTime = b.data()?.createdAt?.toMillis?.() || 0;
+      return bTime - aTime;
+    });
+    const schoolYearDoc = sortedActiveSchoolYears[0];
+
+    if (!schoolYearDoc) {
+      renderTeacherSectionLeaderboardPreview([]);
+      return;
+    }
+
+    const sectionsSnapshot = await getDocs(
+      query(
+        collection(db, 'sections'),
+        where('status', '==', 'active'),
+        where('schoolYearId', '==', schoolYearDoc.id)
+      )
+    );
+
+    const ranked = sectionsSnapshot.docs
+      .map((item) => ({
+        id: item.id,
+        ...item.data()
+      }))
+      .sort((a, b) => {
+        const pointsDelta = normalizePoints(b.totalPoints) - normalizePoints(a.totalPoints);
+        if (pointsDelta !== 0) return pointsDelta;
+        return safeText(a.name, '').localeCompare(safeText(b.name, ''), undefined, { sensitivity: 'base' });
+      })
+      .map((record, index) => {
+        const rank = index + 1;
+        return {
+          ...record,
+          rank,
+          tier: String(record.tier || '').trim() || getTierFromRank(rank)
+        };
+      });
+
+    renderTeacherSectionLeaderboardPreview(ranked);
+  } catch (error) {
+    console.error('Failed to load teacher section leaderboard preview:', error);
+    teacherLeaderboardPreviewElement.innerHTML = '<p>Unable to load section leaderboard right now.</p>';
   }
 }
 
@@ -2094,6 +2178,7 @@ onAuthStateChanged(auth, async (user) => {
     ]);
     await loadMyClasses();
     await loadEnrollmentRequests();
+    await loadTeacherSectionLeaderboardPreview();
   } catch (error) {
     console.error('Failed to validate teacher role:', error);
     window.location.replace('dashboard.html');

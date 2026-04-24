@@ -96,6 +96,35 @@
             <p><strong>Notes/Reminders:</strong> Review pending teachers daily before classes.</p>
           </div>
         </article>
+
+        <article class="app-card">
+          <h3>Section Leaderboard</h3>
+          <p>Top active sections by total points for the selected school year.</p>
+          <div class="admin-toolbar">
+            <select id="ranking-school-year" aria-label="School year for section leaderboard">
+              <option value="">Select school year</option>
+            </select>
+            <button id="recompute-rankings-btn" type="button">Recompute Section Rankings</button>
+          </div>
+          <div class="admin-table-wrap" role="region" aria-label="Section leaderboard table" tabindex="0">
+            <table class="student-table">
+              <thead>
+                <tr>
+                  <th scope="col">Rank</th>
+                  <th scope="col">Tier</th>
+                  <th scope="col">Section</th>
+                  <th scope="col">Grade Level</th>
+                  <th scope="col">Total Points</th>
+                </tr>
+              </thead>
+              <tbody id="section-leaderboard-body">
+                <tr>
+                  <td colspan="5" class="empty-cell">No sections found.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
       </section>
 
       <section
