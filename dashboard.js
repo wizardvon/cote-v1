@@ -322,6 +322,7 @@ function getClassMetadata(enrollment = {}) {
   return {
     classId: String(enrollment.classId || classData.id || '').trim(),
     subjectName: classData.subjectName || enrollment.subjectName || 'Unknown Subject',
+    subjectCode: classData.subjectCode || enrollment.subjectCode || 'Not provided',
     teacherName: classData.teacherName || enrollment.teacherName || classData.teacherEmail || 'Not assigned',
     schoolYearName: classData.schoolYearName || classData.schoolYear || enrollment.schoolYearName || 'Not provided',
     termName: classData.termName || classData.term || enrollment.termName || 'Not provided',
@@ -351,11 +352,12 @@ function renderClassRecordsDetail({ metadata = {}, rows = [], summary = {} } = {
           `
         )
         .join('')
-    : `<tr><td colspan="5" class="empty-cell">No class records found yet.</td></tr>`;
+    : `<tr><td colspan="5" class="empty-cell">No records available for this class yet.</td></tr>`;
 
   classRecordsDetailElement.innerHTML = `
     <div class="info-grid">
       <p><strong>Subject Name:</strong> ${escapeHtml(metadata.subjectName || 'Not provided')}</p>
+      <p><strong>Subject Code:</strong> ${escapeHtml(metadata.subjectCode || 'Not provided')}</p>
       <p><strong>Teacher Name:</strong> ${escapeHtml(metadata.teacherName || 'Not provided')}</p>
       <p><strong>School Year:</strong> ${escapeHtml(metadata.schoolYearName || 'Not provided')}</p>
       <p><strong>Term:</strong> ${escapeHtml(metadata.termName || 'Not provided')}</p>
@@ -484,6 +486,8 @@ async function loadClassRecordsDetail(enrollment = {}) {
       };
     });
 
+    const rowsWithScores = rows.filter((row) => row.scoreDisplay !== '--');
+
     const percentages = rows
       .map((row) => row.percentageValue)
       .filter((value) => Number.isFinite(value));
@@ -495,7 +499,7 @@ async function loadClassRecordsDetail(enrollment = {}) {
 
     renderClassRecordsDetail({
       metadata,
-      rows,
+      rows: rowsWithScores,
       summary: {
         totalActivities: activities.length,
         totalAcademicPoints,
