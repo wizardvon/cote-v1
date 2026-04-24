@@ -63,6 +63,12 @@ registrationForm?.addEventListener('submit', async (event) => {
     return;
   }
 
+  const normalizedSex = String(payload.sex || '').trim();
+  if (!['Male', 'Female'].includes(normalizedSex)) {
+    showFormMessage('Please select Male or Female.', 'error');
+    return;
+  }
+
   const lrnIsValid = /^\d{12}$/.test(payload.lrn.trim());
   if (!lrnIsValid) {
     showFormMessage('LRN must be exactly 12 digits.', 'error');
@@ -110,7 +116,7 @@ registrationForm?.addEventListener('submit', async (event) => {
       firstName: payload.firstName.trim(),
       middleName: payload.middleName ? payload.middleName.trim() : '',
       lastName: payload.lastName.trim(),
-      sex: payload.sex,
+      sex: normalizedSex,
       schoolYearId: selectedSchoolYear.id,
       schoolYearName: selectedSchoolYear.name,
       gradeLevel: payload.gradeLevel,
