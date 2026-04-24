@@ -370,8 +370,8 @@
       
       <section id="page-class-record" class="page" data-page="class-record" aria-label="Class record">
         <article class="app-card">
-          <h2>Class Record (Score Summary)</h2>
-          <p>Review, edit, download, and print score summaries by class.</p>
+          <h2>Class Record</h2>
+          <p>Manage activities and scores in a gradebook-style class record table.</p>
 
           <div class="admin-toolbar score-toolbar">
             <div class="field">
@@ -379,6 +379,40 @@
               <select id="class-record-filter">
                 <option value="">Select a class first</option>
               </select>
+            </div>
+          </div>
+
+          <div class="admin-toolbar score-toolbar">
+            <div class="field">
+              <label for="class-record-activity-title">Activity Title</label>
+              <input id="class-record-activity-title" type="text" placeholder="e.g. Quiz 1" autocomplete="off" />
+            </div>
+
+            <div class="field">
+              <label for="class-record-component-type">Component Type</label>
+              <select id="class-record-component-type">
+                <option value="">Select Component</option>
+                <option value="WW">Written Works</option>
+                <option value="PT">Performance Task</option>
+                <option value="Exam">Exam</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="class-record-max-score">Highest Possible Score</label>
+              <input
+                id="class-record-max-score"
+                type="number"
+                min="1"
+                step="0.01"
+                inputmode="decimal"
+                placeholder="e.g. 50"
+              />
+            </div>
+
+            <div class="field admin-load-field">
+              <label for="class-record-add-activity-button">Add Activity</label>
+              <button id="class-record-add-activity-button" type="button">Add Activity</button>
             </div>
 
             <div class="field admin-load-field">
@@ -396,20 +430,32 @@
         </article>
 
         <article class="app-card">
-          <h3>Score Summary</h3>
+          <h3>Gradebook</h3>
           <div id="class-record-table" class="admin-table-wrap" role="region" aria-label="Class record table" tabindex="0">
             <table class="student-table">
               <thead>
                 <tr>
-                  <th scope="col">Name</th>
+                  <th scope="col"> </th>
                   <th scope="col">Written Works</th>
                   <th scope="col">Performance Task</th>
                   <th scope="col">Exam</th>
                 </tr>
+                <tr>
+                  <th scope="col">Activities:</th>
+                  <th scope="col">-</th>
+                  <th scope="col">-</th>
+                  <th scope="col">-</th>
+                </tr>
+                <tr>
+                  <th scope="col">Name / Highest Possible Score:</th>
+                  <th scope="col">-</th>
+                  <th scope="col">-</th>
+                  <th scope="col">-</th>
+                </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td colspan="4" class="empty-cell">Select a class to view score summary.</td>
+                  <td colspan="4" class="empty-cell">Select a class to view class record.</td>
                 </tr>
               </tbody>
             </table>
