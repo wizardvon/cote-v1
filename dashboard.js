@@ -201,11 +201,15 @@ function renderMyEnrollments(enrollments) {
   myEnrollmentsListElement.innerHTML = enrollments
     .map((enrollment) => {
       const classData = enrollment.classData || {};
-      const subjectName = classData.subjectName || classData.subject || 'Unknown Subject';
+      const subjectName = classData.subjectName || enrollment.subjectName || 'Unknown Subject';
       const sectionName = classData.sectionName || enrollment.sectionName || 'Not provided';
-      const schoolYear = classData.schoolYear || 'Not provided';
-      const term = classData.term || 'Not provided';
-      const teacherName = getTeacherName(classData);
+      const schoolYear = classData.schoolYearName || enrollment.schoolYearName || 'Not provided';
+      const term = classData.termName || enrollment.termName || 'Not provided';
+      const teacherName =
+        classData.teacherName ||
+        enrollment.teacherName ||
+        classData.teacherEmail ||
+        'Not assigned';
       const status = String(enrollment.status || 'pending').toLowerCase();
       const statusText = status.charAt(0).toUpperCase() + status.slice(1);
 
