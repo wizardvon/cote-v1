@@ -38,14 +38,6 @@ const reasonInput = document.getElementById('reason-input');
 const addPointsButton = document.getElementById('add-points-button');
 const deductPointsButton = document.getElementById('deduct-points-button');
 const messageElement = document.getElementById('admin-message');
-const scoreClassFilterElement = document.getElementById('score-class-filter');
-const scoreTypeElement = document.getElementById('score-type');
-const scoreTitleElement = document.getElementById('score-title');
-const scoreMaxElement = document.getElementById('score-max');
-const loadScoreStudentsButton = document.getElementById('load-score-students-button');
-const saveScoresButton = document.getElementById('save-scores-button');
-const scoresTableBody = document.getElementById('scoresTableBody');
-const scoreMessageElement = document.getElementById('score-message');
 const classSubjectElement = document.getElementById('class-subject');
 const classSchoolYearElement = document.getElementById('class-school-year');
 const classTermElement = document.getElementById('class-term');
@@ -72,7 +64,6 @@ const TABLE_COLUMN_COUNT = 5;
 const pageTitles = {
   home: 'Home',
   'give-points': 'Give Points',
-  scores: 'Scores',
   quest: 'Quest',
   resources: 'Resources',
   'my-classes': 'My Classes',
@@ -129,11 +120,9 @@ async function playLoadingSequence(messages, interval = 430) {
 
 let allStudents = [];
 let visibleStudents = [];
-let scoreStudents = [];
 let currentTeacherProfile = null;
 let teacherClasses = [];
 let selectedTeacherClassId = '';
-let selectedScoreClassId = '';
 let classSubjects = [];
 let classSchoolYears = [];
 let classTerms = [];
@@ -194,16 +183,6 @@ function setMessage(message, type = '') {
 
   if (type) {
     messageElement.classList.add(type);
-  }
-}
-
-function setScoreMessage(message, type = '') {
-  if (!scoreMessageElement) return;
-  scoreMessageElement.textContent = message;
-  scoreMessageElement.classList.remove('success', 'error');
-
-  if (type) {
-    scoreMessageElement.classList.add(type);
   }
 }
 
@@ -329,7 +308,7 @@ function formatClassLabel(classItem) {
 }
 
 function populateTeacherClassSelectors(classes = []) {
-  const selectors = [teacherClassFilterElement, scoreClassFilterElement, classRecordFilterElement].filter(Boolean);
+  const selectors = [teacherClassFilterElement, classRecordFilterElement].filter(Boolean);
 
   selectors.forEach((selectElement) => {
     const previousValue = selectElement.value;
@@ -346,41 +325,6 @@ function populateTeacherClassSelectors(classes = []) {
       selectElement.value = previousValue;
     }
   });
-}
-
-function renderScoreStudentsTable(emptyMessage = 'No students found for the selected section.') {
-  if (!scoresTableBody) return;
-
-  if (!scoreStudents.length) {
-    scoresTableBody.innerHTML = `
-      <tr>
-        <td colspan="3" class="empty-cell">${emptyMessage}</td>
-      </tr>
-    `;
-    return;
-  }
-
-  scoresTableBody.innerHTML = scoreStudents
-    .map((student) => {
-      return `
-        <tr>
-          <td>${formatFullName(student)}</td>
-          <td>${safeText(student.lrn)}</td>
-          <td>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              inputmode="decimal"
-              class="score-input"
-              data-score-student-id="${student.id}"
-              placeholder="Enter score"
-            />
-          </td>
-        </tr>
-      `;
-    })
-    .join('');
 }
 
 function populateSelectOptions(selectElement, data, placeholder, getLabel) {
@@ -1566,192 +1510,6 @@ async function createClass() {
   }
 }
 
-async function ensureStudentsLoadedForScores() {
-  if (allStudents.length > 0) {
-    return true;
-  }
-
-  const loaded = await loadStudents({ showStatusMessage: false, classId: selectedScoreClassId });
-  if (!loaded) {
-    setScoreMessage('Unable to load students. Please try again.', 'error');
-    return false;
-  }
-
-  return true;
-}
-
-async function loadStudentsForScores() {
-  if (!scoreClassFilterElement) return;
-
-  const classId = scoreClassFilterElement.value;
-  if (!classId) {
-    setScoreMessage('Select a class first.', 'error');
-    return;
-  }
-
-  const hasStudents = await ensureStudentsLoadedForScores();
-  if (!hasStudents) return;
-
-  if (loadScoreStudentsButton) {
-    loadScoreStudentsButton.disabled = true;
-    loadScoreStudentsButton.textContent = 'Loading...';
-  }
-
-  try {
-    selectedScoreClassId = classId;
-    const loaded = await loadStudents({ showStatusMessage: false, classId, silent: true });
-
-    if (!loaded) {
-      setScoreMessage('Unable to load students for the selected class.', 'error');
-      return;
-    }
-
-    scoreStudents = [...allStudents];
-    renderScoreStudentsTable();
-
-    if (!scoreStudents.length) {
-      setScoreMessage('No approved enrolled students found for the selected class.', 'error');
-      return;
-    }
-
-    setScoreMessage(`Loaded ${scoreStudents.length} students for the selected class.`, 'success');
-  } finally {
-    if (loadScoreStudentsButton) {
-      loadScoreStudentsButton.disabled = false;
-      loadScoreStudentsButton.textContent = 'Load Students';
-    }
-  }
-}
-
-function collectScoreInputs() {
-  if (!scoresTableBody) return [];
-
-  const maxScore = Number(scoreMaxElement?.value);
-  const scoreInputs = Array.from(scoresTableBody.querySelectorAll('input[data-score-student-id]'));
-
-  return scoreInputs
-    .map((input) => {
-      const rawValue = String(input.value || '').trim();
-      if (!rawValue) return null;
-
-      const value = Number(rawValue);
-      if (!Number.isFinite(value) || value < 0) return null;
-      if (Number.isFinite(maxScore) && maxScore > 0 && value > maxScore) return null;
-
-      const studentId = input.dataset.scoreStudentId || '';
-      const student = scoreStudents.find((item) => item.id === studentId);
-
-      if (!student) return null;
-
-      return {
-        student,
-        score: value
-      };
-    })
-    .filter(Boolean);
-}
-
-async function saveAllScores() {
-  if (!saveScoresButton) return;
-
-  const classId = String(scoreClassFilterElement?.value || '').trim();
-  const type = String(scoreTypeElement?.value || '').trim();
-  const title = String(scoreTitleElement?.value || '').trim();
-  const maxScore = Number(scoreMaxElement?.value);
-
-  if (!classId) {
-    setScoreMessage('Select a class first.', 'error');
-    return;
-  }
-
-  if (!type) {
-    setScoreMessage('Please select a score type.', 'error');
-    return;
-  }
-
-  if (!title) {
-    setScoreMessage('Please enter an activity title.', 'error');
-    return;
-  }
-
-  if (!Number.isFinite(maxScore) || maxScore <= 0) {
-    setScoreMessage('Please enter a valid max score.', 'error');
-    return;
-  }
-
-  if (!scoreStudents.length) {
-    setScoreMessage('Please load students for the selected class.', 'error');
-    return;
-  }
-
-  const enteredScores = collectScoreInputs();
-
-  if (!enteredScores.length) {
-    setScoreMessage('Enter at least one student score before saving.', 'error');
-    return;
-  }
-
-  const invalidInputExists = Array.from(scoresTableBody.querySelectorAll('input[data-score-student-id]')).some((input) => {
-    const rawValue = String(input.value || '').trim();
-    if (!rawValue) return false;
-
-    const value = Number(rawValue);
-    return !Number.isFinite(value) || value < 0 || value > maxScore;
-  });
-
-  if (invalidInputExists) {
-    setScoreMessage('One or more scores are invalid. Check values and max score.', 'error');
-    return;
-  }
-
-  const teacherId = auth.currentUser?.uid || '';
-  const teacherName =
-    String(currentTeacherProfile?.displayName || '').trim() ||
-    String(currentTeacherProfile?.email || '').trim() ||
-    'Unknown Teacher';
-  const teacherEmail = String(currentTeacherProfile?.email || auth.currentUser?.email || '').trim();
-  const selectedClass = teacherClasses.find((classItem) => classItem.id === classId);
-
-  saveScoresButton.disabled = true;
-  saveScoresButton.textContent = 'Saving...';
-
-  try {
-    await Promise.all(
-      enteredScores.map(({ student, score }) =>
-        addDoc(collection(db, 'scores'), {
-          classId,
-          className: formatClassLabel(selectedClass || {}),
-          studentId: student.id,
-          studentName: formatFullName(student),
-          lrn: safeText(student.lrn, ''),
-          section: safeText(selectedClass?.sectionName || student.section, ''),
-          gradeLevel: safeText(student.gradeLevel, ''),
-          type,
-          title,
-          score,
-          maxScore,
-          teacherId,
-          teacherName,
-          teacherEmail,
-          createdAt: serverTimestamp()
-        })
-      )
-    );
-
-    Array.from(scoresTableBody.querySelectorAll('input[data-score-student-id]')).forEach((input) => {
-      input.value = '';
-    });
-
-    setScoreMessage(`Saved ${enteredScores.length} score record(s).`, 'success');
-  } catch (error) {
-    console.error('Failed to save scores:', error);
-    setScoreMessage('Unable to save scores. Please try again.', 'error');
-  } finally {
-    saveScoresButton.disabled = false;
-    saveScoresButton.textContent = 'Save All Scores';
-  }
-}
-
 function getSelectedStudentIds() {
   if (!tableBody) return [];
 
@@ -1847,7 +1605,7 @@ function populateSectionFilter(students) {
   return students;
 }
 
-async function loadStudents({ showStatusMessage = true, silent = false, classId = '' } = {}) {
+async function loadStudents({ showStatusMessage = true, classId = '' } = {}) {
   if (!tableBody) return false;
   const activeClassId = String(classId || selectedTeacherClassId || '').trim();
 
@@ -1855,22 +1613,18 @@ async function loadStudents({ showStatusMessage = true, silent = false, classId 
     allStudents = [];
     visibleStudents = [];
     renderTableRows();
-    scoreStudents = [];
-    renderScoreStudentsTable('Select a class first.');
     if (showStatusMessage) {
       setMessage('Select a class first.', 'error');
     }
     return false;
   }
 
-  if (!silent) {
-    setMessage('Loading students...');
-    tableBody.innerHTML = `
-      <tr>
-        <td colspan="${TABLE_COLUMN_COUNT}" class="empty-cell">Loading students...</td>
-      </tr>
-    `;
-  }
+  setMessage('Loading students...');
+  tableBody.innerHTML = `
+    <tr>
+      <td colspan="${TABLE_COLUMN_COUNT}" class="empty-cell">Loading students...</td>
+    </tr>
+  `;
 
   if (loadStudentsButton) {
     loadStudentsButton.disabled = true;
@@ -2132,24 +1886,6 @@ deductPointsButton?.addEventListener('click', () => {
   updatePointsForSelected('subtract');
 });
 
-loadScoreStudentsButton?.addEventListener('click', () => {
-  loadStudentsForScores();
-});
-
-scoreClassFilterElement?.addEventListener('change', () => {
-  selectedScoreClassId = String(scoreClassFilterElement?.value || '').trim();
-
-  if (!selectedScoreClassId) {
-    scoreStudents = [];
-    renderScoreStudentsTable('Select a class first.');
-    setScoreMessage('Select a class first.', '');
-    return;
-  }
-
-  loadStudentsForScores();
-});
-
-
 classRecordFilterElement?.addEventListener('change', () => {
   const classId = String(classRecordFilterElement.value || '').trim();
   loadClassRecord(classId);
@@ -2270,19 +2006,8 @@ enrollmentRequestsListElement?.addEventListener('click', (event) => {
   }
 });
 
-saveScoresButton?.addEventListener('click', () => {
-  saveAllScores();
-});
 createClassButton?.addEventListener('click', () => {
   createClass();
-});
-
-scoreMaxElement?.addEventListener('input', () => {
-  if (!scoreMaxElement) return;
-  const value = Number(scoreMaxElement.value);
-  if (Number.isFinite(value) && value < 0) {
-    scoreMaxElement.value = '';
-  }
 });
 
 logoutButton?.addEventListener('click', async () => {
@@ -2354,8 +2079,6 @@ onAuthStateChanged(auth, async (user) => {
       `;
     }
 
-    renderScoreStudentsTable('Select a class first.');
-    setScoreMessage('Select class, type, title, then enter scores.', '');
     setClassMessage('Create and manage your own classes here.', '');
     setEnrollmentMessage('Review pending enrollment requests for your classes.', '');
     renderClassRecordTable([], [], new Map(), 'Select a class first.');
