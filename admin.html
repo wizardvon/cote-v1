@@ -42,10 +42,6 @@
             <span aria-hidden="true">⭐</span>
             <span>Give Points</span>
           </button>
-          <button type="button" class="menu-btn" data-target="scores">
-            <span aria-hidden="true">📝</span>
-            <span>Scores</span>
-          </button>
           <button type="button" class="menu-btn" data-target="quest">
             <span aria-hidden="true">🎯</span>
             <span>Quest</span>
@@ -112,9 +108,9 @@
           <ul class="list-stack">
             <li><strong>Home:</strong> Teacher dashboard overview and reminders.</li>
             <li><strong>Give Points:</strong> Main working area for merit/demerit updates.</li>
-            <li><strong>Scores:</strong> Placeholder cards for Written Works, PT, and Exams.</li>
             <li><strong>Quest:</strong> Placeholder cards for future quest management.</li>
             <li><strong>Resources:</strong> Placeholder cards for learning materials.</li>
+            <li><strong>Class Record:</strong> Manage class activities and student scores.</li>
           </ul>
         </article>
 
@@ -123,7 +119,7 @@
           <ul class="list-stack">
             <li>Always include a clear reason when applying point changes.</li>
             <li>Use filters and search before bulk updates.</li>
-            <li>Scores, Quest, and Resources are layout-only in this release.</li>
+            <li>Use Class Record as the single score management module.</li>
           </ul>
         </article>
       </section>
@@ -201,74 +197,6 @@
               <tbody id="studentTableBody">
                 <tr>
                   <td colspan="5" class="empty-cell">Click "Load Students" to fetch and display students.</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </article>
-      </section>
-
-      <section id="page-scores" class="page" data-page="scores" aria-label="Scores">
-        <article class="app-card">
-          <h2>Score Recording</h2>
-          <p>Record Written Work, Performance Task, and Exam scores by class.</p>
-
-          <div class="admin-toolbar score-toolbar">
-            <div class="field">
-              <label for="score-class-filter">Select Class</label>
-              <select id="score-class-filter">
-                <option value="">Select a class first</option>
-              </select>
-            </div>
-
-            <div class="field">
-              <label for="score-type">Score Type</label>
-              <select id="score-type">
-                <option value="">Select Score Type</option>
-                <option value="Written Work">Written Work</option>
-                <option value="Performance Task">Performance Task</option>
-                <option value="Exam">Exam</option>
-              </select>
-            </div>
-
-            <div class="field admin-load-field">
-              <label for="load-score-students-button">Load Students</label>
-              <button id="load-score-students-button" type="button">Load Students</button>
-            </div>
-
-            <div class="field">
-              <label for="score-title">Activity Title</label>
-              <input id="score-title" type="text" placeholder="e.g. Quiz 1" autocomplete="off" />
-            </div>
-
-            <div class="field">
-              <label for="score-max">Max Score / Total Items</label>
-              <input id="score-max" type="number" min="1" step="1" inputmode="numeric" placeholder="e.g. 50" />
-            </div>
-
-            <div class="field admin-load-field">
-              <label for="save-scores-button">Save</label>
-              <button id="save-scores-button" type="button">Save All Scores</button>
-            </div>
-          </div>
-
-          <p id="score-message" class="form-message" role="status" aria-live="polite"></p>
-        </article>
-
-        <article class="app-card">
-          <h3>Students for Scoring</h3>
-          <div class="admin-table-wrap" role="region" aria-label="Students for scoring" tabindex="0">
-            <table class="student-table">
-              <thead>
-                <tr>
-                  <th scope="col">Full Name</th>
-                  <th scope="col">LRN</th>
-                  <th scope="col">Score</th>
-                </tr>
-              </thead>
-              <tbody id="scoresTableBody">
-                <tr>
-                  <td colspan="3" class="empty-cell">Select a class and click "Load Students".</td>
                 </tr>
               </tbody>
             </table>

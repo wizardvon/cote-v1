@@ -41,7 +41,6 @@ const burgerButton = document.getElementById('burger-button');
 const menuButtons = Array.from(document.querySelectorAll('.menu-btn'));
 const pages = Array.from(document.querySelectorAll('.page'));
 const recordsPageElement = document.getElementById('page-records');
-const studentScoresListElement = document.getElementById('student-scores-list');
 const availableClassesListElement = document.getElementById('available-classes-list');
 const myEnrollmentsListElement = document.getElementById('my-enrollments-list');
 const myClassesFeedbackElement = document.getElementById('my-classes-feedback');
@@ -597,59 +596,6 @@ function formatTimestamp(value) {
   });
 }
 
-async function loadStudentScores(studentId) {
-  if (!studentScoresListElement) return;
-
-  studentScoresListElement.innerHTML = '<li>Loading scores...</li>';
-
-  try {
-    let scoresSnapshot;
-
-    try {
-      const scoresQuery = query(
-        collection(db, 'scores'),
-        where('studentId', '==', studentId),
-        orderBy('createdAt', 'desc')
-      );
-      scoresSnapshot = await getDocs(scoresQuery);
-    } catch (error) {
-      console.error('Failed to query scores with index:', error);
-      const fallbackSnapshot = await getDocs(collection(db, 'scores'));
-      const filteredDocs = fallbackSnapshot.docs
-        .filter((scoreDoc) => scoreDoc.data().studentId === studentId)
-        .sort((a, b) => {
-          const aTime = a.data().createdAt?.toMillis?.() || 0;
-          const bTime = b.data().createdAt?.toMillis?.() || 0;
-          return bTime - aTime;
-        });
-
-      scoresSnapshot = { empty: filteredDocs.length === 0, docs: filteredDocs };
-    }
-
-    if (scoresSnapshot.empty) {
-      studentScoresListElement.innerHTML = '<li>No scores available yet.</li>';
-      return;
-    }
-
-    studentScoresListElement.innerHTML = scoresSnapshot.docs
-      .map((scoreDoc) => {
-        const score = scoreDoc.data();
-        const type = escapeHtml(String(score.type || 'Not set'));
-        const title = escapeHtml(String(score.title || 'Untitled Activity'));
-        const scoreValue = Number.isFinite(Number(score.score)) ? Number(score.score) : 0;
-        const maxScore = Number.isFinite(Number(score.maxScore)) ? Number(score.maxScore) : 0;
-        const teacherName = escapeHtml(String(score.teacherName || score.teacherEmail || 'Unknown Teacher'));
-        const date = escapeHtml(formatTimestamp(score.createdAt));
-
-        return `<li><strong>${type}</strong> — ${title}<br>${scoreValue}/${maxScore}<br><strong>Teacher:</strong> ${teacherName}<br><strong>Date:</strong> ${date}</li>`;
-      })
-      .join('');
-  } catch (error) {
-    console.error('Failed to load scores:', error);
-    studentScoresListElement.innerHTML = '<li>Unable to load scores. Please try again later.</li>';
-  }
-}
-
 function getRecordsListElement() {
   if (!recordsPageElement) return null;
 
@@ -982,7 +928,6 @@ onAuthStateChanged(auth, async (user) => {
 
     setStudentData(studentData, user.email);
     loadPointLogs(user.uid);
-    loadStudentScores(user.uid);
     loadMyEnrollments();
     loadAvailableClasses();
   } catch (error) {
