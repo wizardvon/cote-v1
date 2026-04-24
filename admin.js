@@ -247,6 +247,32 @@ function compareStudents(a, b) {
   });
 }
 
+function getSexSortRank(sexValue) {
+  const normalizedSex = String(sexValue || '').trim().toLowerCase();
+  if (normalizedSex === 'male') return 0;
+  if (normalizedSex === 'female') return 1;
+  return 2;
+}
+
+function compareClassRecordStudents(a, b) {
+  const sexCompare = getSexSortRank(a.sex) - getSexSortRank(b.sex);
+  if (sexCompare !== 0) {
+    return sexCompare;
+  }
+
+  const lastNameCompare = safeText(a.lastName, '').localeCompare(safeText(b.lastName, ''), undefined, {
+    sensitivity: 'base'
+  });
+
+  if (lastNameCompare !== 0) {
+    return lastNameCompare;
+  }
+
+  return safeText(a.firstName, '').localeCompare(safeText(b.firstName, ''), undefined, {
+    sensitivity: 'base'
+  });
+}
+
 function toggleSidebar() {
   if (!sidebar || !sidebarOverlay) return;
 
@@ -955,7 +981,7 @@ async function loadClassRecord(classId) {
       getDocs(query(collection(db, 'scores'), where('classId', '==', selectedClassId)))
     ]);
 
-    currentClassRecordStudents = students;
+    currentClassRecordStudents = [...students].sort(compareClassRecordStudents);
     currentClassRecordActivities = activitySnapshot.docs
       .map((activityDoc) => ({
         id: activityDoc.id,
