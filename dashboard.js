@@ -51,6 +51,7 @@ const recordsPageElement = document.getElementById('page-records');
 const availableClassesListElement = document.getElementById('available-classes-list');
 const myEnrollmentsListElement = document.getElementById('my-enrollments-list');
 const myClassesFeedbackElement = document.getElementById('my-classes-feedback');
+const classRecordsDetailElement = document.getElementById('class-records-detail');
 const loadingOverlay = document.getElementById('loadingOverlay');
 let overlaySequenceJob = 0;
 let currentStudentProfile = null;
@@ -255,7 +256,7 @@ function renderMyEnrollments(enrollments) {
   if (!myEnrollmentsListElement) return;
 
   if (!enrollments.length) {
-    myEnrollmentsListElement.innerHTML = '<p>No class enrollments yet.</p>';
+    myEnrollmentsListElement.innerHTML = '<p>No approved classes yet.</p>';
     return;
   }
 
@@ -263,29 +264,248 @@ function renderMyEnrollments(enrollments) {
     .map((enrollment) => {
       const classData = enrollment.classData || {};
       const subjectName = classData.subjectName || enrollment.subjectName || 'Unknown Subject';
+      const subjectCode = classData.subjectCode || enrollment.subjectCode || 'Not provided';
       const sectionName = classData.sectionName || enrollment.sectionName || 'Not provided';
-      const schoolYear = classData.schoolYearName || enrollment.schoolYearName || 'Not provided';
-      const term = classData.termName || enrollment.termName || 'Not provided';
+      const schoolYear = classData.schoolYearName || classData.schoolYear || enrollment.schoolYearName || 'Not provided';
+      const term = classData.termName || classData.term || enrollment.termName || 'Not provided';
       const teacherName =
         classData.teacherName ||
         enrollment.teacherName ||
         classData.teacherEmail ||
         'Not assigned';
-      const status = String(enrollment.status || 'pending').toLowerCase();
-      const statusText = status.charAt(0).toUpperCase() + status.slice(1);
 
       return `
         <article class="app-card">
           <p><strong>Subject:</strong> ${escapeHtml(subjectName)}</p>
+          <p><strong>Subject Code:</strong> ${escapeHtml(subjectCode)}</p>
           <p><strong>Section:</strong> ${escapeHtml(sectionName)}</p>
           <p><strong>School Year:</strong> ${escapeHtml(schoolYear)}</p>
           <p><strong>Term:</strong> ${escapeHtml(term)}</p>
           <p><strong>Teacher:</strong> ${escapeHtml(teacherName)}</p>
-          <p><strong>Status:</strong> ${escapeHtml(statusText)}</p>
+          <button type="button" class="view-records-btn" data-class-id="${escapeHtml(enrollment.classId || '')}">
+            View Records
+          </button>
         </article>
       `;
     })
     .join('');
+
+  const viewRecordButtons = myEnrollmentsListElement.querySelectorAll('.view-records-btn');
+  viewRecordButtons.forEach((button) => {
+    button.addEventListener('click', async () => {
+      const classId = String(button.dataset.classId || '').trim();
+      const selectedEnrollment = enrollments.find((item) => String(item.classId || '').trim() === classId);
+      await loadClassRecordsDetail(selectedEnrollment || {});
+    });
+  });
+}
+
+function formatScoreValue(score, maxScore) {
+  const normalizedScore = normalizeNumericValue(score, Number.NaN);
+  const normalizedMax = normalizeNumericValue(maxScore, Number.NaN);
+
+  if (!Number.isFinite(normalizedScore) || !Number.isFinite(normalizedMax) || normalizedMax <= 0) {
+    return '--';
+  }
+
+  return `${normalizedScore}/${normalizedMax}`;
+}
+
+function formatSignedNumber(value) {
+  const normalized = normalizeNumericValue(value, 0);
+  if (normalized > 0) return `+${normalized}`;
+  return String(normalized);
+}
+
+function getClassMetadata(enrollment = {}) {
+  const classData = enrollment.classData || {};
+  return {
+    classId: String(enrollment.classId || classData.id || '').trim(),
+    subjectName: classData.subjectName || enrollment.subjectName || 'Unknown Subject',
+    teacherName: classData.teacherName || enrollment.teacherName || classData.teacherEmail || 'Not assigned',
+    schoolYearName: classData.schoolYearName || classData.schoolYear || enrollment.schoolYearName || 'Not provided',
+    termName: classData.termName || classData.term || enrollment.termName || 'Not provided',
+    sectionName: classData.sectionName || enrollment.sectionName || 'Not provided',
+  };
+}
+
+function renderClassRecordsDetail({ metadata = {}, rows = [], summary = {} } = {}) {
+  if (!classRecordsDetailElement) return;
+
+  if (!metadata.classId) {
+    classRecordsDetailElement.innerHTML = '<p>Select an approved class and click <strong>View Records</strong>.</p>';
+    return;
+  }
+
+  const rowsHtml = rows.length
+    ? rows
+        .map(
+          (row) => `
+            <tr>
+              <td>${escapeHtml(row.activityTitle)}</td>
+              <td>${escapeHtml(row.type)}</td>
+              <td>${escapeHtml(row.scoreDisplay)}</td>
+              <td>${escapeHtml(row.percentageDisplay)}</td>
+              <td>${escapeHtml(row.academicPointsDisplay)}</td>
+            </tr>
+          `
+        )
+        .join('')
+    : `<tr><td colspan="5" class="empty-cell">No class records found yet.</td></tr>`;
+
+  classRecordsDetailElement.innerHTML = `
+    <div class="info-grid">
+      <p><strong>Subject Name:</strong> ${escapeHtml(metadata.subjectName || 'Not provided')}</p>
+      <p><strong>Teacher Name:</strong> ${escapeHtml(metadata.teacherName || 'Not provided')}</p>
+      <p><strong>School Year:</strong> ${escapeHtml(metadata.schoolYearName || 'Not provided')}</p>
+      <p><strong>Term:</strong> ${escapeHtml(metadata.termName || 'Not provided')}</p>
+      <p><strong>Section:</strong> ${escapeHtml(metadata.sectionName || 'Not provided')}</p>
+    </div>
+
+    <div class="my-classes-summary-grid">
+      <article class="summary-card">
+        <p>Total Activities</p>
+        <h4>${escapeHtml(String(summary.totalActivities || 0))}</h4>
+      </article>
+      <article class="summary-card">
+        <p>Total Academic Points</p>
+        <h4>${escapeHtml(formatSignedNumber(summary.totalAcademicPoints || 0))}</h4>
+      </article>
+      <article class="summary-card">
+        <p>Average Percentage</p>
+        <h4>${escapeHtml(summary.averagePercentageDisplay || '0%')}</h4>
+      </article>
+    </div>
+
+    <div class="admin-table-wrap">
+      <table class="student-table">
+        <thead>
+          <tr>
+            <th>Activity</th>
+            <th>Type</th>
+            <th>Score</th>
+            <th>Percentage</th>
+            <th>Academic Points</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+async function loadClassRecordsDetail(enrollment = {}) {
+  if (!currentStudentUser?.uid || !classRecordsDetailElement) return;
+
+  const metadata = getClassMetadata(enrollment);
+  if (!metadata.classId) {
+    renderClassRecordsDetail({ metadata });
+    return;
+  }
+
+  classRecordsDetailElement.innerHTML = '<p>Loading class records...</p>';
+
+  try {
+    const classId = metadata.classId;
+    const studentId = currentStudentUser.uid;
+    const activitiesSnapshot = await getDocs(query(collection(db, 'activities'), where('classId', '==', classId)));
+
+    let scoresSnapshot;
+    try {
+      scoresSnapshot = await getDocs(
+        query(collection(db, 'scores'), where('classId', '==', classId), where('studentId', '==', studentId))
+      );
+    } catch (error) {
+      console.error('Failed to query scores with compound filter:', error);
+      const fallbackSnapshot = await getDocs(query(collection(db, 'scores'), where('classId', '==', classId)));
+      const filteredDocs = fallbackSnapshot.docs.filter(
+        (scoreDoc) => String(scoreDoc.data().studentId || '').trim() === studentId
+      );
+      scoresSnapshot = { docs: filteredDocs };
+    }
+
+    let pointLogsSnapshot;
+    try {
+      pointLogsSnapshot = await getDocs(
+        query(
+          collection(db, 'pointLogs'),
+          where('classId', '==', classId),
+          where('studentId', '==', studentId),
+          where('source', '==', 'academic')
+        )
+      );
+    } catch (error) {
+      console.error('Failed to query point logs with compound filter:', error);
+      const fallbackSnapshot = await getDocs(query(collection(db, 'pointLogs'), where('classId', '==', classId)));
+      const filteredDocs = fallbackSnapshot.docs.filter((logDoc) => {
+        const log = logDoc.data() || {};
+        return String(log.studentId || '').trim() === studentId && String(log.source || '').trim().toLowerCase() === 'academic';
+      });
+      pointLogsSnapshot = { docs: filteredDocs };
+    }
+
+    const activities = activitiesSnapshot.docs.map((activityDoc) => ({
+      id: activityDoc.id,
+      ...activityDoc.data(),
+    }));
+
+    const scoresByActivityId = new Map(
+      scoresSnapshot.docs.map((scoreDoc) => {
+        const score = scoreDoc.data() || {};
+        return [String(score.activityId || '').trim(), score];
+      })
+    );
+
+    const pointsByActivityId = new Map(
+      pointLogsSnapshot.docs.map((pointLogDoc) => {
+        const log = pointLogDoc.data() || {};
+        return [String(log.activityId || '').trim(), log];
+      })
+    );
+
+    const rows = activities.map((activity) => {
+      const activityId = String(activity.id || '').trim();
+      const scoreEntry = scoresByActivityId.get(activityId) || {};
+      const pointLogEntry = pointsByActivityId.get(activityId) || {};
+      const score = Number(scoreEntry.score);
+      const maxScore = Number(activity.maxScore ?? scoreEntry.maxScore);
+      const hasValidScore = Number.isFinite(score) && Number.isFinite(maxScore) && maxScore > 0;
+      const percentage = hasValidScore ? Number(((score / maxScore) * 100).toFixed(2)) : Number.NaN;
+      const awardedPoints = normalizeNumericValue(pointLogEntry.awardedPoints, 0);
+
+      return {
+        activityTitle: String(activity.title || scoreEntry.title || 'Untitled Activity'),
+        type: String(activity.componentType || activity.type || scoreEntry.componentType || scoreEntry.type || '--'),
+        scoreDisplay: formatScoreValue(score, maxScore),
+        percentageDisplay: Number.isFinite(percentage) ? `${formatPercentage(percentage)}%` : '--',
+        academicPoints: awardedPoints,
+        academicPointsDisplay: formatSignedNumber(awardedPoints),
+        percentageValue: percentage,
+      };
+    });
+
+    const percentages = rows
+      .map((row) => row.percentageValue)
+      .filter((value) => Number.isFinite(value));
+    const averagePercentage = percentages.length
+      ? Number((percentages.reduce((sum, value) => sum + value, 0) / percentages.length).toFixed(2))
+      : 0;
+
+    const totalAcademicPoints = rows.reduce((sum, row) => sum + normalizeNumericValue(row.academicPoints, 0), 0);
+
+    renderClassRecordsDetail({
+      metadata,
+      rows,
+      summary: {
+        totalActivities: activities.length,
+        totalAcademicPoints,
+        averagePercentageDisplay: `${formatPercentage(averagePercentage)}%`,
+      },
+    });
+  } catch (error) {
+    console.error('Failed to load class-specific records:', error);
+    classRecordsDetailElement.innerHTML = '<p>Unable to load class records. Please try again later.</p>';
+  }
 }
 
 async function checkExistingEnrollment(classId) {
@@ -431,7 +651,10 @@ function renderAvailableClasses(classes) {
 async function loadMyEnrollments() {
   if (!myEnrollmentsListElement || !currentStudentUser?.uid) return;
 
-  myEnrollmentsListElement.innerHTML = '<p>Loading enrollments...</p>';
+  myEnrollmentsListElement.innerHTML = '<p>Loading approved classes...</p>';
+  if (classRecordsDetailElement) {
+    classRecordsDetailElement.innerHTML = '<p>Select an approved class and click <strong>View Records</strong>.</p>';
+  }
 
   try {
     let enrollmentsSnapshot;
@@ -439,12 +662,17 @@ async function loadMyEnrollments() {
       const enrollmentsQuery = query(
         collection(db, 'classEnrollments'),
         where('studentId', '==', currentStudentUser.uid),
+        where('status', '==', 'approved'),
         orderBy('requestedAt', 'desc')
       );
       enrollmentsSnapshot = await getDocs(enrollmentsQuery);
     } catch (error) {
       const fallbackSnapshot = await getDocs(
-        query(collection(db, 'classEnrollments'), where('studentId', '==', currentStudentUser.uid))
+        query(
+          collection(db, 'classEnrollments'),
+          where('studentId', '==', currentStudentUser.uid),
+          where('status', '==', 'approved')
+        )
       );
       const docs = [...fallbackSnapshot.docs].sort((a, b) => {
         const aTime = a.data().requestedAt?.toMillis?.() || 0;
@@ -475,7 +703,7 @@ async function loadMyEnrollments() {
     renderMyEnrollments(enrollmentsWithClassData);
   } catch (error) {
     console.error('Failed to load enrollments:', error);
-    myEnrollmentsListElement.innerHTML = '<p>Unable to load enrollments. Please try again later.</p>';
+    myEnrollmentsListElement.innerHTML = '<p>Unable to load approved classes. Please try again later.</p>';
   }
 }
 
