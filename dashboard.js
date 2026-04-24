@@ -265,12 +265,28 @@ async function enrollInClass(classData) {
     }
 
     const displayName = safe(makeFullName(currentStudentProfile || {}));
-    const sectionId = String(
-      currentStudentProfile?.sectionId || classData.sectionId || ''
-    ).trim();
+    const classDocRef = doc(db, 'classes', classData.id);
+    const classSnapshot = await getDoc(classDocRef);
+
+    if (!classSnapshot.exists()) {
+      showMyClassesFeedback('Selected class could not be found.', 'error');
+      await loadAvailableClasses();
+      return;
+    }
+
+    const selectedClassData = classSnapshot.data() || {};
+    const sectionId = String(selectedClassData.sectionId || classData.sectionId || currentStudentProfile?.sectionId || '').trim();
     const sectionName = String(
-      currentStudentProfile?.section || currentStudentProfile?.sectionName || classData.sectionName || ''
+      selectedClassData.sectionName || classData.sectionName || currentStudentProfile?.section || currentStudentProfile?.sectionName || ''
     ).trim();
+    const subjectId = String(selectedClassData.subjectId || classData.subjectId || '').trim();
+    const subjectName = String(selectedClassData.subjectName || classData.subjectName || '').trim();
+    const schoolYearId = String(selectedClassData.schoolYearId || classData.schoolYearId || '').trim();
+    const schoolYearName = String(selectedClassData.schoolYearName || classData.schoolYearName || '').trim();
+    const termId = String(selectedClassData.termId || classData.termId || '').trim();
+    const termName = String(selectedClassData.termName || classData.termName || '').trim();
+    const teacherId = String(selectedClassData.teacherId || classData.teacherId || '').trim();
+    const teacherName = String(selectedClassData.teacherName || classData.teacherName || '').trim();
 
     await addDoc(collection(db, 'classEnrollments'), {
       classId: classData.id,
@@ -279,6 +295,14 @@ async function enrollInClass(classData) {
       studentEmail: currentStudentUser.email || '',
       sectionId,
       sectionName,
+      subjectId,
+      subjectName,
+      schoolYearId,
+      schoolYearName,
+      termId,
+      termName,
+      teacherId,
+      teacherName,
       status: 'pending',
       requestedAt: serverTimestamp(),
     });
