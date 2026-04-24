@@ -568,14 +568,21 @@ async function loadEnrollmentRequests(selectedClassId = '') {
   if (!enrollmentRequestsListElement) return;
 
   const classId = String(selectedClassId || enrollmentClassFilterElement?.value || '').trim();
-  const allowedClassIds = new Set(teacherClasses.map((item) => item.id));
+  const allowedClasses = teacherClasses.filter((item) => Boolean(item?.id));
+  const allowedClassIds = new Set(allowedClasses.map((item) => item.id));
 
   enrollmentRequestsListElement.innerHTML = '<p class="empty-cell">Loading enrollment requests...</p>';
   setEnrollmentMessage('Loading pending requests...');
 
   try {
-    let enrollmentQuery = query(collection(db, 'classEnrollments'), where('status', '==', 'pending'));
+    if (!allowedClasses.length) {
+      enrollmentRequests = [];
+      renderEnrollmentRequests(enrollmentRequests);
+      setEnrollmentMessage('No classes found for this teacher.');
+      return;
+    }
 
+    let classesToQuery = allowedClasses;
     if (classId) {
       if (!allowedClassIds.has(classId)) {
         enrollmentRequests = [];
@@ -584,19 +591,27 @@ async function loadEnrollmentRequests(selectedClassId = '') {
         return;
       }
 
-      enrollmentQuery = query(
-        collection(db, 'classEnrollments'),
-        where('status', '==', 'pending'),
-        where('classId', '==', classId)
-      );
+      classesToQuery = allowedClasses.filter((teacherClass) => teacherClass.id === classId);
     }
 
-    const snapshot = await getDocs(enrollmentQuery);
-    const mappedRequests = snapshot.docs
-      .map((enrollmentDoc) => ({ id: enrollmentDoc.id, ...enrollmentDoc.data() }))
+    const snapshots = await Promise.all(
+      classesToQuery.map((teacherClass) =>
+        getDocs(
+          query(
+            collection(db, 'classEnrollments'),
+            where('classId', '==', teacherClass.id),
+            where('status', '==', 'pending')
+          )
+        )
+      )
+    );
+
+    const classById = new Map(allowedClasses.map((item) => [item.id, item]));
+    const mappedRequests = snapshots
+      .flatMap((snapshot) => snapshot.docs.map((enrollmentDoc) => ({ id: enrollmentDoc.id, ...enrollmentDoc.data() })))
       .filter((item) => allowedClassIds.has(String(item.classId || '').trim()))
       .map((item) => {
-        const classItem = teacherClasses.find((teacherClass) => teacherClass.id === item.classId) || {};
+        const classItem = classById.get(String(item.classId || '').trim()) || {};
         return {
           ...item,
           classSubjectName: safeText(item.subjectName || item.classSubjectName || classItem.subjectName),
