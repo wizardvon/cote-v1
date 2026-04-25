@@ -681,6 +681,7 @@ button:active {
   overflow: hidden;
   border-radius: 16px;
   margin-top: 12px;
+  background: #000;
 }
 
 .video-wrapper iframe {
