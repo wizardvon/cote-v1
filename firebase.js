@@ -17,6 +17,13 @@ import {
   runTransaction,
   writeBatch
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+import {
+  getStorage,
+  ref,
+  uploadBytesResumable,
+  getDownloadURL,
+  deleteObject
+} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyA_y-kzUWTt04vuyKSqR9b5_L8c_VvbCIs',
@@ -30,11 +37,13 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const storage = getStorage(app);
 
 export {
   app,
   auth,
   db,
+  storage,
   onAuthStateChanged,
   signOut,
   doc,
@@ -50,5 +59,9 @@ export {
   orderBy,
   serverTimestamp,
   runTransaction,
-  writeBatch
+  writeBatch,
+  ref,
+  uploadBytesResumable,
+  getDownloadURL,
+  deleteObject
 };
