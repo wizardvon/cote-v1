@@ -67,6 +67,7 @@ const resourceDescriptionElement = document.getElementById('resource-description
 const resourceUrlElement = document.getElementById('resource-url');
 const saveResourceButton = document.getElementById('save-resource-button');
 const resourceMessageElement = document.getElementById('resource-message');
+const resourceYoutubeHintElement = document.getElementById('resource-youtube-hint');
 const teacherResourcesListElement = document.getElementById('teacher-resources-list');
 let overlaySequenceJob = 0;
 
@@ -681,6 +682,33 @@ function isValidHttpUrl(url) {
     return parsed.protocol === 'http:' || parsed.protocol === 'https:';
   } catch (_error) {
     return false;
+  }
+}
+
+function getYouTubeEmbedUrl(url) {
+  const rawUrl = String(url || '').trim();
+  if (!rawUrl) return '';
+
+  try {
+    const parsedUrl = new URL(rawUrl);
+    const hostname = parsedUrl.hostname.toLowerCase();
+    const pathParts = parsedUrl.pathname.split('/').filter(Boolean);
+    let videoId = '';
+
+    if (hostname === 'youtu.be' || hostname === 'www.youtu.be') {
+      videoId = pathParts[0] || '';
+    } else if (['youtube.com', 'www.youtube.com', 'm.youtube.com'].includes(hostname)) {
+      if (parsedUrl.pathname === '/watch') {
+        videoId = parsedUrl.searchParams.get('v') || '';
+      } else if (pathParts[0] === 'shorts' || pathParts[0] === 'embed') {
+        videoId = pathParts[1] || '';
+      }
+    }
+
+    if (!/^[A-Za-z0-9_-]{6,}$/.test(videoId)) return '';
+    return `https://www.youtube.com/embed/${videoId}`;
+  } catch (error) {
+    return '';
   }
 }
 
@@ -2432,6 +2460,15 @@ createClassButton?.addEventListener('click', () => {
 
 saveResourceButton?.addEventListener('click', () => {
   saveResourceLink();
+});
+
+resourceUrlElement?.addEventListener('input', () => {
+  if (!resourceYoutubeHintElement) return;
+
+  const embedUrl = getYouTubeEmbedUrl(resourceUrlElement.value);
+  resourceYoutubeHintElement.textContent = embedUrl
+    ? 'Detected YouTube video. Students can watch this inside the app.'
+    : '';
 });
 
 teacherResourcesListElement?.addEventListener('click', (event) => {
