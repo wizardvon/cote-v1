@@ -263,8 +263,8 @@
 
       <section id="page-resources" class="page" data-page="resources" aria-label="Resources">
         <article class="app-card">
-          <h3>Add Learning Resource (External Link)</h3>
-          <p>Post learning links for your class. File uploads (PDF/image/document) will be added later.</p>
+          <h3>Add Learning Resource</h3>
+          <p>Share external links or upload small images/PDF files for students.</p>
 
           <div class="admin-toolbar">
             <div class="field">
@@ -290,20 +290,37 @@
             </div>
 
             <div class="field">
-              <label for="resource-url">URL</label>
-              <input id="resource-url" type="url" placeholder="https://..." />
-              <p id="resource-youtube-hint" class="form-message youtube-hint" aria-live="polite"></p>
+              <label for="resource-input-mode">Resource Input</label>
+              <select id="resource-input-mode">
+                <option value="link">External Link</option>
+                <option value="file">Upload File (Image/PDF)</option>
+              </select>
             </div>
 
             <div class="field">
               <label for="resource-type">Resource Type</label>
               <input id="resource-type" type="text" value="Link" readonly />
             </div>
+
+            <div id="resource-link-field" class="field field-full">
+              <label for="resource-url">URL</label>
+              <input id="resource-url" type="url" placeholder="https://..." />
+              <p id="resource-youtube-hint" class="form-message youtube-hint" aria-live="polite"></p>
+            </div>
+
+            <div id="resource-file-field" class="field field-full hidden">
+              <label for="resource-file">Upload File</label>
+              <input id="resource-file" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" />
+              <p class="form-message youtube-hint">
+                Allowed: JPG, PNG, WEBP (max 2 MB), PDF (max 5 MB). Absolute max: 10 MB.
+              </p>
+            </div>
           </div>
 
           <div class="admin-actions">
             <button id="save-resource-button" type="button">Save Resource</button>
           </div>
+          <p id="resource-upload-progress" class="form-message youtube-hint" role="status" aria-live="polite"></p>
           <p id="resource-message" class="form-message" role="status" aria-live="polite"></p>
         </article>
 
@@ -493,6 +510,11 @@
         </article>
       </section>
     </main>
+
+    <div id="imageModal" class="image-modal hidden">
+      <button id="closeImageModal" type="button" aria-label="Close image preview">×</button>
+      <img id="modalImage" src="" alt="Preview" />
+    </div>
 
     <script type="module" src="admin.js?v=9"></script>
   </body>

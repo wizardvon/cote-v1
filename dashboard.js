@@ -53,6 +53,9 @@ const myEnrollmentsListElement = document.getElementById('my-enrollments-list');
 const myClassesFeedbackElement = document.getElementById('my-classes-feedback');
 const classRecordsDetailElement = document.getElementById('class-records-detail');
 const studentResourcesListElement = document.getElementById('student-resources-list');
+const imageModalElement = document.getElementById('imageModal');
+const modalImageElement = document.getElementById('modalImage');
+const closeImageModalButton = document.getElementById('closeImageModal');
 const loadingOverlay = document.getElementById('loadingOverlay');
 let overlaySequenceJob = 0;
 let currentStudentProfile = null;
@@ -303,11 +306,27 @@ function getGoogleDriveEmbedUrl(url) {
   return `https://drive.google.com/file/d/${fileId}/preview`;
 }
 
+function getPdfViewerUrl(originalUrl) {
+  const encoded = encodeURIComponent(originalUrl);
+  return `https://docs.google.com/gview?url=${encoded}&embedded=true`;
+}
+
+function openImageModal(imageUrl) {
+  const url = String(imageUrl || '').trim();
+  if (!url || !imageModalElement || !modalImageElement) return;
+  modalImageElement.src = url;
+  imageModalElement.classList.remove('hidden');
+}
+
+function closeImageModal() {
+  if (!imageModalElement || !modalImageElement) return;
+  imageModalElement.classList.add('hidden');
+  modalImageElement.src = '';
+}
+
 function renderResourceMedia(resource) {
   const originalUrl = String(resource?.url || '').trim();
-  console.log('Original URL:', originalUrl);
-  console.log('YouTube:', getYouTubeEmbedUrl(originalUrl));
-  console.log('Drive:', getGoogleDriveEmbedUrl(originalUrl));
+  if (!originalUrl) return '';
 
   const youtubeEmbedUrl = getYouTubeEmbedUrl(originalUrl);
   if (youtubeEmbedUrl) {
@@ -337,6 +356,41 @@ function renderResourceMedia(resource) {
           allowfullscreen
           referrerpolicy="strict-origin-when-cross-origin">
         </iframe>
+      </div>
+    `;
+  }
+
+  if (resource?.resourceType === 'file' && resource?.fileType === 'image') {
+    return `
+      <img
+        src="${escapeHtml(originalUrl)}"
+        class="resource-image"
+        alt="${escapeHtml(resource?.fileName || resource?.title || 'Resource image')}"
+        loading="lazy"
+        data-preview-image="${escapeHtml(originalUrl)}"
+      />
+      <div class="admin-actions">
+        <button type="button" data-resource-url="${escapeHtml(originalUrl)}">Open Resource</button>
+      </div>
+    `;
+  }
+
+  if (resource?.resourceType === 'file' && resource?.fileType === 'pdf') {
+    const pdfFallbackUrl = getPdfViewerUrl(originalUrl);
+    return `
+      <div class="pdf-wrapper">
+        <iframe
+          src="${escapeHtml(originalUrl)}"
+          class="pdf-frame"
+          title="PDF Preview"
+          loading="lazy"
+          referrerpolicy="no-referrer">
+        </iframe>
+      </div>
+      <div class="admin-actions">
+        <button type="button" data-resource-url="${escapeHtml(originalUrl)}">Open Full</button>
+        <button type="button" data-resource-url="${escapeHtml(originalUrl)}" data-resource-download="true">Download</button>
+        <button type="button" data-resource-url="${escapeHtml(pdfFallbackUrl)}">Mobile PDF Viewer</button>
       </div>
     `;
   }
@@ -378,6 +432,10 @@ function renderStudentResources(resources = []) {
       if (!url) return;
       window.open(url, '_blank', 'noopener,noreferrer');
     });
+  });
+
+  studentResourcesListElement.querySelectorAll('[data-preview-image]').forEach((image) => {
+    image.addEventListener('click', () => openImageModal(String(image.getAttribute('data-preview-image') || '').trim()));
   });
 }
 
@@ -1505,6 +1563,14 @@ sidebarOverlay?.addEventListener('click', closeSidebar);
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
     closeSidebar();
+    closeImageModal();
+  }
+});
+
+closeImageModalButton?.addEventListener('click', closeImageModal);
+imageModalElement?.addEventListener('click', (event) => {
+  if (event.target === imageModalElement) {
+    closeImageModal();
   }
 });
 
