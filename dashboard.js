@@ -258,6 +258,33 @@ function formatDateTime(value) {
   return value.toDate().toLocaleString();
 }
 
+function getYouTubeEmbedUrl(url) {
+  const rawUrl = String(url || '').trim();
+  if (!rawUrl) return '';
+
+  try {
+    const parsedUrl = new URL(rawUrl);
+    const hostname = parsedUrl.hostname.toLowerCase();
+    const pathParts = parsedUrl.pathname.split('/').filter(Boolean);
+    let videoId = '';
+
+    if (hostname === 'youtu.be' || hostname === 'www.youtu.be') {
+      videoId = pathParts[0] || '';
+    } else if (['youtube.com', 'www.youtube.com', 'm.youtube.com'].includes(hostname)) {
+      if (parsedUrl.pathname === '/watch') {
+        videoId = parsedUrl.searchParams.get('v') || '';
+      } else if (pathParts[0] === 'shorts' || pathParts[0] === 'embed') {
+        videoId = pathParts[1] || '';
+      }
+    }
+
+    if (!/^[A-Za-z0-9_-]{6,}$/.test(videoId)) return '';
+    return `https://www.youtube.com/embed/${videoId}`;
+  } catch (error) {
+    return '';
+  }
+}
+
 function renderStudentResources(resources = []) {
   if (!studentResourcesListElement) return;
 
@@ -268,6 +295,21 @@ function renderStudentResources(resources = []) {
 
   studentResourcesListElement.innerHTML = resources
     .map((resource) => {
+      const embedUrl = getYouTubeEmbedUrl(resource.url);
+      const iframeHtml = embedUrl
+        ? `
+          <div class="video-wrapper">
+            <iframe
+              src="${escapeHtml(embedUrl)}"
+              title="YouTube video player"
+              frameborder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowfullscreen
+            ></iframe>
+          </div>
+        `
+        : '';
+
       return `
         <article class="app-card">
           <h4>${escapeHtml(resource.title || 'Untitled Resource')}</h4>
@@ -276,6 +318,7 @@ function renderStudentResources(resources = []) {
           <p><strong>Description:</strong> ${escapeHtml(resource.description || 'No description')}</p>
           <p><strong>Class:</strong> ${escapeHtml(resource.sectionName || 'Not provided')}</p>
           <p><strong>Uploaded:</strong> ${escapeHtml(formatDateTime(resource.createdAt) || '—')}</p>
+          ${iframeHtml}
           <div class="admin-actions">
             <button type="button" data-resource-url="${escapeHtml(resource.url || '')}">Open Resource</button>
           </div>
