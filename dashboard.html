@@ -53,6 +53,10 @@
             <span aria-hidden="true">📂</span>
             <span>Resources</span>
           </button>
+          <button type="button" class="menu-btn" data-target="achievements">
+            <span aria-hidden="true">🏆</span>
+            <span>Achievements</span>
+          </button>
           <button type="button" class="menu-btn" data-target="quest">
             <span aria-hidden="true">🎯</span>
             <span>Quest</span>
@@ -246,6 +250,30 @@
           <div id="student-resources-list" class="list-stack" aria-live="polite">
             <p>Loading resources...</p>
           </div>
+        </article>
+      </section>
+
+
+      <section id="page-achievements" class="page" data-page="achievements" aria-label="Achievements">
+        <article class="app-card">
+          <h3>Achievement Summary</h3>
+          <div id="achievements-summary" class="info-grid" aria-live="polite">
+            <p>Loading achievements summary...</p>
+          </div>
+        </article>
+
+        <article class="app-card">
+          <h3>Unlocked Achievements</h3>
+          <ul id="unlocked-achievements-list" class="list-stack achievement-list" aria-live="polite">
+            <li>Loading unlocked achievements...</li>
+          </ul>
+        </article>
+
+        <article class="app-card">
+          <h3>Next Achievements to Unlock</h3>
+          <ul id="next-achievements-list" class="list-stack achievement-list" aria-live="polite">
+            <li>Loading next achievements...</li>
+          </ul>
         </article>
       </section>
 
