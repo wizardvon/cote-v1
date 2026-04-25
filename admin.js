@@ -1,7 +1,6 @@
 import {
   auth,
   db,
-  storage,
   onAuthStateChanged,
   signOut,
   doc,
@@ -15,11 +14,7 @@ import {
   where,
   orderBy,
   serverTimestamp,
-  runTransaction,
-  ref,
-  uploadBytesResumable,
-  getDownloadURL,
-  deleteObject
+  runTransaction
 } from './firebase.js';
 
 const adminEmailElement = document.getElementById('admin-email');
@@ -70,26 +65,11 @@ const resourceClassIdElement = document.getElementById('resource-class-id');
 const resourceTitleElement = document.getElementById('resource-title');
 const resourceDescriptionElement = document.getElementById('resource-description');
 const resourceUrlElement = document.getElementById('resource-url');
-const resourceFileElement = document.getElementById('resource-file');
-const resourceInputModeElement = document.getElementById('resource-input-mode');
-const resourceLinkFieldElement = document.getElementById('resource-link-field');
-const resourceFileFieldElement = document.getElementById('resource-file-field');
-const resourceTypeElement = document.getElementById('resource-type');
 const saveResourceButton = document.getElementById('save-resource-button');
 const resourceMessageElement = document.getElementById('resource-message');
-const resourceUploadProgressElement = document.getElementById('resource-upload-progress');
 const resourceYoutubeHintElement = document.getElementById('resource-youtube-hint');
 const teacherResourcesListElement = document.getElementById('teacher-resources-list');
-const imageModalElement = document.getElementById('imageModal');
-const modalImageElement = document.getElementById('modalImage');
-const closeImageModalButton = document.getElementById('closeImageModal');
 let overlaySequenceJob = 0;
-
-const MAX_IMAGE_SIZE = 2 * 1024 * 1024;
-const MAX_PDF_SIZE = 5 * 1024 * 1024;
-const ABSOLUTE_MAX_FILE_SIZE = 10 * 1024 * 1024;
-const OVERSIZED_FILE_MESSAGE = 'File too large. Please upload it to Google Drive and paste the shared link instead.';
-const ALLOWED_RESOURCE_FILE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
 
 const TABLE_COLUMN_COUNT = 6;
 
@@ -263,35 +243,6 @@ function setResourceMessage(message, type = '') {
   resourceMessageElement.classList.remove('success', 'error');
   if (type) {
     resourceMessageElement.classList.add(type);
-  }
-}
-
-function setResourceUploadProgress(message = '') {
-  if (!resourceUploadProgressElement) return;
-  resourceUploadProgressElement.textContent = message;
-}
-
-function openImageModal(imageUrl) {
-  const url = String(imageUrl || '').trim();
-  if (!url || !imageModalElement || !modalImageElement) return;
-  modalImageElement.src = url;
-  imageModalElement.classList.remove('hidden');
-}
-
-function closeImageModal() {
-  if (!imageModalElement || !modalImageElement) return;
-  imageModalElement.classList.add('hidden');
-  modalImageElement.src = '';
-}
-
-function setResourceInputMode(mode) {
-  const nextMode = mode === 'file' ? 'file' : 'link';
-  if (resourceInputModeElement) resourceInputModeElement.value = nextMode;
-  if (resourceTypeElement) resourceTypeElement.value = nextMode === 'file' ? 'File' : 'Link';
-  resourceLinkFieldElement?.classList.toggle('hidden', nextMode !== 'link');
-  resourceFileFieldElement?.classList.toggle('hidden', nextMode !== 'file');
-  if (nextMode !== 'file' && resourceFileElement) {
-    resourceFileElement.value = '';
   }
 }
 
@@ -768,53 +719,49 @@ function isGoogleDriveUrl(url) {
   }
 }
 
-function getGoogleDriveEmbedUrl(url) {
+function isGoogleSlides(url) {
   const rawUrl = String(url || '').trim();
-  if (!rawUrl || !isGoogleDriveUrl(rawUrl)) return null;
+  if (!rawUrl) return false;
 
-  const byPath = rawUrl.match(/\/d\/([A-Za-z0-9_-]+)\//);
+  try {
+    const parsed = new URL(rawUrl);
+    return parsed.hostname.toLowerCase().includes('docs.google.com') && parsed.pathname.includes('/presentation/');
+  } catch (_error) {
+    return false;
+  }
+}
+
+function isGoogleSheets(url) {
+  const rawUrl = String(url || '').trim();
+  if (!rawUrl) return false;
+
+  try {
+    const parsed = new URL(rawUrl);
+    return parsed.hostname.toLowerCase().includes('docs.google.com') && parsed.pathname.includes('/spreadsheets/');
+  } catch (_error) {
+    return false;
+  }
+}
+
+function isGoogleDocs(url) {
+  const rawUrl = String(url || '').trim();
+  if (!rawUrl) return false;
+
+  try {
+    const parsed = new URL(rawUrl);
+    return parsed.hostname.toLowerCase().includes('docs.google.com') && parsed.pathname.includes('/document/');
+  } catch (_error) {
+    return false;
+  }
+}
+
+function getDriveFileId(url) {
+  const rawUrl = String(url || '').trim();
+  if (!rawUrl) return null;
+
+  const byPath = rawUrl.match(/\/(?:file|presentation|spreadsheets|document)\/d\/([A-Za-z0-9_-]+)/);
   const byIdParam = rawUrl.match(/[?&]id=([A-Za-z0-9_-]+)/);
-  const fileId = byPath?.[1] || byIdParam?.[1] || '';
-  if (!fileId) return null;
-  return `https://drive.google.com/file/d/${fileId}/preview`;
-}
-
-function toSafeFileName(fileName) {
-  return String(fileName || 'file')
-    .normalize('NFKD')
-    .replace(/[^\w.\-]+/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .slice(0, 120);
-}
-
-function getFileTypeFromMime(mimeType) {
-  if (mimeType === 'application/pdf') return 'pdf';
-  if (mimeType.startsWith('image/')) return 'image';
-  return null;
-}
-
-function validateResourceFile(file) {
-  if (!file) return { valid: false, message: 'Choose a file to upload first.' };
-  if (file.size > ABSOLUTE_MAX_FILE_SIZE) return { valid: false, message: OVERSIZED_FILE_MESSAGE };
-  if (!ALLOWED_RESOURCE_FILE_TYPES.has(file.type)) {
-    return { valid: false, message: 'Unsupported file type. Use JPG, PNG, WEBP, or PDF only.' };
-  }
-
-  if (file.type === 'application/pdf' && file.size > MAX_PDF_SIZE) {
-    return { valid: false, message: OVERSIZED_FILE_MESSAGE };
-  }
-
-  if (file.type.startsWith('image/') && file.size > MAX_IMAGE_SIZE) {
-    return { valid: false, message: OVERSIZED_FILE_MESSAGE };
-  }
-
-  return { valid: true, message: '' };
-}
-
-function getPdfViewerUrl(originalUrl) {
-  const encoded = encodeURIComponent(originalUrl);
-  return `https://docs.google.com/gview?url=${encoded}&embedded=true`;
+  return byPath?.[1] || byIdParam?.[1] || null;
 }
 
 function renderResourceMedia(resource) {
@@ -837,15 +784,16 @@ function renderResourceMedia(resource) {
     `;
   }
 
-  const driveEmbedUrl = getGoogleDriveEmbedUrl(originalUrl);
-  if (driveEmbedUrl) {
+  const fileId = getDriveFileId(originalUrl);
+
+  if (isGoogleSlides(originalUrl) && fileId) {
+    const slidesEmbedUrl = `https://docs.google.com/presentation/d/${fileId}/embed?start=false&loop=false&delayms=3000`;
     return `
       <div class="video-wrapper">
         <iframe
-          src="${escapeHtml(driveEmbedUrl)}"
-          title="Embedded Video"
+          src="${escapeHtml(slidesEmbedUrl)}"
+          title="Embedded Resource"
           frameborder="0"
-          allow="autoplay; encrypted-media; picture-in-picture"
           allowfullscreen
           referrerpolicy="strict-origin-when-cross-origin">
         </iframe>
@@ -853,37 +801,48 @@ function renderResourceMedia(resource) {
     `;
   }
 
-  if (resource?.resourceType === 'file' && resource?.fileType === 'image') {
+  if (isGoogleSheets(originalUrl) && fileId) {
+    const sheetsEmbedUrl = `https://docs.google.com/spreadsheets/d/${fileId}/preview`;
     return `
-      <img
-        src="${escapeHtml(originalUrl)}"
-        class="resource-image"
-        alt="${escapeHtml(resource?.fileName || resource?.title || 'Resource image')}"
-        loading="lazy"
-        data-preview-image="${escapeHtml(originalUrl)}"
-      />
-      <div class="admin-actions">
-        <button type="button" data-resource-url="${escapeHtml(originalUrl)}">Open Resource</button>
+      <div class="video-wrapper">
+        <iframe
+          src="${escapeHtml(sheetsEmbedUrl)}"
+          title="Embedded Resource"
+          frameborder="0"
+          allowfullscreen
+          referrerpolicy="strict-origin-when-cross-origin">
+        </iframe>
       </div>
     `;
   }
 
-  if (resource?.resourceType === 'file' && resource?.fileType === 'pdf') {
-    const pdfFallbackUrl = getPdfViewerUrl(originalUrl);
+  if (isGoogleDocs(originalUrl) && fileId) {
+    const docsEmbedUrl = `https://docs.google.com/document/d/${fileId}/preview`;
     return `
-      <div class="pdf-wrapper">
+      <div class="video-wrapper">
         <iframe
-          src="${escapeHtml(originalUrl)}"
-          class="pdf-frame"
-          title="PDF Preview"
-          loading="lazy"
-          referrerpolicy="no-referrer">
+          src="${escapeHtml(docsEmbedUrl)}"
+          title="Embedded Resource"
+          frameborder="0"
+          allowfullscreen
+          referrerpolicy="strict-origin-when-cross-origin">
         </iframe>
       </div>
-      <div class="admin-actions">
-        <button type="button" data-resource-url="${escapeHtml(originalUrl)}">Open Full</button>
-        <button type="button" data-resource-url="${escapeHtml(originalUrl)}" data-resource-download="true">Download</button>
-        <button type="button" data-resource-url="${escapeHtml(pdfFallbackUrl)}">Mobile PDF Viewer</button>
+    `;
+  }
+
+  if (isGoogleDriveUrl(originalUrl) && fileId) {
+    const driveEmbedUrl = `https://drive.google.com/file/d/${fileId}/preview`;
+    return `
+      <div class="video-wrapper">
+        <iframe
+          src="${escapeHtml(driveEmbedUrl)}"
+          title="Embedded Resource"
+          frameborder="0"
+          allow="autoplay; encrypted-media; picture-in-picture"
+          allowfullscreen
+          referrerpolicy="strict-origin-when-cross-origin">
+        </iframe>
       </div>
     `;
   }
@@ -935,16 +894,8 @@ function renderTeacherResources(resources = []) {
     button.addEventListener('click', () => {
       const url = String(button.dataset.resourceUrl || '').trim();
       if (!url) return;
-      if (button.dataset.resourceDownload === 'true') {
-        window.open(url, '_blank', 'noopener,noreferrer');
-        return;
-      }
       window.open(url, '_blank', 'noopener,noreferrer');
     });
-  });
-
-  teacherResourcesListElement.querySelectorAll('[data-preview-image]').forEach((image) => {
-    image.addEventListener('click', () => openImageModal(String(image.getAttribute('data-preview-image') || '').trim()));
   });
 }
 
@@ -980,33 +931,6 @@ async function loadTeacherResources() {
   }
 }
 
-async function uploadResourceFile({ file, classId, teacherId }) {
-  const timestamp = Date.now();
-  const safeFileName = toSafeFileName(file.name || 'resource_file');
-  const storagePath = `resources/${classId}/${teacherId}/${timestamp}_${safeFileName}`;
-  const storageRef = ref(storage, storagePath);
-  const uploadTask = uploadBytesResumable(storageRef, file, { contentType: file.type });
-
-  return new Promise((resolve, reject) => {
-    uploadTask.on(
-      'state_changed',
-      (snapshot) => {
-        const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-        setResourceUploadProgress(`Uploading... ${progress}%`);
-      },
-      (error) => reject(error),
-      async () => {
-        try {
-          const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
-          resolve({ downloadUrl, storagePath });
-        } catch (error) {
-          reject(error);
-        }
-      }
-    );
-  });
-}
-
 async function saveResource() {
   const teacher = auth.currentUser;
   if (!teacher?.uid) {
@@ -1018,8 +942,6 @@ async function saveResource() {
   const title = String(resourceTitleElement?.value || '').trim();
   const description = String(resourceDescriptionElement?.value || '').trim();
   const url = String(resourceUrlElement?.value || '').trim();
-  const selectedFile = resourceFileElement?.files?.[0] || null;
-  const inputMode = String(resourceInputModeElement?.value || 'link').trim().toLowerCase() === 'file' ? 'file' : 'link';
 
   if (!classId) {
     setResourceMessage('Select a class first.', 'error');
@@ -1037,17 +959,9 @@ async function saveResource() {
     return;
   }
 
-  if (inputMode === 'link') {
-    if (!url || !isValidHttpUrl(url)) {
-      setResourceMessage('Enter a valid URL (http/https).', 'error');
-      return;
-    }
-  } else {
-    const validation = validateResourceFile(selectedFile);
-    if (!validation.valid) {
-      setResourceMessage(validation.message, 'error');
-      return;
-    }
+  if (!url || !isValidHttpUrl(url)) {
+    setResourceMessage('Enter a valid URL (http/https).', 'error');
+    return;
   }
 
   if (saveResourceButton) {
@@ -1056,26 +970,6 @@ async function saveResource() {
   }
 
   try {
-    let resourceUrl = url;
-    let storagePath = null;
-    let fileType = null;
-    let mimeType = null;
-    let fileName = null;
-    let fileSize = null;
-
-    if (inputMode === 'file' && selectedFile) {
-      const uploadResult = await uploadResourceFile({ file: selectedFile, classId, teacherId: teacher.uid });
-      resourceUrl = uploadResult.downloadUrl;
-      storagePath = uploadResult.storagePath;
-      fileType = getFileTypeFromMime(selectedFile.type);
-      mimeType = selectedFile.type;
-      fileName = selectedFile.name;
-      fileSize = selectedFile.size;
-      setResourceUploadProgress('Upload complete.');
-    } else {
-      setResourceUploadProgress('');
-    }
-
     await addDoc(collection(db, 'resources'), {
       classId,
       teacherId: teacher.uid,
@@ -1088,13 +982,8 @@ async function saveResource() {
       termName: safeText(selectedClass.termName, ''),
       title,
       description,
-      resourceType: inputMode,
-      fileType,
-      fileName,
-      fileSize,
-      mimeType,
-      url: resourceUrl,
-      storagePath,
+      resourceType: 'link',
+      url,
       status: 'active',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
@@ -1103,15 +992,12 @@ async function saveResource() {
     if (resourceTitleElement) resourceTitleElement.value = '';
     if (resourceDescriptionElement) resourceDescriptionElement.value = '';
     if (resourceUrlElement) resourceUrlElement.value = '';
-    if (resourceFileElement) resourceFileElement.value = '';
-    setResourceInputMode('link');
 
     setResourceMessage('Resource saved successfully.', 'success');
     await loadTeacherResources();
   } catch (error) {
     console.error('Failed to save resource:', error);
     setResourceMessage('Unable to save resource. Please try again.', 'error');
-    setResourceUploadProgress('');
   } finally {
     if (saveResourceButton) {
       saveResourceButton.disabled = false;
@@ -1154,14 +1040,6 @@ async function deleteResource(resourceId) {
   }
 
   try {
-    const storagePath = String(matched.storagePath || '').trim();
-    if (storagePath) {
-      try {
-        await deleteObject(ref(storage, storagePath));
-      } catch (storageError) {
-        console.warn('Failed to delete resource file from storage:', storageError);
-      }
-    }
     await deleteDoc(doc(db, 'resources', id));
     setResourceMessage('Resource deleted.', 'success');
     await loadTeacherResources();
@@ -2738,36 +2616,34 @@ resourceUrlElement?.addEventListener('input', () => {
 
   const url = resourceUrlElement.value;
   const youtubeEmbedUrl = getYouTubeEmbedUrl(url);
-  const driveEmbedUrl = getGoogleDriveEmbedUrl(url);
+  const driveFileId = getDriveFileId(url);
 
   if (youtubeEmbedUrl) {
     resourceYoutubeHintElement.textContent = 'Detected YouTube video. Students can watch this inside the app.';
     return;
   }
 
-  if (driveEmbedUrl) {
-    resourceYoutubeHintElement.textContent = 'Detected Google Drive video. Students can watch this inside the app.';
+  if (isGoogleSlides(url) && driveFileId) {
+    resourceYoutubeHintElement.textContent = 'Detected Google Slides. This will be embedded for students.';
+    return;
+  }
+
+  if (isGoogleSheets(url) && driveFileId) {
+    resourceYoutubeHintElement.textContent = 'Detected Google Sheets. This will be embedded for students.';
+    return;
+  }
+
+  if (isGoogleDocs(url) && driveFileId) {
+    resourceYoutubeHintElement.textContent = 'Detected Google Docs. This will be embedded for students.';
+    return;
+  }
+
+  if (isGoogleDriveUrl(url) && driveFileId) {
+    resourceYoutubeHintElement.textContent = 'Detected Google Drive file. This will be embedded for students.';
     return;
   }
 
   resourceYoutubeHintElement.textContent = '';
-});
-
-resourceInputModeElement?.addEventListener('change', () => {
-  setResourceInputMode(resourceInputModeElement.value);
-  setResourceMessage('');
-  setResourceUploadProgress('');
-});
-
-resourceFileElement?.addEventListener('change', () => {
-  if (!resourceFileElement?.files?.length) return;
-  const file = resourceFileElement.files[0];
-  const validation = validateResourceFile(file);
-  if (!validation.valid) {
-    setResourceMessage(validation.message, 'error');
-  } else {
-    setResourceMessage(`Selected file: ${file.name}`, 'success');
-  }
 });
 
 teacherResourcesListElement?.addEventListener('click', (event) => {
@@ -2791,20 +2667,6 @@ teacherResourcesListElement?.addEventListener('click', (event) => {
     });
   }
 });
-
-closeImageModalButton?.addEventListener('click', closeImageModal);
-imageModalElement?.addEventListener('click', (event) => {
-  if (event.target === imageModalElement) {
-    closeImageModal();
-  }
-});
-document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') {
-    closeImageModal();
-  }
-});
-
-setResourceInputMode('link');
 
 logoutButton?.addEventListener('click', async () => {
   try {

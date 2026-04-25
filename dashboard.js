@@ -53,9 +53,6 @@ const myEnrollmentsListElement = document.getElementById('my-enrollments-list');
 const myClassesFeedbackElement = document.getElementById('my-classes-feedback');
 const classRecordsDetailElement = document.getElementById('class-records-detail');
 const studentResourcesListElement = document.getElementById('student-resources-list');
-const imageModalElement = document.getElementById('imageModal');
-const modalImageElement = document.getElementById('modalImage');
-const closeImageModalButton = document.getElementById('closeImageModal');
 const loadingOverlay = document.getElementById('loadingOverlay');
 let overlaySequenceJob = 0;
 let currentStudentProfile = null;
@@ -295,33 +292,49 @@ function isGoogleDriveUrl(url) {
   }
 }
 
-function getGoogleDriveEmbedUrl(url) {
+function isGoogleSlides(url) {
   const rawUrl = String(url || '').trim();
-  if (!rawUrl || !isGoogleDriveUrl(rawUrl)) return null;
+  if (!rawUrl) return false;
 
-  const byPath = rawUrl.match(/\/d\/([A-Za-z0-9_-]+)\//);
+  try {
+    const parsed = new URL(rawUrl);
+    return parsed.hostname.toLowerCase().includes('docs.google.com') && parsed.pathname.includes('/presentation/');
+  } catch (_error) {
+    return false;
+  }
+}
+
+function isGoogleSheets(url) {
+  const rawUrl = String(url || '').trim();
+  if (!rawUrl) return false;
+
+  try {
+    const parsed = new URL(rawUrl);
+    return parsed.hostname.toLowerCase().includes('docs.google.com') && parsed.pathname.includes('/spreadsheets/');
+  } catch (_error) {
+    return false;
+  }
+}
+
+function isGoogleDocs(url) {
+  const rawUrl = String(url || '').trim();
+  if (!rawUrl) return false;
+
+  try {
+    const parsed = new URL(rawUrl);
+    return parsed.hostname.toLowerCase().includes('docs.google.com') && parsed.pathname.includes('/document/');
+  } catch (_error) {
+    return false;
+  }
+}
+
+function getDriveFileId(url) {
+  const rawUrl = String(url || '').trim();
+  if (!rawUrl) return null;
+
+  const byPath = rawUrl.match(/\/(?:file|presentation|spreadsheets|document)\/d\/([A-Za-z0-9_-]+)/);
   const byIdParam = rawUrl.match(/[?&]id=([A-Za-z0-9_-]+)/);
-  const fileId = byPath?.[1] || byIdParam?.[1] || '';
-  if (!fileId) return null;
-  return `https://drive.google.com/file/d/${fileId}/preview`;
-}
-
-function getPdfViewerUrl(originalUrl) {
-  const encoded = encodeURIComponent(originalUrl);
-  return `https://docs.google.com/gview?url=${encoded}&embedded=true`;
-}
-
-function openImageModal(imageUrl) {
-  const url = String(imageUrl || '').trim();
-  if (!url || !imageModalElement || !modalImageElement) return;
-  modalImageElement.src = url;
-  imageModalElement.classList.remove('hidden');
-}
-
-function closeImageModal() {
-  if (!imageModalElement || !modalImageElement) return;
-  imageModalElement.classList.add('hidden');
-  modalImageElement.src = '';
+  return byPath?.[1] || byIdParam?.[1] || null;
 }
 
 function renderResourceMedia(resource) {
@@ -344,15 +357,16 @@ function renderResourceMedia(resource) {
     `;
   }
 
-  const driveEmbedUrl = getGoogleDriveEmbedUrl(originalUrl);
-  if (driveEmbedUrl) {
+  const fileId = getDriveFileId(originalUrl);
+
+  if (isGoogleSlides(originalUrl) && fileId) {
+    const slidesEmbedUrl = `https://docs.google.com/presentation/d/${fileId}/embed?start=false&loop=false&delayms=3000`;
     return `
       <div class="video-wrapper">
         <iframe
-          src="${escapeHtml(driveEmbedUrl)}"
-          title="Embedded Video"
+          src="${escapeHtml(slidesEmbedUrl)}"
+          title="Embedded Resource"
           frameborder="0"
-          allow="autoplay; encrypted-media; picture-in-picture"
           allowfullscreen
           referrerpolicy="strict-origin-when-cross-origin">
         </iframe>
@@ -360,37 +374,48 @@ function renderResourceMedia(resource) {
     `;
   }
 
-  if (resource?.resourceType === 'file' && resource?.fileType === 'image') {
+  if (isGoogleSheets(originalUrl) && fileId) {
+    const sheetsEmbedUrl = `https://docs.google.com/spreadsheets/d/${fileId}/preview`;
     return `
-      <img
-        src="${escapeHtml(originalUrl)}"
-        class="resource-image"
-        alt="${escapeHtml(resource?.fileName || resource?.title || 'Resource image')}"
-        loading="lazy"
-        data-preview-image="${escapeHtml(originalUrl)}"
-      />
-      <div class="admin-actions">
-        <button type="button" data-resource-url="${escapeHtml(originalUrl)}">Open Resource</button>
+      <div class="video-wrapper">
+        <iframe
+          src="${escapeHtml(sheetsEmbedUrl)}"
+          title="Embedded Resource"
+          frameborder="0"
+          allowfullscreen
+          referrerpolicy="strict-origin-when-cross-origin">
+        </iframe>
       </div>
     `;
   }
 
-  if (resource?.resourceType === 'file' && resource?.fileType === 'pdf') {
-    const pdfFallbackUrl = getPdfViewerUrl(originalUrl);
+  if (isGoogleDocs(originalUrl) && fileId) {
+    const docsEmbedUrl = `https://docs.google.com/document/d/${fileId}/preview`;
     return `
-      <div class="pdf-wrapper">
+      <div class="video-wrapper">
         <iframe
-          src="${escapeHtml(originalUrl)}"
-          class="pdf-frame"
-          title="PDF Preview"
-          loading="lazy"
-          referrerpolicy="no-referrer">
+          src="${escapeHtml(docsEmbedUrl)}"
+          title="Embedded Resource"
+          frameborder="0"
+          allowfullscreen
+          referrerpolicy="strict-origin-when-cross-origin">
         </iframe>
       </div>
-      <div class="admin-actions">
-        <button type="button" data-resource-url="${escapeHtml(originalUrl)}">Open Full</button>
-        <button type="button" data-resource-url="${escapeHtml(originalUrl)}" data-resource-download="true">Download</button>
-        <button type="button" data-resource-url="${escapeHtml(pdfFallbackUrl)}">Mobile PDF Viewer</button>
+    `;
+  }
+
+  if (isGoogleDriveUrl(originalUrl) && fileId) {
+    const driveEmbedUrl = `https://drive.google.com/file/d/${fileId}/preview`;
+    return `
+      <div class="video-wrapper">
+        <iframe
+          src="${escapeHtml(driveEmbedUrl)}"
+          title="Embedded Resource"
+          frameborder="0"
+          allow="autoplay; encrypted-media; picture-in-picture"
+          allowfullscreen
+          referrerpolicy="strict-origin-when-cross-origin">
+        </iframe>
       </div>
     `;
   }
@@ -434,9 +459,6 @@ function renderStudentResources(resources = []) {
     });
   });
 
-  studentResourcesListElement.querySelectorAll('[data-preview-image]').forEach((image) => {
-    image.addEventListener('click', () => openImageModal(String(image.getAttribute('data-preview-image') || '').trim()));
-  });
 }
 
 async function loadStudentResources() {
@@ -1563,14 +1585,6 @@ sidebarOverlay?.addEventListener('click', closeSidebar);
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
     closeSidebar();
-    closeImageModal();
-  }
-});
-
-closeImageModalButton?.addEventListener('click', closeImageModal);
-imageModalElement?.addEventListener('click', (event) => {
-  if (event.target === imageModalElement) {
-    closeImageModal();
   }
 });
 
