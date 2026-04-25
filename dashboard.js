@@ -258,31 +258,94 @@ function formatDateTime(value) {
   return value.toDate().toLocaleString();
 }
 
-function getYouTubeEmbedUrl(url) {
+function isYouTubeUrl(url) {
   const rawUrl = String(url || '').trim();
-  if (!rawUrl) return '';
+  if (!rawUrl) return false;
 
   try {
-    const parsedUrl = new URL(rawUrl);
-    const hostname = parsedUrl.hostname.toLowerCase();
-    const pathParts = parsedUrl.pathname.split('/').filter(Boolean);
-    let videoId = '';
-
-    if (hostname === 'youtu.be' || hostname === 'www.youtu.be') {
-      videoId = pathParts[0] || '';
-    } else if (['youtube.com', 'www.youtube.com', 'm.youtube.com'].includes(hostname)) {
-      if (parsedUrl.pathname === '/watch') {
-        videoId = parsedUrl.searchParams.get('v') || '';
-      } else if (pathParts[0] === 'shorts' || pathParts[0] === 'embed') {
-        videoId = pathParts[1] || '';
-      }
-    }
-
-    if (!/^[A-Za-z0-9_-]{6,}$/.test(videoId)) return '';
-    return `https://www.youtube.com/embed/${videoId}`;
-  } catch (error) {
-    return '';
+    const hostname = new URL(rawUrl).hostname.toLowerCase();
+    return hostname.includes('youtube.com') || hostname.includes('youtu.be');
+  } catch (_error) {
+    return false;
   }
+}
+
+function getYouTubeEmbedUrl(url) {
+  const rawUrl = String(url || '').trim();
+  if (!rawUrl || !isYouTubeUrl(rawUrl)) return null;
+
+  const match = rawUrl.match(/(?:v=|\/)([0-9A-Za-z_-]{11})(?:[?&/]|$)/);
+  const videoId = match?.[1] || '';
+  if (!videoId) return null;
+  return `https://www.youtube.com/embed/${videoId}`;
+}
+
+function isGoogleDriveUrl(url) {
+  const rawUrl = String(url || '').trim();
+  if (!rawUrl) return false;
+
+  try {
+    const hostname = new URL(rawUrl).hostname.toLowerCase();
+    return hostname.includes('drive.google.com');
+  } catch (_error) {
+    return false;
+  }
+}
+
+function getGoogleDriveEmbedUrl(url) {
+  const rawUrl = String(url || '').trim();
+  if (!rawUrl || !isGoogleDriveUrl(rawUrl)) return null;
+
+  const byPath = rawUrl.match(/\/d\/([A-Za-z0-9_-]+)\//);
+  const byIdParam = rawUrl.match(/[?&]id=([A-Za-z0-9_-]+)/);
+  const fileId = byPath?.[1] || byIdParam?.[1] || '';
+  if (!fileId) return null;
+  return `https://drive.google.com/file/d/${fileId}/preview`;
+}
+
+function renderResourceMedia(resource) {
+  const originalUrl = String(resource?.url || '').trim();
+  console.log('Original URL:', originalUrl);
+  console.log('YouTube:', getYouTubeEmbedUrl(originalUrl));
+  console.log('Drive:', getGoogleDriveEmbedUrl(originalUrl));
+
+  const youtubeEmbedUrl = getYouTubeEmbedUrl(originalUrl);
+  if (youtubeEmbedUrl) {
+    return `
+      <div class="video-wrapper">
+        <iframe
+          src="${escapeHtml(youtubeEmbedUrl)}"
+          title="Embedded Video"
+          frameborder="0"
+          allow="autoplay; encrypted-media; picture-in-picture"
+          allowfullscreen
+          referrerpolicy="strict-origin-when-cross-origin">
+        </iframe>
+      </div>
+    `;
+  }
+
+  const driveEmbedUrl = getGoogleDriveEmbedUrl(originalUrl);
+  if (driveEmbedUrl) {
+    return `
+      <div class="video-wrapper">
+        <iframe
+          src="${escapeHtml(driveEmbedUrl)}"
+          title="Embedded Video"
+          frameborder="0"
+          allow="autoplay; encrypted-media; picture-in-picture"
+          allowfullscreen
+          referrerpolicy="strict-origin-when-cross-origin">
+        </iframe>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="admin-actions">
+      <button type="button" data-resource-url="${escapeHtml(originalUrl)}">Open Resource</button>
+    </div>
+  `;
 }
 
 function renderStudentResources(resources = []) {
@@ -295,21 +358,6 @@ function renderStudentResources(resources = []) {
 
   studentResourcesListElement.innerHTML = resources
     .map((resource) => {
-      const embedUrl = getYouTubeEmbedUrl(resource.url);
-      const iframeHtml = embedUrl
-        ? `
-          <div class="video-wrapper">
-            <iframe
-              src="${escapeHtml(embedUrl)}"
-              title="YouTube video player"
-              frameborder="0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowfullscreen
-            ></iframe>
-          </div>
-        `
-        : '';
-
       return `
         <article class="app-card">
           <h4>${escapeHtml(resource.title || 'Untitled Resource')}</h4>
@@ -318,10 +366,7 @@ function renderStudentResources(resources = []) {
           <p><strong>Description:</strong> ${escapeHtml(resource.description || 'No description')}</p>
           <p><strong>Class:</strong> ${escapeHtml(resource.sectionName || 'Not provided')}</p>
           <p><strong>Uploaded:</strong> ${escapeHtml(formatDateTime(resource.createdAt) || '—')}</p>
-          ${iframeHtml}
-          <div class="admin-actions">
-            <button type="button" data-resource-url="${escapeHtml(resource.url || '')}">Open Resource</button>
-          </div>
+          ${renderResourceMedia(resource)}
         </article>
       `;
     })
