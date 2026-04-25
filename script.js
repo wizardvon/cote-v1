@@ -130,7 +130,7 @@ registrationForm?.addEventListener('submit', async (event) => {
       email,
       points: 0,
       role: 'student',
-      status: 'pending',
+      status: 'active',
       createdAt: serverTimestamp(),
     });
 
@@ -138,7 +138,7 @@ registrationForm?.addEventListener('submit', async (event) => {
       uid,
       email,
       role: 'student',
-      status: 'pending',
+      status: 'active',
       createdAt: serverTimestamp(),
     });
 
