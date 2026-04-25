@@ -1022,8 +1022,8 @@ function setStudentData(data, fallbackEmail = '') {
   }
 
   if (profileStudentRankElement) {
-    const studentRank = Number(studentData.studentRank);
-    const sectionRankTotal = Number(studentData.sectionRankTotal);
+    const studentRank = Number(data.studentRank);
+    const sectionRankTotal = Number(data.sectionRankTotal);
     const hasRank = Number.isFinite(studentRank) && studentRank > 0;
     const hasTotal = Number.isFinite(sectionRankTotal) && sectionRankTotal > 0;
 
@@ -1188,6 +1188,71 @@ async function loadStudentSectionStanding(studentData = {}) {
   }
 }
 
+function renderStudentProfileNotFound(email = '', uid = '') {
+  console.error('Student document not found:', uid);
+
+  const fallback = safe(email);
+  const supportMessage = 'Student profile not found. Please contact admin.';
+
+  if (sidebarStudentNameElement) {
+    sidebarStudentNameElement.textContent = 'Profile not found';
+  }
+
+  if (sidebarStudentEmailElement) {
+    sidebarStudentEmailElement.textContent = fallback;
+  }
+
+  if (profileFullNameElement) {
+    profileFullNameElement.textContent = 'Profile not found';
+  }
+
+  if (profileEmailElement) {
+    profileEmailElement.textContent = fallback;
+  }
+
+  if (profileGradeSectionElement) {
+    profileGradeSectionElement.textContent = supportMessage;
+  }
+
+  if (profileAvatarElement) {
+    profileAvatarElement.textContent = '👤';
+  }
+
+  if (pointsTotalElement) {
+    pointsTotalElement.textContent = '0';
+  }
+
+  if (homeStudentNameElement) {
+    homeStudentNameElement.textContent = 'Profile not found';
+  }
+
+  if (homeStudentSectionElement) {
+    homeStudentSectionElement.textContent = supportMessage;
+  }
+
+  if (homeStudentPointsElement) {
+    homeStudentPointsElement.textContent = '0';
+  }
+
+  if (profileRankElement) {
+    profileRankElement.textContent = 'Not ranked';
+  }
+
+  if (profileStudentRankElement) {
+    profileStudentRankElement.textContent = 'Not yet assigned';
+  }
+  setSectionStanding({});
+
+  if (profileDataElement) {
+    profileDataElement.innerHTML = `
+      <p><strong>Error:</strong> ${supportMessage}</p>
+      <p><strong>UID:</strong> ${safe(uid)}</p>
+      <p><strong>Email:</strong> ${fallback}</p>
+      <p><strong>Total Points:</strong> 0</p>
+    `;
+  }
+}
+
 function renderNoProfile(email = '') {
   const fallback = safe(email);
 
@@ -1280,12 +1345,18 @@ messagesButton?.addEventListener('click', () => {
   alert('Messages or chat feature will be added here.');
 });
 
-onAuthStateChanged(auth, async (user) => {
+onAuthStateChanged(auth, async () => {
+  const user = auth.currentUser;
+
   if (!user) {
     window.location.replace('index.html');
     return;
   }
+
+  const uid = user.uid;
   currentStudentUser = user;
+
+  console.log('Auth UID:', uid);
 
   loadLeaderboard();
 
@@ -1294,15 +1365,19 @@ onAuthStateChanged(auth, async (user) => {
   }
 
   try {
-    const studentRef = doc(db, 'students', user.uid);
+    const studentRef = doc(db, 'students', uid);
     const studentSnap = await getDoc(studentRef);
 
+    console.log('Student doc:', studentSnap.exists());
+
     if (!studentSnap.exists()) {
-      renderNoProfile(user.email);
+      renderStudentProfileNotFound(user.email, uid);
       return;
     }
 
     const studentData = studentSnap.data();
+    console.log('Student data:', studentData);
+
     currentStudentProfile = studentData;
     const points = normalizePoints(studentData.points);
 
@@ -1315,7 +1390,7 @@ onAuthStateChanged(auth, async (user) => {
 
     setStudentData(studentData, user.email);
     await loadStudentSectionStanding(studentData);
-    loadPointLogs(user.uid);
+    loadPointLogs(uid);
     loadMyEnrollments();
     loadAvailableClasses();
   } catch (error) {
