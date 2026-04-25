@@ -52,6 +52,7 @@ const availableClassesListElement = document.getElementById('available-classes-l
 const myEnrollmentsListElement = document.getElementById('my-enrollments-list');
 const myClassesFeedbackElement = document.getElementById('my-classes-feedback');
 const classRecordsDetailElement = document.getElementById('class-records-detail');
+const studentResourcesListElement = document.getElementById('student-resources-list');
 const loadingOverlay = document.getElementById('loadingOverlay');
 let overlaySequenceJob = 0;
 let currentStudentProfile = null;
@@ -250,6 +251,81 @@ function getTeacherName(classData) {
     String(classData.teacherEmail || '').trim() ||
     'Not assigned'
   );
+}
+
+function formatDateTime(value) {
+  if (!value?.toDate) return '';
+  return value.toDate().toLocaleString();
+}
+
+function renderStudentResources(resources = []) {
+  if (!studentResourcesListElement) return;
+
+  if (!resources.length) {
+    studentResourcesListElement.innerHTML = '<p>No active resources found for your approved classes.</p>';
+    return;
+  }
+
+  studentResourcesListElement.innerHTML = resources
+    .map((resource) => {
+      return `
+        <article class="app-card">
+          <h4>${escapeHtml(resource.title || 'Untitled Resource')}</h4>
+          <p><strong>Subject:</strong> ${escapeHtml(resource.subjectName || 'Not provided')}</p>
+          <p><strong>Teacher:</strong> ${escapeHtml(resource.teacherName || 'Unknown Teacher')}</p>
+          <p><strong>Description:</strong> ${escapeHtml(resource.description || 'No description')}</p>
+          <p><strong>Class:</strong> ${escapeHtml(resource.sectionName || 'Not provided')}</p>
+          <p><strong>Uploaded:</strong> ${escapeHtml(formatDateTime(resource.createdAt) || '—')}</p>
+          <div class="admin-actions">
+            <button type="button" data-resource-url="${escapeHtml(resource.url || '')}">Open Resource</button>
+          </div>
+        </article>
+      `;
+    })
+    .join('');
+
+  studentResourcesListElement.querySelectorAll('button[data-resource-url]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const url = String(button.dataset.resourceUrl || '').trim();
+      if (!url) return;
+      window.open(url, '_blank', 'noopener,noreferrer');
+    });
+  });
+}
+
+async function loadStudentResources() {
+  if (!studentResourcesListElement || !currentStudentUser?.uid) return;
+
+  const classIds = [...enrolledClassIds].filter(Boolean);
+  if (!classIds.length) {
+    studentResourcesListElement.innerHTML = '<p>Get approved in classes to view resources.</p>';
+    return;
+  }
+
+  studentResourcesListElement.innerHTML = '<p>Loading resources...</p>';
+
+  try {
+    const chunks = [];
+    for (let i = 0; i < classIds.length; i += 10) {
+      chunks.push(classIds.slice(i, i + 10));
+    }
+
+    const snapshots = await Promise.all(
+      chunks.map((ids) =>
+        getDocs(query(collection(db, 'resources'), where('classId', 'in', ids), where('status', '==', 'active')))
+      )
+    );
+
+    const resources = snapshots
+      .flatMap((snapshot) => snapshot.docs.map((resourceDoc) => ({ id: resourceDoc.id, ...resourceDoc.data() })))
+      .filter((resource) => classIds.includes(String(resource.classId || '').trim()))
+      .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+
+    renderStudentResources(resources);
+  } catch (error) {
+    console.error('Failed to load student resources:', error);
+    studentResourcesListElement.innerHTML = '<p>Unable to load resources right now.</p>';
+  }
 }
 
 function renderMyEnrollments(enrollments) {
@@ -705,9 +781,13 @@ async function loadMyEnrollments() {
     }));
 
     renderMyEnrollments(enrollmentsWithClassData);
+    await loadStudentResources();
   } catch (error) {
     console.error('Failed to load enrollments:', error);
     myEnrollmentsListElement.innerHTML = '<p>Unable to load approved classes. Please try again later.</p>';
+    if (studentResourcesListElement) {
+      studentResourcesListElement.innerHTML = '<p>Unable to load resources because approved classes failed to load.</p>';
+    }
   }
 }
 
@@ -1325,6 +1405,9 @@ menuButtons.forEach((button) => {
   button.addEventListener('click', () => {
     const target = button.dataset.target;
     showPage(target);
+    if (target === 'resources') {
+      loadStudentResources();
+    }
   });
 });
 
