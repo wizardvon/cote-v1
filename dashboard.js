@@ -14,6 +14,12 @@ import {
   orderBy,
   serverTimestamp,
 } from './firebase.js';
+import {
+  getVisibleAchievementsForStudent,
+  getStudentUnlockedAchievementIds,
+  getAchievementRequirementText,
+  seedAchievementsIfEmpty
+} from './achievements.js';
 
 const profileDataElement = document.getElementById('profileData');
 const profileFullNameElement = document.getElementById('profile-full-name');
@@ -48,6 +54,10 @@ const burgerButton = document.getElementById('burger-button');
 const menuButtons = Array.from(document.querySelectorAll('.menu-btn'));
 const pages = Array.from(document.querySelectorAll('.page'));
 const recordsPageElement = document.getElementById('page-records');
+const achievementsPageElement = document.getElementById('page-achievements');
+const achievementsSummaryElement = document.getElementById('achievements-summary');
+const unlockedAchievementsListElement = document.getElementById('unlocked-achievements-list');
+const nextAchievementsListElement = document.getElementById('next-achievements-list');
 const availableClassesListElement = document.getElementById('available-classes-list');
 const myEnrollmentsListElement = document.getElementById('my-enrollments-list');
 const myClassesFeedbackElement = document.getElementById('my-classes-feedback');
@@ -66,6 +76,7 @@ const pageTitles = {
   records: 'Records',
   'my-classes': 'My Classes',
   resources: 'Resources',
+  achievements: 'Achievements',
   quest: 'Quest',
 };
 
@@ -1201,6 +1212,95 @@ async function loadPointLogs(studentId) {
   }
 }
 
+
+function formatAchievementDate(value) {
+  if (!value?.toDate) return 'Recently unlocked';
+  return value.toDate().toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function getAchievementStatusDetails(achievement, unlockedIds) {
+  const isUnlocked = unlockedIds.has(achievement.id);
+  const requirement = getAchievementRequirementText(achievement);
+  return {
+    isUnlocked,
+    statusLabel: isUnlocked ? 'Unlocked' : 'Locked • visible',
+    requirement
+  };
+}
+
+function renderAchievementCard(achievement, unlockedIds) {
+  const status = getAchievementStatusDetails(achievement, unlockedIds);
+  const achievedAt = achievement.achievedAt ? `<p><strong>Achieved:</strong> ${escapeHtml(formatAchievementDate(achievement.achievedAt))}</p>` : '';
+
+  return `
+    <li class="achievement-card ${status.isUnlocked ? 'unlocked' : 'locked'}">
+      <div class="achievement-card-header">
+        <h4>${escapeHtml(achievement.title || 'Untitled Achievement')}</h4>
+        <span class="achievement-status-pill ${status.isUnlocked ? 'unlocked' : 'locked'}">${escapeHtml(status.statusLabel)}</span>
+      </div>
+      <p>${escapeHtml(achievement.description || 'No description available.')}</p>
+      <p><strong>Category:</strong> ${escapeHtml(achievement.category || 'General')}</p>
+      <p><strong>Reward:</strong> +${escapeHtml(String(achievement.rewardPoints || 0))} points</p>
+      ${status.isUnlocked ? achievedAt : `<p><strong>Requirement:</strong> ${escapeHtml(status.requirement)}</p>`}
+    </li>
+  `;
+}
+
+async function loadAchievementsDashboard(studentId) {
+  if (!achievementsPageElement) return;
+
+  if (achievementsSummaryElement) {
+    achievementsSummaryElement.innerHTML = '<p>Loading achievements...</p>';
+  }
+  if (unlockedAchievementsListElement) {
+    unlockedAchievementsListElement.innerHTML = '<li>Loading unlocked achievements...</li>';
+  }
+  if (nextAchievementsListElement) {
+    nextAchievementsListElement.innerHTML = '<li>Loading next achievements...</li>';
+  }
+
+  try {
+    const [visibleAchievements, unlockedIds] = await Promise.all([
+      getVisibleAchievementsForStudent(studentId),
+      getStudentUnlockedAchievementIds(studentId)
+    ]);
+
+    const unlockedAchievements = visibleAchievements.filter((achievement) => unlockedIds.has(achievement.id));
+    const lockedVisibleAchievements = visibleAchievements.filter((achievement) => !unlockedIds.has(achievement.id));
+
+    const latestAchievement = unlockedAchievements
+      .slice()
+      .sort((a, b) => (b.achievedAt?.toMillis?.() || 0) - (a.achievedAt?.toMillis?.() || 0))[0];
+
+    const nextAchievement = lockedVisibleAchievements[0] || null;
+
+    if (achievementsSummaryElement) {
+      achievementsSummaryElement.innerHTML = `
+        <p><strong>Total achievements unlocked:</strong> ${unlockedAchievements.length}</p>
+        <p><strong>Latest achievement:</strong> ${escapeHtml(latestAchievement?.title || 'No unlocked achievement yet')}</p>
+        <p><strong>Next achievement:</strong> ${escapeHtml(nextAchievement?.title || 'No visible next achievement')}</p>
+      `;
+    }
+
+    if (unlockedAchievementsListElement) {
+      unlockedAchievementsListElement.innerHTML = unlockedAchievements.length
+        ? unlockedAchievements.map((achievement) => renderAchievementCard(achievement, unlockedIds)).join('')
+        : '<li>No achievements unlocked yet.</li>';
+    }
+
+    if (nextAchievementsListElement) {
+      nextAchievementsListElement.innerHTML = lockedVisibleAchievements.length
+        ? lockedVisibleAchievements.map((achievement) => renderAchievementCard(achievement, unlockedIds)).join('')
+        : '<li>No visible locked achievements right now.</li>';
+    }
+  } catch (error) {
+    console.error('Failed to load achievements dashboard:', error);
+    if (achievementsSummaryElement) achievementsSummaryElement.innerHTML = '<p>Unable to load achievements summary right now.</p>';
+    if (unlockedAchievementsListElement) unlockedAchievementsListElement.innerHTML = '<li>Unable to load unlocked achievements.</li>';
+    if (nextAchievementsListElement) nextAchievementsListElement.innerHTML = '<li>Unable to load next achievements.</li>';
+  }
+}
+
 function toggleSidebar() {
   if (!sidebar || !sidebarOverlay) return;
 
@@ -1576,6 +1676,9 @@ menuButtons.forEach((button) => {
     if (target === 'resources') {
       loadStudentResources();
     }
+    if (target === 'achievements' && currentStudentUser?.uid) {
+      loadAchievementsDashboard(currentStudentUser.uid);
+    }
   });
 });
 
@@ -1641,7 +1744,9 @@ onAuthStateChanged(auth, async () => {
 
     setStudentData(studentData, user.email);
     await loadStudentSectionStanding(studentData);
+    await seedAchievementsIfEmpty();
     loadPointLogs(uid);
+    loadAchievementsDashboard(uid);
     loadMyEnrollments();
     loadAvailableClasses();
   } catch (error) {

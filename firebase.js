@@ -15,7 +15,9 @@ import {
   orderBy,
   serverTimestamp,
   runTransaction,
-  writeBatch
+  writeBatch,
+  setDoc,
+  increment
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import {
   getStorage,
@@ -60,6 +62,8 @@ export {
   serverTimestamp,
   runTransaction,
   writeBatch,
+  setDoc,
+  increment,
   ref,
   uploadBytesResumable,
   getDownloadURL,

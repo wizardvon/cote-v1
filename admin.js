@@ -16,6 +16,7 @@ import {
   serverTimestamp,
   runTransaction
 } from './firebase.js';
+import { checkAchievements, seedAchievementsIfEmpty } from './achievements.js';
 
 const adminEmailElement = document.getElementById('admin-email');
 const sidebarTeacherNameElement = document.getElementById('sidebar-teacher-name');
@@ -1797,6 +1798,23 @@ async function saveScoreWithAcademicPoints(payload) {
 
   currentClassRecordScores.set(scoreKey, updatedScore);
 
+  try {
+    await checkAchievements(studentId, {
+      triggerType: 'score_update',
+      classId,
+      activityId,
+      sourceId: activityId
+    });
+    await checkAchievements(studentId, {
+      triggerType: 'points_update',
+      classId,
+      activityId,
+      sourceId: activityId
+    });
+  } catch (achievementError) {
+    console.warn('Achievement check skipped after score save:', achievementError);
+  }
+
   return transactionResult;
 }
 
@@ -2756,6 +2774,8 @@ onAuthStateChanged(auth, async (user) => {
     await loadTeacherResources();
     await loadTeacherSectionLeaderboardPreview();
     await loadTeacherStudentRankPreview();
+
+    await seedAchievementsIfEmpty();
   } catch (error) {
     console.error('Failed to validate teacher role:', error);
     window.location.replace('dashboard.html');
