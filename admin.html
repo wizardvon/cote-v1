@@ -262,22 +262,56 @@
       </section>
 
       <section id="page-resources" class="page" data-page="resources" aria-label="Resources">
-        <article class="app-card resource-card">
-          <h3>Add Learning Resource</h3>
-          <p>Prepare future upload panel for modules, handouts, and references.</p>
-          <button type="button">Coming Soon</button>
+        <article class="app-card">
+          <h3>Add Learning Resource (External Link)</h3>
+          <p>Post learning links for your class. File uploads (PDF/image/document) will be added later.</p>
+
+          <div class="admin-toolbar">
+            <div class="field">
+              <label for="resource-class-id">Select Class</label>
+              <select id="resource-class-id">
+                <option value="">Select a class first</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="resource-title">Title</label>
+              <input id="resource-title" type="text" placeholder="e.g. Algebra Lesson 1" maxlength="150" />
+            </div>
+
+            <div class="field field-full">
+              <label for="resource-description">Description</label>
+              <textarea
+                id="resource-description"
+                class="admin-reason"
+                rows="3"
+                placeholder="What should students learn from this resource?"
+              ></textarea>
+            </div>
+
+            <div class="field">
+              <label for="resource-url">URL</label>
+              <input id="resource-url" type="url" placeholder="https://..." />
+            </div>
+
+            <div class="field">
+              <label for="resource-type">Resource Type</label>
+              <input id="resource-type" type="text" value="Link" readonly />
+            </div>
+          </div>
+
+          <div class="admin-actions">
+            <button id="save-resource-button" type="button">Save Resource</button>
+          </div>
+          <p id="resource-message" class="form-message" role="status" aria-live="polite"></p>
         </article>
 
-        <article class="app-card resource-card">
-          <h3>Uploaded Resources</h3>
-          <p>Placeholder list for available class resources and files.</p>
-          <button type="button">Coming Soon</button>
-        </article>
-
-        <article class="app-card resource-card">
-          <h3>Resource Notes / Section Assignment</h3>
-          <p>Reserve this area for section-based material assignment notes.</p>
-          <button type="button">Coming Soon</button>
+        <article class="app-card">
+          <h3>My Resources</h3>
+          <p>Only resources you created are shown here.</p>
+          <div id="teacher-resources-list" class="list-stack" aria-live="polite">
+            <p>No resources yet.</p>
+          </div>
         </article>
       </section>
 

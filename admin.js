@@ -9,6 +9,7 @@ import {
   collection,
   getDocs,
   addDoc,
+  deleteDoc,
   query,
   where,
   orderBy,
@@ -60,6 +61,13 @@ const classRecordMessageElement = document.getElementById('class-record-message'
 const teacherLeaderboardPreviewElement = document.getElementById('teacher-leaderboard-preview');
 const teacherRankPreviewClassFilterElement = document.getElementById('teacher-rank-preview-class-filter');
 const teacherStudentRankPreviewBodyElement = document.getElementById('teacher-student-rank-preview-body');
+const resourceClassIdElement = document.getElementById('resource-class-id');
+const resourceTitleElement = document.getElementById('resource-title');
+const resourceDescriptionElement = document.getElementById('resource-description');
+const resourceUrlElement = document.getElementById('resource-url');
+const saveResourceButton = document.getElementById('save-resource-button');
+const resourceMessageElement = document.getElementById('resource-message');
+const teacherResourcesListElement = document.getElementById('teacher-resources-list');
 let overlaySequenceJob = 0;
 
 const TABLE_COLUMN_COUNT = 6;
@@ -137,6 +145,7 @@ let currentClassRecordStudents = [];
 let currentClassRecordActivities = [];
 let currentClassRecordScores = new Map();
 let currentEditingActivityId = '';
+let teacherResources = [];
 
 function normalizePoints(points) {
   return typeof points === 'number' && Number.isFinite(points) ? points : 0;
@@ -224,6 +233,15 @@ function setClassRecordMessage(message, type = '') {
 
   if (type) {
     classRecordMessageElement.classList.add(type);
+  }
+}
+
+function setResourceMessage(message, type = '') {
+  if (!resourceMessageElement) return;
+  resourceMessageElement.textContent = message;
+  resourceMessageElement.classList.remove('success', 'error');
+  if (type) {
+    resourceMessageElement.classList.add(type);
   }
 }
 
@@ -639,6 +657,221 @@ function populateEnrollmentClassFilter(classes = []) {
   }
 }
 
+function populateResourceClassFilter(classes = []) {
+  if (!resourceClassIdElement) return;
+
+  const previousValue = resourceClassIdElement.value;
+  resourceClassIdElement.innerHTML = '<option value="">Select a class first</option>';
+
+  classes.forEach((classItem) => {
+    const option = document.createElement('option');
+    option.value = classItem.id;
+    option.textContent = formatClassLabel(classItem);
+    resourceClassIdElement.append(option);
+  });
+
+  if (previousValue && classes.some((item) => item.id === previousValue)) {
+    resourceClassIdElement.value = previousValue;
+  }
+}
+
+function isValidHttpUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch (_error) {
+    return false;
+  }
+}
+
+function renderTeacherResources(resources = []) {
+  if (!teacherResourcesListElement) return;
+
+  if (!resources.length) {
+    teacherResourcesListElement.innerHTML = '<p>No resources yet. Add your first learning link above.</p>';
+    return;
+  }
+
+  teacherResourcesListElement.innerHTML = resources
+    .map((resource) => {
+      return `
+        <article class="app-card">
+          <h4>${safeText(resource.title, 'Untitled Resource')}</h4>
+          <p><strong>Subject:</strong> ${safeText(resource.subjectName)}</p>
+          <p><strong>Section:</strong> ${safeText(resource.sectionName)}</p>
+          <p><strong>School Year:</strong> ${safeText(resource.schoolYearName)}</p>
+          <p><strong>Term:</strong> ${safeText(resource.termName)}</p>
+          <p><strong>Description:</strong> ${safeText(resource.description, 'No description')}</p>
+          <p><strong>URL:</strong> <a href="${escapeHtml(safeText(resource.url, '#'))}" target="_blank" rel="noopener noreferrer">Open Resource</a></p>
+          <p><strong>Status:</strong> ${safeText(resource.status, 'active')}</p>
+          <p><strong>Created:</strong> ${formatTimestamp(resource.createdAt)}</p>
+          <div class="admin-actions">
+            <button type="button" data-resource-open="${resource.id}">Open</button>
+            <button type="button" class="danger-button" data-resource-deactivate="${resource.id}" ${
+              String(resource.status || '').toLowerCase() !== 'active' ? 'disabled' : ''
+            }>
+              Deactivate
+            </button>
+            <button type="button" class="danger-button" data-resource-delete="${resource.id}">
+              Delete
+            </button>
+          </div>
+        </article>
+      `;
+    })
+    .join('');
+}
+
+async function loadTeacherResources() {
+  if (!auth.currentUser?.uid || !teacherResourcesListElement) return;
+
+  teacherResourcesListElement.innerHTML = '<p>Loading resources...</p>';
+
+  try {
+    let snapshot;
+    try {
+      snapshot = await getDocs(
+        query(collection(db, 'resources'), where('teacherId', '==', auth.currentUser.uid), orderBy('createdAt', 'desc'))
+      );
+    } catch (error) {
+      const fallbackSnapshot = await getDocs(query(collection(db, 'resources'), where('teacherId', '==', auth.currentUser.uid)));
+      const docs = [...fallbackSnapshot.docs].sort((a, b) => {
+        const aTime = a.data()?.createdAt?.toMillis?.() || 0;
+        const bTime = b.data()?.createdAt?.toMillis?.() || 0;
+        return bTime - aTime;
+      });
+      snapshot = { docs };
+      console.error('Failed to query teacher resources with orderBy:', error);
+    }
+
+    teacherResources = snapshot.docs.map((resourceDoc) => ({ id: resourceDoc.id, ...resourceDoc.data() }));
+    renderTeacherResources(teacherResources);
+  } catch (error) {
+    console.error('Failed to load teacher resources:', error);
+    teacherResources = [];
+    teacherResourcesListElement.innerHTML = '<p>Unable to load resources right now.</p>';
+    setResourceMessage('Unable to load your resources. Please try again.', 'error');
+  }
+}
+
+async function saveResourceLink() {
+  const teacher = auth.currentUser;
+  if (!teacher?.uid) {
+    setResourceMessage('You must be logged in to save resources.', 'error');
+    return;
+  }
+
+  const classId = String(resourceClassIdElement?.value || '').trim();
+  const title = String(resourceTitleElement?.value || '').trim();
+  const description = String(resourceDescriptionElement?.value || '').trim();
+  const url = String(resourceUrlElement?.value || '').trim();
+
+  if (!classId) {
+    setResourceMessage('Select a class first.', 'error');
+    return;
+  }
+
+  const selectedClass = teacherClasses.find((classItem) => classItem.id === classId);
+  if (!selectedClass) {
+    setResourceMessage('Invalid class selection.', 'error');
+    return;
+  }
+
+  if (!title) {
+    setResourceMessage('Title is required.', 'error');
+    return;
+  }
+
+  if (!url || !isValidHttpUrl(url)) {
+    setResourceMessage('Enter a valid URL (http/https).', 'error');
+    return;
+  }
+
+  if (saveResourceButton) {
+    saveResourceButton.disabled = true;
+    saveResourceButton.textContent = 'Saving...';
+  }
+
+  try {
+    await addDoc(collection(db, 'resources'), {
+      classId,
+      teacherId: teacher.uid,
+      teacherName: safeText(currentTeacherProfile?.displayName, 'Unknown Teacher'),
+      subjectName: safeText(selectedClass.subjectName, ''),
+      sectionName: safeText(selectedClass.sectionName, ''),
+      schoolYearId: safeText(selectedClass.schoolYearId, ''),
+      schoolYearName: safeText(selectedClass.schoolYearName, ''),
+      termId: safeText(selectedClass.termId, ''),
+      termName: safeText(selectedClass.termName, ''),
+      title,
+      description,
+      resourceType: 'link',
+      url,
+      status: 'active',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+
+    if (resourceTitleElement) resourceTitleElement.value = '';
+    if (resourceDescriptionElement) resourceDescriptionElement.value = '';
+    if (resourceUrlElement) resourceUrlElement.value = '';
+
+    setResourceMessage('Resource link saved successfully.', 'success');
+    await loadTeacherResources();
+  } catch (error) {
+    console.error('Failed to save resource:', error);
+    setResourceMessage('Unable to save resource link. Please try again.', 'error');
+  } finally {
+    if (saveResourceButton) {
+      saveResourceButton.disabled = false;
+      saveResourceButton.textContent = 'Save Resource';
+    }
+  }
+}
+
+async function deactivateResource(resourceId) {
+  const id = String(resourceId || '').trim();
+  if (!id || !auth.currentUser?.uid) return;
+
+  const matched = teacherResources.find((item) => item.id === id);
+  if (!matched || String(matched.teacherId || '').trim() !== auth.currentUser.uid) {
+    setResourceMessage('You can only deactivate your own resources.', 'error');
+    return;
+  }
+
+  try {
+    await updateDoc(doc(db, 'resources', id), {
+      status: 'inactive',
+      updatedAt: serverTimestamp()
+    });
+    setResourceMessage('Resource deactivated.', 'success');
+    await loadTeacherResources();
+  } catch (error) {
+    console.error('Failed to deactivate resource:', error);
+    setResourceMessage('Unable to deactivate resource. Please try again.', 'error');
+  }
+}
+
+async function deleteResource(resourceId) {
+  const id = String(resourceId || '').trim();
+  if (!id || !auth.currentUser?.uid) return;
+
+  const matched = teacherResources.find((item) => item.id === id);
+  if (!matched || String(matched.teacherId || '').trim() !== auth.currentUser.uid) {
+    setResourceMessage('You can only delete your own resources.', 'error');
+    return;
+  }
+
+  try {
+    await deleteDoc(doc(db, 'resources', id));
+    setResourceMessage('Resource deleted.', 'success');
+    await loadTeacherResources();
+  } catch (error) {
+    console.error('Failed to delete resource:', error);
+    setResourceMessage('Unable to delete resource. Please try again.', 'error');
+  }
+}
+
 async function loadMyClasses() {
   if (!auth.currentUser?.uid) return;
 
@@ -672,6 +905,7 @@ async function loadTeacherClassesForSelection() {
   teacherClasses = snapshot.docs.map((classDoc) => ({ id: classDoc.id, ...classDoc.data() }));
   populateTeacherClassSelectors(teacherClasses);
   populateEnrollmentClassFilter(teacherClasses);
+  populateResourceClassFilter(teacherClasses);
   return teacherClasses;
 }
 
@@ -1991,6 +2225,10 @@ menuButtons.forEach((button) => {
     if (targetPage === 'enrollment-requests' && auth.currentUser?.uid) {
       loadEnrollmentRequests();
     }
+
+    if (targetPage === 'resources' && auth.currentUser?.uid) {
+      loadTeacherResources();
+    }
   });
 });
 
@@ -2192,6 +2430,43 @@ createClassButton?.addEventListener('click', () => {
   createClass();
 });
 
+saveResourceButton?.addEventListener('click', () => {
+  saveResourceLink();
+});
+
+teacherResourcesListElement?.addEventListener('click', (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+
+  const openButton = target.closest('button[data-resource-open]');
+  if (openButton instanceof HTMLButtonElement) {
+    const resourceId = String(openButton.dataset.resourceOpen || '').trim();
+    const selected = teacherResources.find((item) => item.id === resourceId);
+    const url = String(selected?.url || '').trim();
+    if (url) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+    return;
+  }
+
+  const deactivateButton = target.closest('button[data-resource-deactivate]');
+  if (deactivateButton instanceof HTMLButtonElement) {
+    deactivateButton.disabled = true;
+    deactivateResource(deactivateButton.dataset.resourceDeactivate).finally(() => {
+      deactivateButton.disabled = false;
+    });
+    return;
+  }
+
+  const deleteButton = target.closest('button[data-resource-delete]');
+  if (deleteButton instanceof HTMLButtonElement) {
+    deleteButton.disabled = true;
+    deleteResource(deleteButton.dataset.resourceDelete).finally(() => {
+      deleteButton.disabled = false;
+    });
+  }
+});
+
 logoutButton?.addEventListener('click', async () => {
   try {
     await signOut(auth);
@@ -2263,6 +2538,7 @@ onAuthStateChanged(auth, async (user) => {
 
     setClassMessage('Create and manage your own classes here.', '');
     setEnrollmentMessage('Review pending enrollment requests for your classes.', '');
+    setResourceMessage('Share external learning links for your classes.', '');
     renderClassRecordTable([], [], new Map(), 'Select a class first.');
     setClassRecordMessage('Select a class first.', '');
 
@@ -2276,6 +2552,7 @@ onAuthStateChanged(auth, async (user) => {
     ]);
     await loadMyClasses();
     await loadEnrollmentRequests();
+    await loadTeacherResources();
     await loadTeacherSectionLeaderboardPreview();
     await loadTeacherStudentRankPreview();
   } catch (error) {
