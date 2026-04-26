@@ -1223,25 +1223,28 @@ function getAchievementStatusDetails(achievement, unlockedIds) {
   const requirement = getAchievementRequirementText(achievement);
   return {
     isUnlocked,
-    statusLabel: isUnlocked ? 'Unlocked' : 'Locked • visible',
+    statusLabel: isUnlocked ? 'Unlocked' : 'Next',
     requirement
   };
 }
 
 function renderAchievementCard(achievement, unlockedIds) {
   const status = getAchievementStatusDetails(achievement, unlockedIds);
-  const achievedAt = achievement.achievedAt ? `<p><strong>Achieved:</strong> ${escapeHtml(formatAchievementDate(achievement.achievedAt))}</p>` : '';
+  const title = escapeHtml(achievement.title || 'Untitled Achievement');
+  const rewardPoints = Number(achievement.rewardPoints || 0);
+  const detailTextRaw = status.requirement || achievement.description || 'No description available.';
+  const detailText = detailTextRaw.length > 62 ? `${detailTextRaw.slice(0, 59).trimEnd()}…` : detailTextRaw;
 
   return `
-    <li class="achievement-card ${status.isUnlocked ? 'unlocked' : 'locked'}">
+    <li class="achievement-card compact ${status.isUnlocked ? 'unlocked' : 'locked'}">
       <div class="achievement-card-header">
-        <h4>${escapeHtml(achievement.title || 'Untitled Achievement')}</h4>
+        <h4>${title}</h4>
         <span class="achievement-status-pill ${status.isUnlocked ? 'unlocked' : 'locked'}">${escapeHtml(status.statusLabel)}</span>
       </div>
-      <p>${escapeHtml(achievement.description || 'No description available.')}</p>
-      <p><strong>Category:</strong> ${escapeHtml(achievement.category || 'General')}</p>
-      <p><strong>Reward:</strong> +${escapeHtml(String(achievement.rewardPoints || 0))} points</p>
-      ${status.isUnlocked ? achievedAt : `<p><strong>Requirement:</strong> ${escapeHtml(status.requirement)}</p>`}
+      <div class="achievement-meta-row">
+        <span class="achievement-requirement">${escapeHtml(detailText)}</span>
+        <span class="achievement-reward-mini">+${escapeHtml(String(rewardPoints))} pts</span>
+      </div>
     </li>
   `;
 }
