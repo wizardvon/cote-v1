@@ -746,10 +746,23 @@ export async function unlockAchievement(studentId, achievement, context = {}) {
   }
 }
 
-export async function claimAchievement(studentId, achievementId) {
+function showPointsPopupSafe(points) {
+  if (typeof globalThis.showPointsPopup !== 'function') return;
+  const normalizedPoints = Number(points || 0);
+  if (!Number.isFinite(normalizedPoints) || normalizedPoints <= 0) return;
+
+  try {
+    globalThis.showPointsPopup(normalizedPoints);
+  } catch (error) {
+    console.warn('Points popup render skipped:', error);
+  }
+}
+
+export async function claimAchievement(studentId, achievementId, options = {}) {
   const normalizedStudentId = safeText(studentId);
   const normalizedAchievementId = safeText(achievementId);
   if (!normalizedStudentId || !normalizedAchievementId) return { claimed: false, reason: 'invalid_input' };
+  const suppressPopup = Boolean(options?.suppressPopup);
 
   const studentAchievementRef = doc(db, 'studentAchievements', buildStudentAchievementDocId(normalizedStudentId, normalizedAchievementId));
   const pointLogRef = doc(db, 'pointLogs', buildAchievementPointLogDocId(normalizedStudentId, normalizedAchievementId));
@@ -811,13 +824,56 @@ export async function claimAchievement(studentId, achievementId) {
         claimedAt: serverTimestamp()
       });
 
-      return { claimed: true };
+      return { claimed: true, rewardPoints };
     });
+
+    if (transactionResult.claimed && !suppressPopup) {
+      showPointsPopupSafe(transactionResult.rewardPoints);
+    }
 
     return transactionResult;
   } catch (error) {
     console.warn('Achievement claim failed:', error);
     return { claimed: false, reason: 'claim_error' };
+  }
+}
+
+export async function claimAllAchievements(studentId) {
+  const normalizedStudentId = safeText(studentId);
+  if (!normalizedStudentId) return { claimedCount: 0, totalPoints: 0 };
+
+  try {
+    const unclaimedSnapshot = await getDocs(
+      query(
+        collection(db, 'studentAchievements'),
+        where('studentId', '==', normalizedStudentId),
+        where('isClaimed', '==', false)
+      )
+    );
+
+    let claimedCount = 0;
+    let totalPoints = 0;
+
+    for (const docItem of unclaimedSnapshot.docs) {
+      const data = docItem.data() || {};
+      const achievementId = safeText(data.achievementId);
+      if (!achievementId) continue;
+
+      const result = await claimAchievement(normalizedStudentId, achievementId, { suppressPopup: true });
+      if (!result.claimed) continue;
+
+      claimedCount += 1;
+      totalPoints += Number(result.rewardPoints || 0);
+    }
+
+    if (totalPoints > 0) {
+      showPointsPopupSafe(totalPoints);
+    }
+
+    return { claimedCount, totalPoints };
+  } catch (error) {
+    console.warn('Claim all achievements failed:', error);
+    return { claimedCount: 0, totalPoints: 0 };
   }
 }
 
