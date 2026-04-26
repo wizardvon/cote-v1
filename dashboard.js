@@ -20,7 +20,8 @@ import {
   getStudentAchievementStatusMap,
   getAchievementRequirementText,
   seedAchievementsIfEmpty,
-  claimAchievement
+  claimAchievement,
+  claimAllAchievements
 } from './achievements.js';
 
 const profileDataElement = document.getElementById('profileData');
@@ -225,6 +226,24 @@ function escapeHtml(value) {
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
 }
+
+function showPointsPopup(points) {
+  const normalizedPoints = Number(points || 0);
+  if (!Number.isFinite(normalizedPoints) || normalizedPoints <= 0) return;
+
+  const popup = document.createElement('div');
+  popup.className = 'points-popup';
+  popup.innerText = `+${Math.round(normalizedPoints)} pts`;
+
+  document.body.appendChild(popup);
+
+  setTimeout(() => {
+    popup.classList.add('fade-out');
+    setTimeout(() => popup.remove(), 500);
+  }, 800);
+}
+
+globalThis.showPointsPopup = showPointsPopup;
 
 function makeLeaderboardName(data) {
   return [data.firstName, data.lastName]
@@ -1247,7 +1266,9 @@ function renderAchievementCard(achievement, unlockedIds, achievementStatusMap = 
       : '';
 
   return `
-    <li class="achievement-card compact ${status.isUnlocked ? 'unlocked' : 'locked'}">
+    <li class="achievement-card compact ${status.isUnlocked ? 'unlocked' : 'locked'} ${
+      status.isClaimed ? 'achievement-card-claimed' : ''
+    }">
       <div class="achievement-card-header">
         <h4>${title}</h4>
         <span class="achievement-status-pill ${status.isUnlocked ? 'unlocked' : 'locked'}">${escapeHtml(status.statusLabel)}</span>
@@ -1288,6 +1309,10 @@ async function loadAchievementsDashboard(studentId) {
 
     const unlockedAchievements = visibleAchievements.filter((achievement) => unlockedIds.has(achievement.id));
     const lockedVisibleAchievements = visibleAchievements.filter((achievement) => !unlockedIds.has(achievement.id));
+    const unclaimedAchievements = unlockedAchievements.filter((achievement) => {
+      const achievementStatus = achievementStatusMap.get(achievement.id);
+      return achievementStatus?.isUnlocked && !achievementStatus?.isClaimed;
+    });
 
     const latestAchievement = unlockedAchievements
       .slice()
@@ -1298,8 +1323,14 @@ async function loadAchievementsDashboard(studentId) {
     if (achievementsSummaryElement) {
       achievementsSummaryElement.innerHTML = `
         <p><strong>Total achievements unlocked:</strong> ${unlockedAchievements.length}</p>
+        <p><strong>Unclaimed rewards:</strong> ${unclaimedAchievements.length}</p>
         <p><strong>Latest achievement:</strong> ${escapeHtml(latestAchievement?.title || 'No unlocked achievement yet')}</p>
         <p><strong>Next achievement:</strong> ${escapeHtml(nextAchievement?.title || 'No visible next achievement')}</p>
+        ${
+          unclaimedAchievements.length >= 2
+            ? '<button type="button" id="claim-all-btn" class="claim-all-btn">Claim All</button>'
+            : ''
+        }
       `;
     }
 
@@ -1716,20 +1747,37 @@ document.addEventListener('keydown', (event) => {
 
 document.addEventListener('click', async (event) => {
   const claimButton = event.target.closest('.claim-btn');
-  if (!claimButton) return;
-  if (!currentStudentUser?.uid) return;
+  if (claimButton) {
+    if (!currentStudentUser?.uid) return;
 
-  const achievementId = String(claimButton.dataset.id || '').trim();
-  if (!achievementId) return;
+    const achievementId = String(claimButton.dataset.id || '').trim();
+    if (!achievementId) return;
 
-  claimButton.disabled = true;
-  try {
-    await claimAchievement(currentStudentUser.uid, achievementId);
-    await refreshAchievementsUI();
-  } catch (error) {
-    console.error('Failed to claim achievement reward:', error);
-  } finally {
-    claimButton.disabled = false;
+    claimButton.disabled = true;
+    try {
+      await claimAchievement(currentStudentUser.uid, achievementId);
+      await refreshAchievementsUI();
+    } catch (error) {
+      console.error('Failed to claim achievement reward:', error);
+    } finally {
+      claimButton.disabled = false;
+    }
+    return;
+  }
+
+  const claimAllButton = event.target.closest('#claim-all-btn');
+  if (claimAllButton) {
+    if (!currentStudentUser?.uid) return;
+
+    claimAllButton.disabled = true;
+    try {
+      await claimAllAchievements(currentStudentUser.uid);
+      await refreshAchievementsUI();
+    } catch (error) {
+      console.error('Failed to claim all achievement rewards:', error);
+    } finally {
+      claimAllButton.disabled = false;
+    }
   }
 });
 
