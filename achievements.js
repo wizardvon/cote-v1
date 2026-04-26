@@ -519,6 +519,25 @@ export async function getStudentUnlockedAchievementIds(studentId) {
   return new Set(achievementRecords.map((item) => safeText(item.achievementId)).filter(Boolean));
 }
 
+export async function getStudentAchievementStatusMap(studentId) {
+  const achievementRecords = await getStudentAchievementRecords(studentId);
+  const statusMap = new Map();
+
+  achievementRecords.forEach((item) => {
+    const achievementId = safeText(item.achievementId);
+    if (!achievementId) return;
+
+    statusMap.set(achievementId, {
+      isUnlocked: true,
+      isClaimed: Boolean(item.isClaimed),
+      achievedAt: item.achievedAt || null,
+      claimedAt: item.claimedAt || null
+    });
+  });
+
+  return statusMap;
+}
+
 async function getActiveAchievements(triggerType = '') {
   const normalizedTriggerType = safeText(triggerType);
   const source = [];
@@ -685,9 +704,7 @@ export async function unlockAchievement(studentId, achievement, context = {}) {
   if (!normalizedStudentId || !achievement?.id) return { unlocked: false };
 
   const studentAchievementId = buildStudentAchievementDocId(normalizedStudentId, achievement.id);
-  const pointLogId = buildAchievementPointLogDocId(normalizedStudentId, achievement.id);
   const studentAchievementRef = doc(db, 'studentAchievements', studentAchievementId);
-  const pointLogRef = doc(db, 'pointLogs', pointLogId);
   const studentRef = doc(db, 'students', normalizedStudentId);
 
   try {
@@ -702,12 +719,6 @@ export async function unlockAchievement(studentId, achievement, context = {}) {
         return { unlocked: false, reason: 'student_not_found' };
       }
 
-      const studentData = studentSnap.data() || {};
-      const studentName = formatStudentName(studentData);
-      const sectionId = safeText(studentData.sectionId);
-      const sectionRef = sectionId ? doc(db, 'sections', sectionId) : null;
-      const sectionSnap = sectionRef ? await transaction.get(sectionRef) : null;
-
       transaction.set(studentAchievementRef, {
         studentId: normalizedStudentId,
         achievementId: achievement.id,
@@ -715,33 +726,10 @@ export async function unlockAchievement(studentId, achievement, context = {}) {
         category: achievement.category,
         chainKey: achievement.chainKey,
         rewardPoints: achievement.rewardPoints,
+        isClaimed: false,
         achievedAt: serverTimestamp(),
         sourceType: safeText(context.triggerType, 'achievement_engine'),
         sourceId: safeText(context.sourceId)
-      });
-
-      transaction.update(studentRef, {
-        points: increment(Number(achievement.rewardPoints || 100))
-      });
-
-      if (sectionRef && sectionSnap?.exists()) {
-        transaction.update(sectionRef, {
-          totalPoints: increment(Number(achievement.rewardPoints || 100))
-        });
-      }
-
-      transaction.set(pointLogRef, {
-        studentId: normalizedStudentId,
-        studentName: studentName || safeText(studentData.displayName, 'Student'),
-        achievementId: achievement.id,
-        achievementTitle: achievement.title,
-        source: 'achievement',
-        awardedPoints: Number(achievement.rewardPoints || 100),
-        pointDifference: Number(achievement.rewardPoints || 100),
-        previousAwardedPoints: 0,
-        reason: `${achievement.title} unlocked`,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
       });
 
       return { unlocked: true };
@@ -755,6 +743,81 @@ export async function unlockAchievement(studentId, achievement, context = {}) {
   } catch (error) {
     console.warn('Achievement unlock failed:', error);
     return { unlocked: false, reason: 'unlock_error' };
+  }
+}
+
+export async function claimAchievement(studentId, achievementId) {
+  const normalizedStudentId = safeText(studentId);
+  const normalizedAchievementId = safeText(achievementId);
+  if (!normalizedStudentId || !normalizedAchievementId) return { claimed: false, reason: 'invalid_input' };
+
+  const studentAchievementRef = doc(db, 'studentAchievements', buildStudentAchievementDocId(normalizedStudentId, normalizedAchievementId));
+  const pointLogRef = doc(db, 'pointLogs', buildAchievementPointLogDocId(normalizedStudentId, normalizedAchievementId));
+  const studentRef = doc(db, 'students', normalizedStudentId);
+  const achievementRef = doc(db, 'achievements', normalizedAchievementId);
+
+  try {
+    const transactionResult = await runTransaction(db, async (transaction) => {
+      const studentAchievementSnap = await transaction.get(studentAchievementRef);
+      if (!studentAchievementSnap.exists()) {
+        return { claimed: false, reason: 'achievement_not_unlocked' };
+      }
+
+      const studentAchievementData = studentAchievementSnap.data() || {};
+      if (studentAchievementData.isClaimed) {
+        return { claimed: false, reason: 'already_claimed' };
+      }
+
+      const achievementSnap = await transaction.get(achievementRef);
+      if (!achievementSnap.exists()) {
+        return { claimed: false, reason: 'achievement_missing' };
+      }
+
+      const studentSnap = await transaction.get(studentRef);
+      if (!studentSnap.exists()) {
+        return { claimed: false, reason: 'student_not_found' };
+      }
+
+      const achievementData = normalizeAchievement(achievementSnap.data() || {});
+      const rewardPoints = Number(achievementData.rewardPoints || studentAchievementData.rewardPoints || 0);
+      const studentData = studentSnap.data() || {};
+      const studentName = formatStudentName(studentData) || safeText(studentData.displayName, 'Student');
+      const sectionId = safeText(studentData.sectionId);
+      const sectionRef = sectionId ? doc(db, 'sections', sectionId) : null;
+      const sectionSnap = sectionRef ? await transaction.get(sectionRef) : null;
+
+      transaction.update(studentRef, { points: increment(rewardPoints) });
+
+      if (sectionRef && sectionSnap?.exists()) {
+        transaction.update(sectionRef, { totalPoints: increment(rewardPoints) });
+      }
+
+      transaction.set(pointLogRef, {
+        studentId: normalizedStudentId,
+        studentName,
+        achievementId: normalizedAchievementId,
+        achievementTitle: achievementData.title || studentAchievementData.title || 'Achievement reward',
+        source: 'achievement',
+        awardedPoints: rewardPoints,
+        pointDifference: rewardPoints,
+        previousAwardedPoints: 0,
+        reason: `${achievementData.title || studentAchievementData.title || 'Achievement'} claimed`,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+
+      transaction.update(studentAchievementRef, {
+        isClaimed: true,
+        claimedAt: serverTimestamp()
+      });
+
+      return { claimed: true };
+    });
+
+    return transactionResult;
+  } catch (error) {
+    console.warn('Achievement claim failed:', error);
+    return { claimed: false, reason: 'claim_error' };
   }
 }
 
