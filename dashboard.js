@@ -17,8 +17,10 @@ import {
 import {
   getVisibleAchievementsForStudent,
   getStudentUnlockedAchievementIds,
+  getStudentAchievementStatusMap,
   getAchievementRequirementText,
-  seedAchievementsIfEmpty
+  seedAchievementsIfEmpty,
+  claimAchievement
 } from './achievements.js';
 
 const profileDataElement = document.getElementById('profileData');
@@ -1218,22 +1220,31 @@ function formatAchievementDate(value) {
   return value.toDate().toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function getAchievementStatusDetails(achievement, unlockedIds) {
+function getAchievementStatusDetails(achievement, unlockedIds, achievementStatusMap = new Map()) {
+  const achievementStatus = achievementStatusMap.get(achievement.id) || {};
   const isUnlocked = unlockedIds.has(achievement.id);
+  const isClaimed = Boolean(achievementStatus.isClaimed);
   const requirement = getAchievementRequirementText(achievement);
   return {
     isUnlocked,
-    statusLabel: isUnlocked ? 'Unlocked' : 'Next',
+    isClaimed,
+    statusLabel: !isUnlocked ? 'Next' : isClaimed ? 'Completed ✔' : 'Unlocked',
     requirement
   };
 }
 
-function renderAchievementCard(achievement, unlockedIds) {
-  const status = getAchievementStatusDetails(achievement, unlockedIds);
+function renderAchievementCard(achievement, unlockedIds, achievementStatusMap = new Map()) {
+  const status = getAchievementStatusDetails(achievement, unlockedIds, achievementStatusMap);
   const title = escapeHtml(achievement.title || 'Untitled Achievement');
   const rewardPoints = Number(achievement.rewardPoints || 0);
   const detailTextRaw = status.requirement || achievement.description || 'No description available.';
   const detailText = detailTextRaw.length > 62 ? `${detailTextRaw.slice(0, 59).trimEnd()}…` : detailTextRaw;
+  const claimButtonHtml =
+    status.isUnlocked && !status.isClaimed
+      ? `<button type="button" class="claim-btn" data-id="${escapeHtml(achievement.id)}">Claim +${escapeHtml(
+          String(rewardPoints)
+        )} pts</button>`
+      : '';
 
   return `
     <li class="achievement-card compact ${status.isUnlocked ? 'unlocked' : 'locked'}">
@@ -1245,8 +1256,14 @@ function renderAchievementCard(achievement, unlockedIds) {
         <span class="achievement-requirement">${escapeHtml(detailText)}</span>
         <span class="achievement-reward-mini">+${escapeHtml(String(rewardPoints))} pts</span>
       </div>
+      ${claimButtonHtml}
     </li>
   `;
+}
+
+async function refreshAchievementsUI() {
+  if (!currentStudentUser?.uid) return;
+  await loadAchievementsDashboard(currentStudentUser.uid);
 }
 
 async function loadAchievementsDashboard(studentId) {
@@ -1263,9 +1280,10 @@ async function loadAchievementsDashboard(studentId) {
   }
 
   try {
-    const [visibleAchievements, unlockedIds] = await Promise.all([
+    const [visibleAchievements, unlockedIds, achievementStatusMap] = await Promise.all([
       getVisibleAchievementsForStudent(studentId),
-      getStudentUnlockedAchievementIds(studentId)
+      getStudentUnlockedAchievementIds(studentId),
+      getStudentAchievementStatusMap(studentId)
     ]);
 
     const unlockedAchievements = visibleAchievements.filter((achievement) => unlockedIds.has(achievement.id));
@@ -1287,13 +1305,15 @@ async function loadAchievementsDashboard(studentId) {
 
     if (unlockedAchievementsListElement) {
       unlockedAchievementsListElement.innerHTML = unlockedAchievements.length
-        ? unlockedAchievements.map((achievement) => renderAchievementCard(achievement, unlockedIds)).join('')
+        ? unlockedAchievements.map((achievement) => renderAchievementCard(achievement, unlockedIds, achievementStatusMap)).join('')
         : '<li>No achievements unlocked yet.</li>';
     }
 
     if (nextAchievementsListElement) {
       nextAchievementsListElement.innerHTML = lockedVisibleAchievements.length
-        ? lockedVisibleAchievements.map((achievement) => renderAchievementCard(achievement, unlockedIds)).join('')
+        ? lockedVisibleAchievements
+            .map((achievement) => renderAchievementCard(achievement, unlockedIds, achievementStatusMap))
+            .join('')
         : '<li>No visible locked achievements right now.</li>';
     }
   } catch (error) {
@@ -1691,6 +1711,25 @@ sidebarOverlay?.addEventListener('click', closeSidebar);
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
     closeSidebar();
+  }
+});
+
+document.addEventListener('click', async (event) => {
+  const claimButton = event.target.closest('.claim-btn');
+  if (!claimButton) return;
+  if (!currentStudentUser?.uid) return;
+
+  const achievementId = String(claimButton.dataset.id || '').trim();
+  if (!achievementId) return;
+
+  claimButton.disabled = true;
+  try {
+    await claimAchievement(currentStudentUser.uid, achievementId);
+    await refreshAchievementsUI();
+  } catch (error) {
+    console.error('Failed to claim achievement reward:', error);
+  } finally {
+    claimButton.disabled = false;
   }
 });
 
