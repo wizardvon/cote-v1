@@ -15,7 +15,7 @@ import {
   serverTimestamp,
   writeBatch
 } from './firebase.js';
-
+import { seedAchievementsIfEmpty } from './achievements.js';
 const superAdminEmailElement = document.getElementById('super-admin-email');
 const sidebarSuperAdminNameElement = document.getElementById('sidebar-super-admin-name');
 const logoutButton = document.getElementById('logout-button');
@@ -1081,13 +1081,15 @@ onAuthStateChanged(auth, async (user) => {
       sidebarSuperAdminNameElement.textContent = makeFullName({}, userData) || 'Super Admin';
     }
 
-    await Promise.all([
-      refreshTeacherViews(),
-      loadSchoolYears(),
-      loadTerms(),
-      loadSubjects(),
-      loadSections()
-    ]);
+ await seedAchievementsIfEmpty();
+
+await Promise.all([
+  refreshTeacherViews(),
+  loadSchoolYears(),
+  loadTerms(),
+  loadSubjects(),
+  loadSections()
+]);
   } catch (error) {
     console.error('Failed to validate super admin role:', error);
     window.location.replace('index.html');
