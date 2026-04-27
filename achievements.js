@@ -815,6 +815,7 @@ export async function claimAchievement(studentId, achievementId, options = {}) {
         pointDifference: rewardPoints,
         previousAwardedPoints: 0,
         reason: `${achievementData.title || studentAchievementData.title || 'Achievement'} claimed`,
+        teacherName: 'System',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
