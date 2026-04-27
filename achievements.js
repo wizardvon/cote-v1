@@ -18,6 +18,7 @@ import {
 } from './firebase.js';
 
 const ACHIEVEMENT_STATUS_ACTIVE = 'active';
+const BADGE_STATUS_ACTIVE = 'active';
 
 const ACHIEVEMENT_MASTER_DATA = [
   {
@@ -414,6 +415,68 @@ const ACHIEVEMENT_MASTER_DATA = [
   }
 ];
 
+const BADGE_ICON_OVERRIDES = {
+  first_perfect_score: '🏆',
+  double_perfection: '💎',
+  sharp_mind: '🧠',
+  starter_boost: '⚡',
+  first_step: '👣'
+};
+
+const BADGE_RARITY_OVERRIDES = {
+  first_perfect_score: 'Rare',
+  double_perfection: 'Rare',
+  sharp_mind: 'Common',
+  starter_boost: 'Common',
+  first_step: 'Common'
+};
+
+function deriveBadgeIcon(achievementId = '') {
+  const normalizedId = safeText(achievementId);
+  if (BADGE_ICON_OVERRIDES[normalizedId]) return BADGE_ICON_OVERRIDES[normalizedId];
+  if (normalizedId.includes('attendance')) return '📅';
+  if (normalizedId.includes('streak')) return '🔥';
+  if (normalizedId.includes('point') || normalizedId.includes('club') || normalizedId.includes('milestone')) return '⭐';
+  if (normalizedId.includes('perfect') || normalizedId.includes('flawless')) return '🏅';
+  if (normalizedId.includes('activity') || normalizedId.includes('step')) return '🎯';
+  return '🎖️';
+}
+
+function deriveBadgeRarity(achievement = {}) {
+  const normalizedId = safeText(achievement.id);
+  if (BADGE_RARITY_OVERRIDES[normalizedId]) return BADGE_RARITY_OVERRIDES[normalizedId];
+
+  const order = Number(achievement.chainOrder || 0);
+  if (order >= 5) return 'Epic';
+  if (order >= 3) return 'Rare';
+  return 'Common';
+}
+
+function buildBadgeId(achievementId = '') {
+  const normalizedId = safeText(achievementId);
+  return normalizedId ? `${normalizedId}_badge` : '';
+}
+
+function buildBadgeMasterDataFromAchievements() {
+  return ACHIEVEMENT_MASTER_DATA.map((achievement) => {
+    const badgeId = buildBadgeId(achievement.id);
+
+    return {
+      id: badgeId,
+      title: achievement.title,
+      description: `Earned by completing "${achievement.title}".`,
+      icon: deriveBadgeIcon(achievement.id),
+      category: achievement.category,
+      rarity: deriveBadgeRarity(achievement),
+      sourceType: 'achievement',
+      sourceAchievementId: achievement.id,
+      status: BADGE_STATUS_ACTIVE
+    };
+  });
+}
+
+const BADGE_MASTER_DATA = buildBadgeMasterDataFromAchievements();
+
 function normalizeAchievement(item = {}) {
   return {
     ...item,
@@ -425,7 +488,23 @@ function normalizeAchievement(item = {}) {
     chainOrder: Number(item.chainOrder) || 0,
     unlocksAfterAchievementId: item.unlocksAfterAchievementId ? String(item.unlocksAfterAchievementId).trim() : null,
     triggerType: String(item.triggerType || '').trim(),
-    rewardPoints: Math.max(100, Number(item.rewardPoints) || 100)
+    rewardPoints: Math.max(100, Number(item.rewardPoints) || 100),
+    badgeRewardId: safeText(item.badgeRewardId, buildBadgeId(item.id))
+  };
+}
+
+function normalizeBadge(item = {}) {
+  return {
+    ...item,
+    id: safeText(item.id),
+    title: safeText(item.title, 'Achievement Badge'),
+    description: safeText(item.description),
+    icon: safeText(item.icon, '🎖️'),
+    category: safeText(item.category, 'General'),
+    rarity: safeText(item.rarity, 'Common'),
+    sourceType: safeText(item.sourceType, 'achievement'),
+    sourceAchievementId: safeText(item.sourceAchievementId),
+    status: safeText(item.status, BADGE_STATUS_ACTIVE)
   };
 }
 
@@ -474,7 +553,11 @@ async function queryAllStudentScores(studentId) {
 export async function seedAchievementsIfEmpty() {
   try {
     const existingSnapshot = await getDocs(query(collection(db, 'achievements'), limit(1)));
-    if (!existingSnapshot.empty) return false;
+    if (!existingSnapshot.empty) {
+      await ensureAchievementBadgeRewardIds();
+      await seedBadgesIfEmpty();
+      return false;
+    }
 
     const batch = writeBatch(db);
     const now = serverTimestamp();
@@ -484,7 +567,7 @@ export async function seedAchievementsIfEmpty() {
       const achievementRef = doc(db, 'achievements', achievement.id);
       batch.set(achievementRef, {
         ...achievement,
-        badgeRewardId: null,
+        badgeRewardId: safeText(achievement.badgeRewardId, buildBadgeId(achievement.id)),
         unlockItemIds: [],
         isHidden: false,
         status: ACHIEVEMENT_STATUS_ACTIVE,
@@ -494,9 +577,73 @@ export async function seedAchievementsIfEmpty() {
     });
 
     await batch.commit();
+    await seedBadgesIfEmpty();
     return true;
   } catch (error) {
     console.warn('Achievement seeding skipped:', error);
+    return false;
+  }
+}
+
+export async function seedBadgesIfEmpty() {
+  try {
+    const existingSnapshot = await getDocs(query(collection(db, 'badges'), limit(1)));
+    if (!existingSnapshot.empty) return false;
+
+    const batch = writeBatch(db);
+    const now = serverTimestamp();
+
+    BADGE_MASTER_DATA.forEach((rawBadge) => {
+      const badge = normalizeBadge(rawBadge);
+      const badgeRef = doc(db, 'badges', badge.id);
+
+      batch.set(badgeRef, {
+        ...badge,
+        status: BADGE_STATUS_ACTIVE,
+        createdAt: now,
+        updatedAt: now
+      });
+    });
+
+    await batch.commit();
+    return true;
+  } catch (error) {
+    console.warn('Badge seeding skipped:', error);
+    return false;
+  }
+}
+
+async function ensureAchievementBadgeRewardIds() {
+  try {
+    const snapshot = await getDocs(collection(db, 'achievements'));
+    if (snapshot.empty) return false;
+
+    const batch = writeBatch(db);
+    let updateCount = 0;
+
+    snapshot.docs.forEach((item) => {
+      const data = item.data() || {};
+      const achievementId = safeText(data.id, item.id);
+      const badgeRewardId = safeText(data.badgeRewardId);
+      const nextBadgeRewardId = buildBadgeId(achievementId);
+
+      if (!achievementId || !nextBadgeRewardId || badgeRewardId) return;
+
+      batch.update(item.ref, {
+        badgeRewardId: nextBadgeRewardId,
+        updatedAt: serverTimestamp()
+      });
+      updateCount += 1;
+    });
+
+    if (updateCount > 0) {
+      await batch.commit();
+      return true;
+    }
+
+    return false;
+  } catch (error) {
+    console.warn('Achievement badgeRewardId backfill skipped:', error);
     return false;
   }
 }
@@ -737,12 +884,70 @@ export async function unlockAchievement(studentId, achievement, context = {}) {
 
     if (transactionResult.unlocked) {
       await createAchievementNotification(normalizedStudentId, achievement);
+      const badgeRewardId = safeText(achievement.badgeRewardId);
+      if (badgeRewardId) {
+        await awardBadge(normalizedStudentId, badgeRewardId, achievement);
+      }
     }
 
     return transactionResult;
   } catch (error) {
     console.warn('Achievement unlock failed:', error);
     return { unlocked: false, reason: 'unlock_error' };
+  }
+}
+
+export async function awardBadge(studentId, badgeId, achievement = {}) {
+  const normalizedStudentId = safeText(studentId);
+  const normalizedBadgeId = safeText(badgeId);
+  if (!normalizedStudentId || !normalizedBadgeId) return { awarded: false, reason: 'invalid_input' };
+
+  const studentBadgeDocId = `${normalizedStudentId}_${normalizedBadgeId}`;
+  const studentBadgeRef = doc(db, 'studentBadges', studentBadgeDocId);
+
+  try {
+    const existingStudentBadgeSnap = await getDoc(studentBadgeRef);
+    if (existingStudentBadgeSnap.exists()) {
+      return { awarded: false, reason: 'already_awarded' };
+    }
+
+    const badgeRef = doc(db, 'badges', normalizedBadgeId);
+    const badgeSnap = await getDoc(badgeRef);
+    if (!badgeSnap.exists()) {
+      return { awarded: false, reason: 'badge_missing' };
+    }
+
+    const badgeData = normalizeBadge(badgeSnap.data() || {});
+    await setDoc(studentBadgeRef, {
+      studentId: normalizedStudentId,
+      badgeId: normalizedBadgeId,
+      title: badgeData.title,
+      icon: badgeData.icon,
+      rarity: badgeData.rarity,
+      sourceType: safeText(badgeData.sourceType, 'achievement'),
+      sourceAchievementId: safeText(badgeData.sourceAchievementId, achievement.id),
+      acquiredAt: serverTimestamp()
+    });
+
+    return { awarded: true };
+  } catch (error) {
+    console.warn('Badge award failed:', error);
+    return { awarded: false, reason: 'award_error' };
+  }
+}
+
+export async function getStudentBadges(studentId) {
+  const normalizedStudentId = safeText(studentId);
+  if (!normalizedStudentId) return [];
+
+  try {
+    const snapshot = await getDocs(
+      query(collection(db, 'studentBadges'), where('studentId', '==', normalizedStudentId), orderBy('acquiredAt', 'desc'))
+    );
+    return snapshot.docs.map((item) => ({ id: item.id, ...(item.data() || {}) }));
+  } catch (error) {
+    console.warn('Failed loading student badges:', error);
+    return [];
   }
 }
 

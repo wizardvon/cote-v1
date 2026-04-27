@@ -19,6 +19,16 @@ function isTeacher() {
   return signedIn() && myUser().role == 'teacher';
 }
 
+function isActiveTeacher() {
+  return isTeacher() && myUser().status == 'active';
+}
+
+function isActiveAdmin() {
+  return signedIn()
+    && myUser().role in ['admin', 'superAdmin']
+    && myUser().status == 'active';
+}
+
 function isStudentOwner(studentId) {
   return signedIn() && request.auth.uid == studentId;
 }
@@ -44,6 +54,33 @@ match /studentAchievements/{studentAchievementId} {
     && request.resource.data.sourceType is string
     && request.resource.data.sourceId is string
     && isStudentOwner(request.resource.data.studentId);
+
+  allow update, delete: if isSuperAdmin();
+}
+
+match /badges/{badgeId} {
+  allow read: if signedIn();
+  allow create, update, delete: if isSuperAdmin();
+}
+
+match /studentBadges/{studentBadgeId} {
+  allow read: if isSuperAdmin()
+    || isActiveTeacher()
+    || isStudentOwner(resource.data.studentId);
+
+  allow create: if signedIn()
+    && request.resource.data.studentId is string
+    && request.resource.data.badgeId is string
+    && request.resource.data.title is string
+    && request.resource.data.icon is string
+    && request.resource.data.rarity is string
+    && request.resource.data.sourceType is string
+    && request.resource.data.sourceAchievementId is string
+    && (
+      request.resource.data.studentId == request.auth.uid
+      || isActiveTeacher()
+      || isActiveAdmin()
+    );
 
   allow update, delete: if isSuperAdmin();
 }

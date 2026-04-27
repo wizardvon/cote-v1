@@ -21,10 +21,12 @@ import {
   getAchievementRequirementText,
   seedAchievementsIfEmpty,
   claimAchievement,
-  claimAllAchievements
+  claimAllAchievements,
+  getStudentBadges
 } from './achievements.js';
 
 const profileDataElement = document.getElementById('profileData');
+const profileBadgesElement = document.getElementById('profile-badges');
 const profileFullNameElement = document.getElementById('profile-full-name');
 const profileEmailElement = document.getElementById('profile-email');
 const profileGradeSectionElement = document.getElementById('profile-grade-section');
@@ -225,6 +227,48 @@ function escapeHtml(value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
+}
+
+function renderStudentBadges(badges = []) {
+  if (!profileBadgesElement) return;
+
+  if (!Array.isArray(badges) || badges.length === 0) {
+    profileBadgesElement.innerHTML = '<p class="badges-empty">No badges earned yet.</p>';
+    return;
+  }
+
+  profileBadgesElement.innerHTML = `
+    <div class="badge-grid">
+      ${badges
+        .map((badge) => {
+          const icon = escapeHtml(String(badge.icon || '🎖️'));
+          const title = escapeHtml(String(badge.title || 'Badge'));
+          const rarity = escapeHtml(String(badge.rarity || 'Common'));
+
+          return `
+            <article class="student-badge-card" title="${title} (${rarity})">
+              <span class="student-badge-icon" aria-hidden="true">${icon}</span>
+              <p class="student-badge-title">${title}</p>
+              <p class="student-badge-rarity">${rarity}</p>
+            </article>
+          `;
+        })
+        .join('')}
+    </div>
+  `;
+}
+
+async function loadStudentBadges(studentId) {
+  if (!profileBadgesElement) return;
+  profileBadgesElement.innerHTML = '<p class="badges-empty">Loading badges...</p>';
+
+  try {
+    const badges = await getStudentBadges(studentId);
+    renderStudentBadges(badges);
+  } catch (error) {
+    console.error('Failed to load student badges:', error);
+    profileBadgesElement.innerHTML = '<p class="badges-empty">Unable to load badges right now.</p>';
+  }
 }
 
 function showPointsPopup(points) {
@@ -1278,6 +1322,7 @@ function renderAchievementCard(achievement, unlockedIds, achievementStatusMap = 
   const rewardPoints = Number(achievement.rewardPoints || 0);
   const detailTextRaw = status.requirement || achievement.description || 'No description available.';
   const detailText = detailTextRaw.length > 62 ? `${detailTextRaw.slice(0, 59).trimEnd()}…` : detailTextRaw;
+  const hasBadgeReward = Boolean(String(achievement.badgeRewardId || '').trim());
   const claimButtonHtml =
     status.isUnlocked && !status.isClaimed
       ? `<button type="button" class="claim-btn" data-id="${escapeHtml(achievement.id)}">Claim +${escapeHtml(
@@ -1297,6 +1342,7 @@ function renderAchievementCard(achievement, unlockedIds, achievementStatusMap = 
         <span class="achievement-requirement">${escapeHtml(detailText)}</span>
         <span class="achievement-reward-mini">+${escapeHtml(String(rewardPoints))} pts</span>
       </div>
+      ${hasBadgeReward ? '<p class="achievement-reward-note">Reward: +points pts + Badge</p>' : ''}
       ${claimButtonHtml}
     </li>
   `;
@@ -1673,6 +1719,10 @@ function renderStudentProfileNotFound(email = '', uid = '') {
       <p><strong>Total Points:</strong> 0</p>
     `;
   }
+
+  if (profileBadgesElement) {
+    profileBadgesElement.innerHTML = '<p class="badges-empty">No badges earned yet.</p>';
+  }
 }
 
 function renderNoProfile(email = '') {
@@ -1740,6 +1790,10 @@ function renderNoProfile(email = '') {
       <p><strong>Section:</strong> Not provided</p>
       <p><strong>Total Points:</strong> 0</p>
     `;
+  }
+
+  if (profileBadgesElement) {
+    profileBadgesElement.innerHTML = '<p class="badges-empty">No badges earned yet.</p>';
   }
 }
 
@@ -1855,6 +1909,7 @@ onAuthStateChanged(auth, async () => {
     setStudentData(studentData, user.email);
     await loadStudentSectionStanding(studentData);
     await seedAchievementsIfEmpty();
+    await loadStudentBadges(uid);
     loadPointLogs(uid);
     loadAchievementsDashboard(uid);
     loadMyEnrollments();
@@ -1906,6 +1961,9 @@ onAuthStateChanged(auth, async () => {
 
     if (profileStudentRankElement) {
       profileStudentRankElement.textContent = 'Not yet assigned';
+    }
+    if (profileBadgesElement) {
+      profileBadgesElement.innerHTML = '<p class="badges-empty">Unable to load badges right now.</p>';
     }
     setSectionStanding({});
   }

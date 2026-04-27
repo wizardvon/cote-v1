@@ -618,6 +618,52 @@ button:active {
   margin-top: 0.22rem !important;
 }
 
+.profile-badges {
+  margin-top: 0.75rem;
+}
+
+.badge-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 0.55rem;
+}
+
+.student-badge-card {
+  background: rgba(6, 18, 34, 0.78);
+  border: 1px solid rgba(58, 190, 255, 0.26);
+  border-radius: 11px;
+  padding: 0.52rem;
+  text-align: center;
+}
+
+.student-badge-icon {
+  display: block;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.student-badge-title {
+  margin: 0.34rem 0 0 !important;
+  color: #dbeafe !important;
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+
+.student-badge-rarity {
+  margin: 0.2rem 0 0 !important;
+  color: #facc15 !important;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.badges-empty {
+  margin: 0 !important;
+  font-size: 0.84rem;
+  color: var(--text-soft) !important;
+}
+
 .info-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -1219,6 +1265,12 @@ button:active {
   font-size: 0.72rem;
   font-weight: 800;
   color: #facc15;
+}
+
+.achievement-reward-note {
+  margin: 0.3rem 0 0 !important;
+  font-size: 0.68rem;
+  color: #9ce8ff !important;
 }
 
 .achievement-status-pill {
