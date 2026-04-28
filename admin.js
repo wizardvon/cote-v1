@@ -91,6 +91,21 @@ const pageTitles = {
   'class-record': 'Class Record',
   'enrollment-requests': 'Enrollment Requests'
 };
+const LAST_PAGE_STORAGE_KEY = 'cote.teacher.lastPage';
+
+function isKnownPage(pageName) {
+  return pages.some((page) => page.dataset.page === pageName);
+}
+
+function getSavedPage(fallback = 'home') {
+  const savedPage = String(localStorage.getItem(LAST_PAGE_STORAGE_KEY) || '').trim();
+  return isKnownPage(savedPage) ? savedPage : fallback;
+}
+
+function saveCurrentPage(pageName) {
+  if (!isKnownPage(pageName)) return;
+  localStorage.setItem(LAST_PAGE_STORAGE_KEY, pageName);
+}
 
 function showLoadingOverlay(text = 'Initializing C.O.T.E System...') {
   if (!loadingOverlay) return;
@@ -405,21 +420,49 @@ function closeSidebar() {
   sidebarOverlay.hidden = true;
 }
 
-function showPage(pageName) {
+function showPage(pageName, options = {}) {
+  const targetPage = isKnownPage(pageName) ? pageName : 'home';
+
   pages.forEach((page) => {
-    page.classList.toggle('active', page.dataset.page === pageName);
+    page.classList.toggle('active', page.dataset.page === targetPage);
   });
 
   menuButtons.forEach((button) => {
-    button.classList.toggle('active', button.dataset.target === pageName);
+    button.classList.toggle('active', button.dataset.target === targetPage);
   });
 
   if (pageTitleElement) {
-    pageTitleElement.textContent = pageTitles[pageName] || 'Teacher Dashboard';
+    pageTitleElement.textContent = pageTitles[targetPage] || 'Teacher Dashboard';
+  }
+
+  if (options.persist !== false) {
+    saveCurrentPage(targetPage);
   }
 
   closeSidebar();
   window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function runPageLoaders(pageName) {
+  if (pageName === 'my-classes' && auth.currentUser?.uid) {
+    loadMyClasses();
+  }
+
+  if (pageName === 'class-record' && auth.currentUser?.uid) {
+    loadClassRecordClasses();
+  }
+
+  if (pageName === 'enrollment-requests' && auth.currentUser?.uid) {
+    loadEnrollmentRequests();
+  }
+
+  if (pageName === 'resources' && auth.currentUser?.uid) {
+    loadTeacherResources();
+  }
+
+  if (pageName === 'announcements' && auth.currentUser?.uid) {
+    loadTeacherAnnouncements();
+  }
 }
 
 function formatClassLabel(classItem) {
@@ -2633,26 +2676,7 @@ menuButtons.forEach((button) => {
     if (!targetPage) return;
 
     showPage(targetPage);
-
-    if (targetPage === 'my-classes' && auth.currentUser?.uid) {
-      loadMyClasses();
-    }
-
-    if (targetPage === 'class-record' && auth.currentUser?.uid) {
-      loadClassRecordClasses();
-    }
-
-    if (targetPage === 'enrollment-requests' && auth.currentUser?.uid) {
-      loadEnrollmentRequests();
-    }
-
-    if (targetPage === 'resources' && auth.currentUser?.uid) {
-      loadTeacherResources();
-    }
-
-    if (targetPage === 'announcements' && auth.currentUser?.uid) {
-      loadTeacherAnnouncements();
-    }
+    runPageLoaders(targetPage);
   });
 });
 
@@ -3031,6 +3055,9 @@ onAuthStateChanged(auth, async (user) => {
     await loadTeacherAnnouncements();
     await loadTeacherSectionLeaderboardPreview();
     await loadTeacherStudentRankPreview();
+    const restoredPage = getSavedPage();
+    showPage(restoredPage, { persist: false });
+    runPageLoaders(restoredPage);
 
     await seedAchievementsIfEmpty();
   } catch (error) {

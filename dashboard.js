@@ -91,6 +91,21 @@ const pageTitles = {
   achievements: 'Achievements',
   quest: 'Quest',
 };
+const LAST_PAGE_STORAGE_KEY = 'cote.student.lastPage';
+
+function isKnownPage(pageName) {
+  return pages.some((page) => page.dataset.page === pageName);
+}
+
+function getSavedPage(fallback = 'home') {
+  const savedPage = String(localStorage.getItem(LAST_PAGE_STORAGE_KEY) || '').trim();
+  return isKnownPage(savedPage) ? savedPage : fallback;
+}
+
+function saveCurrentPage(pageName) {
+  if (!isKnownPage(pageName)) return;
+  localStorage.setItem(LAST_PAGE_STORAGE_KEY, pageName);
+}
 
 function showLoadingOverlay(text = 'Initializing C.O.T.E System...') {
   if (!loadingOverlay) return;
@@ -1718,17 +1733,23 @@ function closeSidebar() {
   sidebarOverlay.hidden = true;
 }
 
-function showPage(pageName) {
+function showPage(pageName, options = {}) {
+  const targetPage = isKnownPage(pageName) ? pageName : 'home';
+
   pages.forEach((page) => {
-    page.classList.toggle('active', page.dataset.page === pageName);
+    page.classList.toggle('active', page.dataset.page === targetPage);
   });
 
   menuButtons.forEach((button) => {
-    button.classList.toggle('active', button.dataset.target === pageName);
+    button.classList.toggle('active', button.dataset.target === targetPage);
   });
 
   if (pageTitleElement) {
-    pageTitleElement.textContent = pageTitles[pageName] || 'Dashboard';
+    pageTitleElement.textContent = pageTitles[targetPage] || 'Dashboard';
+  }
+
+  if (options.persist !== false) {
+    saveCurrentPage(targetPage);
   }
 
   closeSidebar();
@@ -2076,6 +2097,15 @@ function renderNoProfile(email = '') {
   }
 }
 
+function runPageLoaders(pageName) {
+  if (pageName === 'resources') {
+    loadStudentResources();
+  }
+  if (pageName === 'achievements' && currentStudentUser?.uid) {
+    loadAchievementsDashboard(currentStudentUser.uid);
+  }
+}
+
 async function saveProfilePicture(event) {
   event.preventDefault();
 
@@ -2134,12 +2164,7 @@ menuButtons.forEach((button) => {
   button.addEventListener('click', () => {
     const target = button.dataset.target;
     showPage(target);
-    if (target === 'resources') {
-      loadStudentResources();
-    }
-    if (target === 'achievements' && currentStudentUser?.uid) {
-      loadAchievementsDashboard(currentStudentUser.uid);
-    }
+    runPageLoaders(target);
   });
 });
 
@@ -2253,6 +2278,9 @@ onAuthStateChanged(auth, async () => {
     loadAchievementsDashboard(uid);
     loadMyEnrollments();
     loadAvailableClasses();
+    const restoredPage = getSavedPage();
+    showPage(restoredPage, { persist: false });
+    runPageLoaders(restoredPage);
   } catch (error) {
     console.error('Failed to load profile:', error);
 
@@ -2338,5 +2366,5 @@ window.toggleSidebar = toggleSidebar;
 window.closeSidebar = closeSidebar;
 window.showPage = showPage;
 
-showPage('home');
+showPage(getSavedPage(), { persist: false });
 closeSidebar();

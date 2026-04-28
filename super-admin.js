@@ -123,6 +123,21 @@ const pageTitles = {
   sections: 'Sections',
   'special-badges': 'Special Badges'
 };
+const LAST_PAGE_STORAGE_KEY = 'cote.superAdmin.lastPage';
+
+function isKnownPage(pageName) {
+  return pages.some((page) => page.dataset.page === pageName);
+}
+
+function getSavedPage(fallback = 'home') {
+  const savedPage = String(localStorage.getItem(LAST_PAGE_STORAGE_KEY) || '').trim();
+  return isKnownPage(savedPage) ? savedPage : fallback;
+}
+
+function saveCurrentPage(pageName) {
+  if (!isKnownPage(pageName)) return;
+  localStorage.setItem(LAST_PAGE_STORAGE_KEY, pageName);
+}
 
 function showLoadingOverlay(text = 'Initializing C.O.T.E System...') {
   if (!loadingOverlay) return;
@@ -286,17 +301,23 @@ function closeSidebar() {
   sidebarOverlay.hidden = true;
 }
 
-function showPage(pageName) {
+function showPage(pageName, options = {}) {
+  const targetPage = isKnownPage(pageName) ? pageName : 'home';
+
   pages.forEach((page) => {
-    page.classList.toggle('active', page.dataset.page === pageName);
+    page.classList.toggle('active', page.dataset.page === targetPage);
   });
 
   menuButtons.forEach((button) => {
-    button.classList.toggle('active', button.dataset.target === pageName);
+    button.classList.toggle('active', button.dataset.target === targetPage);
   });
 
   if (pageTitleElement) {
-    pageTitleElement.textContent = pageTitles[pageName] || 'Super Admin Dashboard';
+    pageTitleElement.textContent = pageTitles[targetPage] || 'Super Admin Dashboard';
+  }
+
+  if (options.persist !== false) {
+    saveCurrentPage(targetPage);
   }
 
   closeSidebar();
@@ -1596,6 +1617,7 @@ await Promise.all([
   loadSpecialBadges(),
   loadStudentOptions()
 ]);
+showPage(getSavedPage(), { persist: false });
   } catch (error) {
     console.error('Failed to validate super admin role:', error);
     window.location.replace('index.html');
