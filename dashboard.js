@@ -1,37 +1,74 @@
-function renderRecord(log) {
-  let label = "";
-  let description = "";
-  let teacher = "";
+import { db, auth } from './firebase.js';
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  doc,
+  getDoc
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-  if (log.source === "achievement") {
-    label = "Achievement";
-    description = log.achievementTitle;
-    teacher = "System";
+import { checkAchievements, claimAchievement } from './achievements.js';
+
+auth.onAuthStateChanged(async (user) => {
+  if (!user) return;
+
+  const uid = user.uid;
+
+  // LOAD PROFILE
+  const studentRef = doc(db, "students", uid);
+  const studentSnap = await getDoc(studentRef);
+
+  if (studentSnap.exists()) {
+    const data = studentSnap.data();
+    document.getElementById("studentName").textContent =
+      `${data.lastName}, ${data.firstName}`;
   }
 
-  else if (log.source === "academic") {
-    label = "Academic";
-    description = `${log.activityTitle} • ${log.score}/${log.maxScore} • ${Math.round(log.percentage)}%`;
-    teacher = log.teacherName || "Teacher";
-  }
+  // LOAD ACHIEVEMENTS
+  await loadAchievements(uid);
 
-  else if (log.source === "merit") {
-    label = "Merit";
-    description = log.reason;
-    teacher = log.teacherName || "Teacher";
-  }
+  // CHECK NEW ACHIEVEMENTS
+  await checkAchievements(uid);
+});
 
-  else if (log.source === "demerit") {
-    label = "Demerit";
-    description = log.reason;
-    teacher = log.teacherName || "Teacher";
-  }
+// =========================
+// LOAD ACHIEVEMENTS
+// =========================
+async function loadAchievements(uid) {
+  const list = document.getElementById("achievementList");
+  list.innerHTML = "";
 
-  return `
-    <div class="record">
-      <strong>+${log.pointDifference}</strong> ${label} — ${description}
-      <br>
-      <small>${teacher}</small>
-    </div>
-  `;
+  const snap = await getDocs(
+    query(collection(db, "studentAchievements"),
+      where("studentId", "==", uid)
+    )
+  );
+
+  snap.forEach(docSnap => {
+    const data = docSnap.data();
+
+    const div = document.createElement("div");
+    div.className = "achievement-card";
+
+    div.innerHTML = `
+      <h4>${data.title}</h4>
+      <p>${data.category}</p>
+      <p>Reward: ${data.rewardPoints}</p>
+      ${
+        data.isClaimed
+          ? "<span>Completed</span>"
+          : `<button data-id="${docSnap.id}">Claim</button>`
+      }
+    `;
+
+    if (!data.isClaimed) {
+      div.querySelector("button").onclick = async () => {
+        await claimAchievement(docSnap.id, uid);
+        loadAchievements(uid);
+      };
+    }
+
+    list.appendChild(div);
+  });
 }
