@@ -18,6 +18,39 @@ import {
 } from './firebase.js';
 
 const ACHIEVEMENT_STATUS_ACTIVE = 'active';
+const ACHIEVEMENT_STATUS_INACTIVE = 'inactive';
+
+const ACHIEVEMENT_BADGE_IMAGE_URLS = {
+  first_perfect_score: 'https://drive.google.com/file/d/1ir0QVZoJpUD2ASe5u8XUScmta1Z2gRuu/view?usp=sharing',
+  double_perfection: 'https://drive.google.com/file/d/1nY5Gnn73TJzJKyQkrdvLaOeG72fO1pDl/view?usp=sharing',
+  triple_perfection: 'https://drive.google.com/file/d/11siY0KSvRv5yyTpRJmHthU5BceWHtVHA/view?usp=sharing',
+  perfectionist: 'https://drive.google.com/file/d/1ShBvOJNiszZUbW9xAbyMt0KWL3HRQbMr/view?usp=sharing',
+  flawless_mind: 'https://drive.google.com/file/d/1YYiICz5D3TwmiNUoTyMZ7RGjL50npIev/view?usp=sharing',
+  sharp_mind: 'https://drive.google.com/file/d/1FtXcQrKqiP7MvF089JJAwJ_5o4ykxRvU/view?usp=sharing',
+  consistent_performer: 'https://drive.google.com/file/d/1mSDaiNA1bH8tPNnQ2tzPHlMDN_m0w-yk/view?usp=sharing',
+  academic_elite: 'https://drive.google.com/file/d/1vJlRsJ-b6spkTQa4R0sQmzjmtPyy1aRD/view?usp=sharing',
+  mastery_level: 'https://drive.google.com/file/d/17WGV-EJ3vZYkioK9Kt3vNKdsRx6LIYkW/view?usp=sharing',
+  first_step: 'https://drive.google.com/file/d/1NQlOSCvDrUAv_GLlvf3eRXCQwaJbthzm/view?usp=sharing',
+  getting_started: 'https://drive.google.com/file/d/14sLogb7A3lIuAyyWWqhxcYP-MaooiO3-/view?usp=sharing',
+  on_a_roll: 'https://drive.google.com/file/d/1IhTcVq8y7TvMsmJ-edwNyDUOZTkrAMGQ/view?usp=sharing',
+  dedicated_learner: 'https://drive.google.com/file/d/1Qorz0ZMuMDm3jf2raCKPiF7PFaKit-1c/view?usp=sharing',
+  relentless: 'https://drive.google.com/file/d/1rhv1S2w2wnxQCNYuUN_MIZXeBOzxjqb9/view?usp=sharing',
+  club_500: 'https://drive.google.com/file/d/1T88putGogNQcj3RYCEnYT6y52zGQOUv_/view?usp=sharing',
+  elite_1000: 'https://drive.google.com/file/d/1vR_XY6hIV_o-kb904q8QANBIxA_2fqQB/view?usp=sharing',
+  milestone_2500: 'https://drive.google.com/file/d/1hy87gYNM8ASl_HWCYbL9kYg-6d-ACylV/view?usp=sharing',
+  club_5000: 'https://drive.google.com/file/d/1vJ6iLiXP4gDdGqHA4yzGCoSdPso1p52U/view?usp=sharing',
+  elite_10000: 'https://drive.google.com/file/d/1bRo7DzcerI0dRv6PZSH9nbLtUB5eqyZo/view?usp=sharing',
+  first_attendance: 'https://drive.google.com/file/d/1YERfwyMbAkX4vWQsHdMs7L886I6LPuxe/view?usp=sharing',
+  showing_up: 'https://drive.google.com/file/d/1GOB9gj4pZyC2QSHYbFDiP5gB2o9aiV6l/view?usp=sharing',
+  consistent_attendee: 'https://drive.google.com/file/d/15H2Rr5kK37MjOTisH14eNi_y88Fh5K-p/view?usp=sharing',
+  reliable: 'https://drive.google.com/file/d/1BkmZW5LpnSWvfkLsAbd7CdThH0i8LT2y/view?usp=sharing',
+  ever_present: 'https://drive.google.com/file/d/1NQGk4s6rR2nyL344FLkSdubU0kYCVUNe/view?usp=sharing',
+  attendance_3_day_streak: 'https://drive.google.com/file/d/14236iK-zESjRKjeqdeZCBhba1HCx5iDt/view?usp=sharing',
+  attendance_5_day_streak: 'https://drive.google.com/file/d/1fjQKNaLL7C8dtEAdHrddoWnxg1016L0J/view?usp=sharing',
+  attendance_10_day_streak: 'https://drive.google.com/file/d/1ejroj7ROF_gn4lmIa9XIOIjlcQ_IDRu-/view?usp=sharing'
+};
+
+const REMOVED_ACHIEVEMENT_IDS = ['milestone_5700'];
 
 const ACHIEVEMENT_MASTER_DATA = [
   {
@@ -267,24 +300,10 @@ const ACHIEVEMENT_MASTER_DATA = [
     chainOrder: 4,
     isVisibleByDefault: false,
     unlocksAfterAchievementId: 'milestone_2500',
-    nextAchievementId: 'milestone_5700',
+    nextAchievementId: 'elite_10000',
     triggerType: 'points_update',
     condition: { type: 'total_points', points: 5000 },
     rewardPoints: 1200
-  },
-  {
-    id: 'milestone_5700',
-    title: '5700 Milestone',
-    description: 'Reach 5700 total points.',
-    category: 'Points',
-    chainKey: 'points_milestone',
-    chainOrder: 5,
-    isVisibleByDefault: false,
-    unlocksAfterAchievementId: 'club_5000',
-    nextAchievementId: 'elite_10000',
-    triggerType: 'points_update',
-    condition: { type: 'total_points', points: 5700 },
-    rewardPoints: 1500
   },
   {
     id: 'elite_10000',
@@ -292,9 +311,9 @@ const ACHIEVEMENT_MASTER_DATA = [
     description: 'Reach 10000 total points.',
     category: 'Points',
     chainKey: 'points_milestone',
-    chainOrder: 6,
+    chainOrder: 5,
     isVisibleByDefault: false,
-    unlocksAfterAchievementId: 'milestone_5700',
+    unlocksAfterAchievementId: 'club_5000',
     nextAchievementId: null,
     triggerType: 'points_update',
     condition: { type: 'total_points', points: 10000 },
@@ -415,9 +434,12 @@ const ACHIEVEMENT_MASTER_DATA = [
 ];
 
 function normalizeAchievement(item = {}) {
+  const id = String(item.id || '').trim();
+  const badgeImageUrl = safeText(item.badgeImageUrl || ACHIEVEMENT_BADGE_IMAGE_URLS[id]);
+
   return {
     ...item,
-    id: String(item.id || '').trim(),
+    id,
     status: String(item.status || ACHIEVEMENT_STATUS_ACTIVE).trim() || ACHIEVEMENT_STATUS_ACTIVE,
     isHidden: Boolean(item.isHidden),
     isVisibleByDefault: Boolean(item.isVisibleByDefault),
@@ -425,7 +447,8 @@ function normalizeAchievement(item = {}) {
     chainOrder: Number(item.chainOrder) || 0,
     unlocksAfterAchievementId: item.unlocksAfterAchievementId ? String(item.unlocksAfterAchievementId).trim() : null,
     triggerType: String(item.triggerType || '').trim(),
-    rewardPoints: Math.max(100, Number(item.rewardPoints) || 100)
+    rewardPoints: Math.max(100, Number(item.rewardPoints) || 100),
+    badgeImageUrl
   };
 }
 
@@ -474,8 +497,6 @@ async function queryAllStudentScores(studentId) {
 export async function seedAchievementsIfEmpty() {
   try {
     const existingSnapshot = await getDocs(query(collection(db, 'achievements'), limit(1)));
-    if (!existingSnapshot.empty) return false;
-
     const batch = writeBatch(db);
     const now = serverTimestamp();
 
@@ -488,15 +509,24 @@ export async function seedAchievementsIfEmpty() {
         unlockItemIds: [],
         isHidden: false,
         status: ACHIEVEMENT_STATUS_ACTIVE,
-        createdAt: now,
         updatedAt: now
-      });
+      }, { merge: true });
+    });
+
+    REMOVED_ACHIEVEMENT_IDS.forEach((achievementId) => {
+      const achievementRef = doc(db, 'achievements', achievementId);
+      batch.set(achievementRef, {
+        isHidden: true,
+        status: ACHIEVEMENT_STATUS_INACTIVE,
+        nextAchievementId: null,
+        updatedAt: now
+      }, { merge: true });
     });
 
     await batch.commit();
-    return true;
+    return existingSnapshot.empty;
   } catch (error) {
-    console.warn('Achievement seeding skipped:', error);
+    console.warn('Achievement sync skipped:', error);
     return false;
   }
 }
@@ -725,6 +755,7 @@ export async function unlockAchievement(studentId, achievement, context = {}) {
         title: achievement.title,
         category: achievement.category,
         chainKey: achievement.chainKey,
+        badgeImageUrl: achievement.badgeImageUrl || '',
         rewardPoints: achievement.rewardPoints,
         isClaimed: false,
         achievedAt: serverTimestamp(),

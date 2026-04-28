@@ -371,6 +371,18 @@ function getDriveFileId(url) {
   return byPath?.[1] || byIdParam?.[1] || null;
 }
 
+function getBadgeImageDisplayUrl(url) {
+  const rawUrl = String(url || '').trim();
+  if (!rawUrl) return '';
+
+  const driveFileId = getDriveFileId(rawUrl);
+  if (driveFileId) {
+    return `https://drive.google.com/thumbnail?id=${encodeURIComponent(driveFileId)}&sz=w256`;
+  }
+
+  return rawUrl;
+}
+
 function renderResourceMedia(resource) {
   const originalUrl = String(resource?.url || '').trim();
   if (!originalUrl) return '';
@@ -1320,7 +1332,14 @@ function getProfileBadgeAchievements(visibleAchievements = [], unlockedIds = new
 }
 
 function getBadgeImageUrl(achievement = {}) {
-  return String(achievement.badgeImageUrl || achievement.badgeImage || achievement.badgeUrl || achievement.imageUrl || '').trim();
+  return getBadgeImageDisplayUrl(
+    achievement.badgeImageUrl ||
+      achievement.badgeImage ||
+      achievement.badgeUrl ||
+      achievement.imageUrl ||
+      achievement.originalImageUrl ||
+      ''
+  );
 }
 
 function getBadgeInitials(achievement = {}) {
@@ -1336,9 +1355,10 @@ function getBadgeInitials(achievement = {}) {
 function renderProfileBadge(achievement) {
   const title = escapeHtml(achievement.title || achievement.name || 'Untitled Badge');
   const imageUrl = getBadgeImageUrl(achievement);
+  const initials = escapeHtml(getBadgeInitials(achievement));
   const badgeVisual = imageUrl
-    ? `<img src="${escapeHtml(imageUrl)}" alt="" loading="lazy" />`
-    : `<span>${escapeHtml(getBadgeInitials(achievement))}</span>`;
+    ? `<span>${initials}</span><img src="${escapeHtml(imageUrl)}" alt="" loading="lazy" onerror="this.remove()" />`
+    : `<span>${initials}</span>`;
 
   return `
     <button type="button" class="profile-badge-item" aria-label="${title}" title="${title}">

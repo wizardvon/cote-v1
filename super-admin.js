@@ -70,6 +70,7 @@ const awardSectionFilterSelect = document.getElementById('award-section-filter')
 const awardStudentSelect = document.getElementById('award-student-select');
 const awardSpecialBadgeButton = document.getElementById('award-special-badge-btn');
 const awardBadgeMessageElement = document.getElementById('award-badge-message');
+const achievementBadgesPreviewListElement = document.getElementById('achievement-badges-preview-list');
 
 let overlaySequenceJob = 0;
 let schoolYearOptionsCache = [];
@@ -197,6 +198,66 @@ function escapeHtml(value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
+}
+
+function getDriveFileId(url) {
+  const rawUrl = String(url || '').trim();
+  if (!rawUrl) return null;
+
+  const byPath = rawUrl.match(/\/file\/d\/([A-Za-z0-9_-]+)/);
+  const byIdParam = rawUrl.match(/[?&]id=([A-Za-z0-9_-]+)/);
+  return byPath?.[1] || byIdParam?.[1] || null;
+}
+
+function getBadgeImageDisplayUrl(url) {
+  const rawUrl = String(url || '').trim();
+  if (!rawUrl) return '';
+
+  const driveFileId = getDriveFileId(rawUrl);
+  if (driveFileId) {
+    return `https://drive.google.com/thumbnail?id=${encodeURIComponent(driveFileId)}&sz=w256`;
+  }
+
+  return rawUrl;
+}
+
+function getBadgeInitials(record = {}) {
+  return String(record.title || record.name || 'Badge')
+    .split(/\s+/)
+    .map((word) => word.charAt(0))
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+}
+
+function renderBadgePreviewCard(record = {}, meta = '') {
+  const title = escapeHtml(record.title || record.name || 'Untitled Badge');
+  const imageUrl = getBadgeImageDisplayUrl(record.badgeImageUrl || record.imageUrl || record.originalImageUrl || '');
+  const initials = escapeHtml(getBadgeInitials(record));
+  const visual = imageUrl
+    ? `<span>${initials}</span><img src="${escapeHtml(imageUrl)}" alt="" loading="lazy" onerror="this.remove()" />`
+    : `<span>${initials}</span>`;
+
+  return `
+    <article class="badge-preview-card">
+      <span class="profile-badge-icon" aria-hidden="true">${visual}</span>
+      <h3>${title}</h3>
+      ${meta ? `<p>${escapeHtml(meta)}</p>` : ''}
+    </article>
+  `;
+}
+
+function sortAchievementsForPreview(records = []) {
+  return records.slice().sort((a, b) => {
+    const categoryCompare = safeText(a.category, '').localeCompare(safeText(b.category, ''));
+    if (categoryCompare !== 0) return categoryCompare;
+
+    const chainCompare = safeText(a.chainKey, '').localeCompare(safeText(b.chainKey, ''));
+    if (chainCompare !== 0) return chainCompare;
+
+    return Number(a.chainOrder || 0) - Number(b.chainOrder || 0);
+  });
 }
 
 function makeFullName(teacher, user) {
@@ -405,7 +466,7 @@ function renderSpecialBadges(records) {
     .map((record) => {
       const status = safeText(record.status, 'active');
       const nextStatus = status === 'active' ? 'inactive' : 'active';
-      const imageUrl = safeText(record.imageUrl, '');
+      const imageUrl = getBadgeImageDisplayUrl(record.imageUrl);
       const previewHtml = imageUrl
         ? `<img src="${escapeHtml(imageUrl)}" alt="" class="special-badge-preview" loading="lazy" />`
         : '<div class="special-badge-preview special-badge-preview-empty">No image</div>';
@@ -428,6 +489,24 @@ function renderSpecialBadges(records) {
       </article>
     `;
     })
+    .join('');
+}
+
+function renderAchievementBadgePreviews(records) {
+  if (!achievementBadgesPreviewListElement) return;
+
+  const visibleRecords = sortAchievementsForPreview(records).filter((record) => {
+    const status = safeText(record.status, 'active').toLowerCase();
+    return status === 'active' && !record.isHidden;
+  });
+
+  if (!visibleRecords.length) {
+    achievementBadgesPreviewListElement.innerHTML = '<p class="empty-cell">No achievement badges found.</p>';
+    return;
+  }
+
+  achievementBadgesPreviewListElement.innerHTML = visibleRecords
+    .map((record) => renderBadgePreviewCard(record, safeText(record.category, 'Achievement')))
     .join('');
 }
 
@@ -1093,10 +1172,11 @@ async function toggleSectionStatus(id, currentStatus) {
 
 async function addSpecialBadge() {
   const name = safeText(specialBadgeNameInput?.value, '').trim();
-  const imageUrl = safeText(specialBadgeImageUrlInput?.value, '').trim();
+  const originalImageUrl = safeText(specialBadgeImageUrlInput?.value, '').trim();
+  const imageUrl = getBadgeImageDisplayUrl(originalImageUrl);
   const description = safeText(specialBadgeDescriptionInput?.value, '').trim();
 
-  if (!name || !imageUrl) {
+  if (!name || !originalImageUrl) {
     setMessageOnElement(specialBadgeMessageElement, 'Please enter a badge name and image URL.', 'error');
     return;
   }
@@ -1105,6 +1185,7 @@ async function addSpecialBadge() {
     await addDoc(collection(db, 'specialBadges'), {
       name,
       imageUrl,
+      originalImageUrl,
       description,
       type: 'special',
       status: 'active',
@@ -1140,6 +1221,24 @@ async function loadSpecialBadges() {
   } catch (error) {
     console.error('Failed to load special badges:', error);
     setMessageOnElement(specialBadgeMessageElement, 'Unable to load special badges right now.', 'error');
+  }
+}
+
+async function loadAchievementBadgePreviews() {
+  if (!achievementBadgesPreviewListElement) return;
+
+  try {
+    const snapshot = await getDocs(collection(db, 'achievements'));
+    const records = snapshot.docs.map((item) => ({
+      id: item.id,
+      ...item.data()
+    }));
+
+    renderAchievementBadgePreviews(records);
+  } catch (error) {
+    console.error('Failed to load achievement badge previews:', error);
+    achievementBadgesPreviewListElement.innerHTML =
+      '<p class="empty-cell">Unable to load achievement badges right now.</p>';
   }
 }
 
@@ -1214,7 +1313,8 @@ async function awardSpecialBadge() {
       studentId,
       studentName: student.displayName,
       name: badge.name || 'Untitled Badge',
-      imageUrl: badge.imageUrl || '',
+      imageUrl: getBadgeImageDisplayUrl(badge.imageUrl || badge.originalImageUrl || ''),
+      originalImageUrl: badge.originalImageUrl || badge.imageUrl || '',
       description: badge.description || '',
       type: 'special',
       status: 'active',
@@ -1392,6 +1492,7 @@ await Promise.all([
   loadTerms(),
   loadSubjects(),
   loadSections(),
+  loadAchievementBadgePreviews(),
   loadSpecialBadges(),
   loadStudentOptions()
 ]);

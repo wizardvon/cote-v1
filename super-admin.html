@@ -221,6 +221,14 @@
 
       <section id="page-special-badges" class="page" data-page="special-badges" aria-label="Special badges">
         <article class="app-card">
+          <h2>Achievement Badge Preview</h2>
+          <p>Review the built-in achievement badges shown on student profiles.</p>
+          <div id="achievement-badges-preview-list" class="badge-preview-grid" aria-live="polite">
+            <p class="empty-cell">Loading achievement badges...</p>
+          </div>
+        </article>
+
+        <article class="app-card">
           <h2>Special Badges</h2>
           <p>Create rare badges for events, awards, or special recognition.</p>
           <div class="admin-toolbar special-badge-toolbar">
@@ -230,6 +238,7 @@
             <button id="add-special-badge-btn" type="button">Create Badge</button>
           </div>
           <p id="special-badge-message" class="form-message" role="status" aria-live="polite"></p>
+          <h3 class="badge-preview-subtitle">Special Badge Preview</h3>
           <div id="special-badges-list" class="super-admin-list"></div>
         </article>
 

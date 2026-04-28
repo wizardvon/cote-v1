@@ -684,6 +684,10 @@ button:active {
   overflow: hidden;
 }
 
+.profile-badge-icon > * {
+  grid-area: 1 / 1;
+}
+
 .profile-badge-icon img {
   width: 100%;
   height: 100%;
@@ -1084,6 +1088,49 @@ button:active {
 .special-badge-toolbar textarea {
   min-height: 46px;
   resize: vertical;
+}
+
+.badge-preview-subtitle {
+  margin: 1.1rem 0 0;
+  color: var(--text-main);
+  font-size: 1rem;
+}
+
+.badge-preview-grid {
+  margin-top: 0.9rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.85rem;
+}
+
+.badge-preview-card {
+  min-height: 150px;
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  gap: 0.58rem;
+  padding: 0.9rem;
+  border: 1px solid rgba(231, 188, 88, 0.28);
+  border-radius: 8px;
+  background: rgba(6, 18, 34, 0.58);
+  text-align: center;
+}
+
+.badge-preview-card h3 {
+  width: 100%;
+  margin: 0;
+  color: var(--text-main);
+  font-size: 0.9rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.badge-preview-card p {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.74rem;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
 }
 
 .special-badge-item {
