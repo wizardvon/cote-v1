@@ -50,6 +50,7 @@ const homeSectionNameElement = document.getElementById('home-section-name');
 const homeSectionTierElement = document.getElementById('home-section-tier');
 const homeSectionRankElement = document.getElementById('home-section-rank');
 const homeSectionPointsElement = document.getElementById('home-section-points');
+const teacherAnnouncementsListElement = document.getElementById('teacher-announcements-list');
 const leaderboardListElement = document.getElementById('leaderboard-list');
 const profileRankElement = document.getElementById('profile-rank');
 const profileStudentRankElement = document.getElementById('profile-student-rank');
@@ -275,6 +276,86 @@ function showMyClassesFeedback(message, type = 'success') {
 function clearMyClassesFeedback() {
   if (myClassesFeedbackElement) {
     myClassesFeedbackElement.innerHTML = '';
+  }
+}
+
+function getTimestampMillis(value) {
+  return value?.toMillis?.() || 0;
+}
+
+function renderTeacherAnnouncements(records = []) {
+  if (!teacherAnnouncementsListElement) return;
+
+  if (!records.length) {
+    teacherAnnouncementsListElement.innerHTML = '<p class="empty-cell">No teacher announcements yet.</p>';
+    return;
+  }
+
+  teacherAnnouncementsListElement.innerHTML = records
+    .map((announcement) => {
+      const title = announcement.title || announcement.subject || 'Announcement';
+      const message = announcement.message || announcement.body || announcement.content || '';
+      const teacherName = announcement.teacherName || announcement.authorName || 'Teacher';
+      const date = announcement.createdAt?.toDate?.();
+      const dateText = date ? date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+
+      return `
+        <article class="teacher-announcement-item">
+          <div class="teacher-announcement-meta">
+            <strong>${escapeHtml(teacherName)}</strong>
+            ${dateText ? `<span>${escapeHtml(dateText)}</span>` : ''}
+          </div>
+          <h4>${escapeHtml(title)}</h4>
+          ${message ? `<p>${escapeHtml(message)}</p>` : ''}
+        </article>
+      `;
+    })
+    .join('');
+}
+
+function announcementMatchesStudent(announcement = {}) {
+  const target = String(announcement.target || announcement.audience || 'all').trim().toLowerCase();
+  if (!target || target === 'all' || target === 'students') return true;
+
+  const sectionId = String(currentStudentProfile?.sectionId || '').trim();
+  const sectionName = String(currentStudentProfile?.sectionName || currentStudentProfile?.section || '').trim().toLowerCase();
+  const classIds = Array.isArray(announcement.classIds) ? announcement.classIds.map((id) => String(id || '').trim()) : [];
+  const sectionIds = Array.isArray(announcement.sectionIds) ? announcement.sectionIds.map((id) => String(id || '').trim()) : [];
+  const sectionNames = Array.isArray(announcement.sectionNames)
+    ? announcement.sectionNames.map((name) => String(name || '').trim().toLowerCase())
+    : [];
+
+  if (target === 'section') {
+    return (
+      Boolean(sectionId && sectionIds.includes(sectionId)) ||
+      Boolean(sectionName && sectionNames.includes(sectionName)) ||
+      String(announcement.sectionId || '').trim() === sectionId ||
+      String(announcement.sectionName || '').trim().toLowerCase() === sectionName
+    );
+  }
+
+  if (target === 'class') {
+    return classIds.some((classId) => enrolledClassIds.has(classId)) || enrolledClassIds.has(String(announcement.classId || '').trim());
+  }
+
+  return true;
+}
+
+async function loadTeacherAnnouncements() {
+  if (!teacherAnnouncementsListElement) return;
+
+  try {
+    const snapshot = await getDocs(query(collection(db, 'teacherAnnouncements'), where('status', '==', 'active')));
+    const records = snapshot.docs
+      .map((item) => ({ id: item.id, ...item.data() }))
+      .filter(announcementMatchesStudent)
+      .sort((a, b) => getTimestampMillis(b.createdAt) - getTimestampMillis(a.createdAt))
+      .slice(0, 5);
+
+    renderTeacherAnnouncements(records);
+  } catch (error) {
+    console.warn('Teacher announcements unavailable:', error);
+    renderTeacherAnnouncements([]);
   }
 }
 
@@ -1106,6 +1187,7 @@ async function loadMyEnrollments() {
 
     renderMyEnrollments(enrollmentsWithClassData);
     await loadStudentResources();
+    await loadTeacherAnnouncements();
   } catch (error) {
     console.error('Failed to load enrollments:', error);
     myEnrollmentsListElement.innerHTML = '<p>Unable to load approved classes. Please try again later.</p>';

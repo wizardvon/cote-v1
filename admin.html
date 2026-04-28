@@ -50,6 +50,10 @@
             <span aria-hidden="true">📂</span>
             <span>Resources</span>
           </button>
+          <button type="button" class="menu-btn" data-target="announcements">
+            <span aria-hidden="true">📢</span>
+            <span>Announcements</span>
+          </button>
           <button type="button" class="menu-btn" data-target="my-classes">
             <span aria-hidden="true">🏫</span>
             <span>My Classes</span>
@@ -307,6 +311,58 @@
           <p>Only resources you created are shown here.</p>
           <div id="teacher-resources-list" class="list-stack" aria-live="polite">
             <p>No resources yet.</p>
+          </div>
+        </article>
+      </section>
+
+      <section id="page-announcements" class="page" data-page="announcements" aria-label="Announcements">
+        <article class="app-card">
+          <h3>Create Announcement</h3>
+          <p>Post updates that appear on the student Home screen.</p>
+
+          <div class="admin-toolbar">
+            <div class="field">
+              <label for="announcement-target">Audience</label>
+              <select id="announcement-target">
+                <option value="all">All students</option>
+                <option value="class">Selected class</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="announcement-class-id">Class</label>
+              <select id="announcement-class-id">
+                <option value="">Select a class first</option>
+              </select>
+            </div>
+
+            <div class="field field-full">
+              <label for="announcement-title">Title</label>
+              <input id="announcement-title" type="text" placeholder="e.g. Quiz reminder" maxlength="150" />
+            </div>
+
+            <div class="field field-full">
+              <label for="announcement-message">Message</label>
+              <textarea
+                id="announcement-message"
+                class="admin-reason"
+                rows="4"
+                placeholder="Write the announcement students should see."
+              ></textarea>
+            </div>
+          </div>
+
+          <div class="admin-actions">
+            <button id="save-announcement-button" type="button">Post Announcement</button>
+          </div>
+          <p id="announcement-message-status" class="form-message" role="status" aria-live="polite"></p>
+        </article>
+
+        <article class="app-card">
+          <h3>My Announcements</h3>
+          <p>Only announcements you created are shown here.</p>
+          <div id="teacher-announcements-list" class="list-stack" aria-live="polite">
+            <p>No announcements yet.</p>
           </div>
         </article>
       </section>

@@ -70,6 +70,13 @@ const saveResourceButton = document.getElementById('save-resource-button');
 const resourceMessageElement = document.getElementById('resource-message');
 const resourceYoutubeHintElement = document.getElementById('resource-youtube-hint');
 const teacherResourcesListElement = document.getElementById('teacher-resources-list');
+const announcementTargetElement = document.getElementById('announcement-target');
+const announcementClassIdElement = document.getElementById('announcement-class-id');
+const announcementTitleElement = document.getElementById('announcement-title');
+const announcementMessageInputElement = document.getElementById('announcement-message');
+const saveAnnouncementButton = document.getElementById('save-announcement-button');
+const announcementMessageElement = document.getElementById('announcement-message-status');
+const teacherAnnouncementsListElement = document.getElementById('teacher-announcements-list');
 let overlaySequenceJob = 0;
 
 const TABLE_COLUMN_COUNT = 6;
@@ -79,6 +86,7 @@ const pageTitles = {
   'give-points': 'Give Points',
   quest: 'Quest',
   resources: 'Resources',
+  announcements: 'Announcements',
   'my-classes': 'My Classes',
   'class-record': 'Class Record',
   'enrollment-requests': 'Enrollment Requests'
@@ -148,6 +156,7 @@ let currentClassRecordActivities = [];
 let currentClassRecordScores = new Map();
 let currentEditingActivityId = '';
 let teacherResources = [];
+let teacherAnnouncements = [];
 
 function normalizePoints(points) {
   return typeof points === 'number' && Number.isFinite(points) ? points : 0;
@@ -244,6 +253,15 @@ function setResourceMessage(message, type = '') {
   resourceMessageElement.classList.remove('success', 'error');
   if (type) {
     resourceMessageElement.classList.add(type);
+  }
+}
+
+function setAnnouncementMessage(message, type = '') {
+  if (!announcementMessageElement) return;
+  announcementMessageElement.textContent = message;
+  announcementMessageElement.classList.remove('success', 'error');
+  if (type) {
+    announcementMessageElement.classList.add(type);
   }
 }
 
@@ -677,6 +695,24 @@ function populateResourceClassFilter(classes = []) {
   }
 }
 
+function populateAnnouncementClassFilter(classes = []) {
+  if (!announcementClassIdElement) return;
+
+  const previousValue = announcementClassIdElement.value;
+  announcementClassIdElement.innerHTML = '<option value="">Select a class first</option>';
+
+  classes.forEach((classItem) => {
+    const option = document.createElement('option');
+    option.value = classItem.id;
+    option.textContent = formatClassLabel(classItem);
+    announcementClassIdElement.append(option);
+  });
+
+  if (previousValue && classes.some((item) => item.id === previousValue)) {
+    announcementClassIdElement.value = previousValue;
+  }
+}
+
 function isValidHttpUrl(url) {
   try {
     const parsed = new URL(url);
@@ -1050,6 +1086,194 @@ async function deleteResource(resourceId) {
   }
 }
 
+function renderTeacherAnnouncements(announcements = []) {
+  if (!teacherAnnouncementsListElement) return;
+
+  if (!announcements.length) {
+    teacherAnnouncementsListElement.innerHTML = '<p>No announcements yet.</p>';
+    return;
+  }
+
+  teacherAnnouncementsListElement.innerHTML = announcements
+    .map((announcement) => {
+      const target = safeText(announcement.target, 'all');
+      const targetLabel = target === 'class' ? safeText(announcement.classLabel, 'Selected class') : 'All students';
+      const status = safeText(announcement.status, 'active');
+      const isInactive = status !== 'active';
+
+      return `
+        <article class="app-card">
+          <h4>${escapeHtml(announcement.title || 'Untitled Announcement')}</h4>
+          <p><strong>Audience:</strong> ${escapeHtml(targetLabel)}</p>
+          <p><strong>Status:</strong> <span class="status-pill ${
+            status === 'active' ? 'status-active' : 'status-pending'
+          }">${escapeHtml(status)}</span></p>
+          <p>${escapeHtml(announcement.message || 'No message')}</p>
+          <div class="admin-actions">
+            <button type="button" class="danger-button" data-announcement-deactivate="${escapeHtml(
+              announcement.id
+            )}" ${isInactive ? 'disabled' : ''}>
+              Deactivate
+            </button>
+            <button type="button" class="danger-button" data-announcement-delete="${escapeHtml(announcement.id)}">
+              Delete
+            </button>
+          </div>
+        </article>
+      `;
+    })
+    .join('');
+}
+
+async function loadTeacherAnnouncements() {
+  if (!auth.currentUser?.uid || !teacherAnnouncementsListElement) return;
+
+  teacherAnnouncementsListElement.innerHTML = '<p>Loading announcements...</p>';
+
+  try {
+    let snapshot;
+    try {
+      snapshot = await getDocs(
+        query(
+          collection(db, 'teacherAnnouncements'),
+          where('teacherId', '==', auth.currentUser.uid),
+          orderBy('createdAt', 'desc')
+        )
+      );
+    } catch (error) {
+      const fallbackSnapshot = await getDocs(
+        query(collection(db, 'teacherAnnouncements'), where('teacherId', '==', auth.currentUser.uid))
+      );
+      const docs = [...fallbackSnapshot.docs].sort((a, b) => {
+        const aTime = a.data().createdAt?.toMillis?.() || 0;
+        const bTime = b.data().createdAt?.toMillis?.() || 0;
+        return bTime - aTime;
+      });
+      snapshot = { docs };
+      console.error('Failed to query announcements with orderBy:', error);
+    }
+
+    teacherAnnouncements = snapshot.docs.map((announcementDoc) => ({
+      id: announcementDoc.id,
+      ...announcementDoc.data()
+    }));
+    renderTeacherAnnouncements(teacherAnnouncements);
+  } catch (error) {
+    console.error('Failed to load announcements:', error);
+    teacherAnnouncements = [];
+    teacherAnnouncementsListElement.innerHTML = '<p>Unable to load announcements right now.</p>';
+    setAnnouncementMessage('Unable to load announcements. Please try again.', 'error');
+  }
+}
+
+async function saveAnnouncement() {
+  if (!auth.currentUser?.uid) {
+    setAnnouncementMessage('You must be logged in to post announcements.', 'error');
+    return;
+  }
+
+  const target = String(announcementTargetElement?.value || 'all').trim();
+  const classId = String(announcementClassIdElement?.value || '').trim();
+  const title = String(announcementTitleElement?.value || '').trim();
+  const message = String(announcementMessageInputElement?.value || '').trim();
+  const selectedClass = teacherClasses.find((classItem) => classItem.id === classId);
+
+  if (!title) {
+    setAnnouncementMessage('Title is required.', 'error');
+    return;
+  }
+
+  if (!message) {
+    setAnnouncementMessage('Message is required.', 'error');
+    return;
+  }
+
+  if (target === 'class' && !selectedClass) {
+    setAnnouncementMessage('Select a class for this announcement.', 'error');
+    return;
+  }
+
+  if (saveAnnouncementButton) {
+    saveAnnouncementButton.disabled = true;
+    saveAnnouncementButton.textContent = 'Posting...';
+  }
+
+  try {
+    await addDoc(collection(db, 'teacherAnnouncements'), {
+      title,
+      message,
+      target,
+      classId: target === 'class' ? classId : '',
+      classIds: target === 'class' ? [classId] : [],
+      classLabel: target === 'class' ? formatClassLabel(selectedClass) : '',
+      teacherId: auth.currentUser.uid,
+      teacherName: currentTeacherProfile?.displayName || 'Teacher',
+      status: 'active',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+
+    if (announcementTitleElement) announcementTitleElement.value = '';
+    if (announcementMessageInputElement) announcementMessageInputElement.value = '';
+    if (announcementTargetElement) announcementTargetElement.value = 'all';
+    if (announcementClassIdElement) announcementClassIdElement.value = '';
+
+    setAnnouncementMessage('Announcement posted successfully.', 'success');
+    await loadTeacherAnnouncements();
+  } catch (error) {
+    console.error('Failed to save announcement:', error);
+    setAnnouncementMessage('Unable to post announcement. Please try again.', 'error');
+  } finally {
+    if (saveAnnouncementButton) {
+      saveAnnouncementButton.disabled = false;
+      saveAnnouncementButton.textContent = 'Post Announcement';
+    }
+  }
+}
+
+async function deactivateAnnouncement(announcementId) {
+  const id = String(announcementId || '').trim();
+  if (!id || !auth.currentUser?.uid) return;
+
+  const matched = teacherAnnouncements.find((item) => item.id === id);
+  if (!matched || String(matched.teacherId || '').trim() !== auth.currentUser.uid) {
+    setAnnouncementMessage('You can only deactivate your own announcements.', 'error');
+    return;
+  }
+
+  try {
+    await updateDoc(doc(db, 'teacherAnnouncements', id), {
+      status: 'inactive',
+      updatedAt: serverTimestamp()
+    });
+    setAnnouncementMessage('Announcement deactivated.', 'success');
+    await loadTeacherAnnouncements();
+  } catch (error) {
+    console.error('Failed to deactivate announcement:', error);
+    setAnnouncementMessage('Unable to deactivate announcement. Please try again.', 'error');
+  }
+}
+
+async function deleteAnnouncement(announcementId) {
+  const id = String(announcementId || '').trim();
+  if (!id || !auth.currentUser?.uid) return;
+
+  const matched = teacherAnnouncements.find((item) => item.id === id);
+  if (!matched || String(matched.teacherId || '').trim() !== auth.currentUser.uid) {
+    setAnnouncementMessage('You can only delete your own announcements.', 'error');
+    return;
+  }
+
+  try {
+    await deleteDoc(doc(db, 'teacherAnnouncements', id));
+    setAnnouncementMessage('Announcement deleted.', 'success');
+    await loadTeacherAnnouncements();
+  } catch (error) {
+    console.error('Failed to delete announcement:', error);
+    setAnnouncementMessage('Unable to delete announcement. Please try again.', 'error');
+  }
+}
+
 async function loadMyClasses() {
   if (!auth.currentUser?.uid) return;
 
@@ -1084,6 +1308,7 @@ async function loadTeacherClassesForSelection() {
   populateTeacherClassSelectors(teacherClasses);
   populateEnrollmentClassFilter(teacherClasses);
   populateResourceClassFilter(teacherClasses);
+  populateAnnouncementClassFilter(teacherClasses);
   return teacherClasses;
 }
 
@@ -2424,6 +2649,10 @@ menuButtons.forEach((button) => {
     if (targetPage === 'resources' && auth.currentUser?.uid) {
       loadTeacherResources();
     }
+
+    if (targetPage === 'announcements' && auth.currentUser?.uid) {
+      loadTeacherAnnouncements();
+    }
   });
 });
 
@@ -2629,6 +2858,10 @@ saveResourceButton?.addEventListener('click', () => {
   saveResource();
 });
 
+saveAnnouncementButton?.addEventListener('click', () => {
+  saveAnnouncement();
+});
+
 resourceUrlElement?.addEventListener('input', () => {
   if (!resourceYoutubeHintElement) return;
 
@@ -2681,6 +2914,28 @@ teacherResourcesListElement?.addEventListener('click', (event) => {
   if (deleteButton instanceof HTMLButtonElement) {
     deleteButton.disabled = true;
     deleteResource(deleteButton.dataset.resourceDelete).finally(() => {
+      deleteButton.disabled = false;
+    });
+  }
+});
+
+teacherAnnouncementsListElement?.addEventListener('click', (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+
+  const deactivateButton = target.closest('button[data-announcement-deactivate]');
+  if (deactivateButton instanceof HTMLButtonElement) {
+    deactivateButton.disabled = true;
+    deactivateAnnouncement(deactivateButton.dataset.announcementDeactivate).finally(() => {
+      deactivateButton.disabled = false;
+    });
+    return;
+  }
+
+  const deleteButton = target.closest('button[data-announcement-delete]');
+  if (deleteButton instanceof HTMLButtonElement) {
+    deleteButton.disabled = true;
+    deleteAnnouncement(deleteButton.dataset.announcementDelete).finally(() => {
       deleteButton.disabled = false;
     });
   }
@@ -2758,6 +3013,7 @@ onAuthStateChanged(auth, async (user) => {
     setClassMessage('Create and manage your own classes here.', '');
     setEnrollmentMessage('Review pending enrollment requests for your classes.', '');
     setResourceMessage('Share external learning links for your classes.', '');
+    setAnnouncementMessage('Post updates for students here.', '');
     renderClassRecordTable([], [], new Map(), 'Select a class first.');
     setClassRecordMessage('Select a class first.', '');
 
@@ -2772,6 +3028,7 @@ onAuthStateChanged(auth, async (user) => {
     await loadMyClasses();
     await loadEnrollmentRequests();
     await loadTeacherResources();
+    await loadTeacherAnnouncements();
     await loadTeacherSectionLeaderboardPreview();
     await loadTeacherStudentRankPreview();
 

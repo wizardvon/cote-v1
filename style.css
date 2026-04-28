@@ -588,6 +588,49 @@ button:active {
   gap: 0.4rem;
 }
 
+.teacher-announcements-card {
+  border-color: rgba(96, 165, 250, 0.32);
+}
+
+.teacher-announcements-list {
+  margin-top: 0.8rem;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.teacher-announcement-item {
+  padding: 0.78rem;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 8px;
+  background: rgba(3, 11, 24, 0.34);
+}
+
+.teacher-announcement-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  color: var(--text-soft);
+  font-size: 0.75rem;
+}
+
+.teacher-announcement-meta strong {
+  color: var(--gold-soft);
+}
+
+.teacher-announcement-item h4 {
+  margin: 0.45rem 0 0;
+  color: var(--text-main);
+  font-size: 0.98rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.teacher-announcement-item p {
+  overflow-wrap: anywhere;
+}
+
 .profile-hero {
   display: flex;
   align-items: center;
