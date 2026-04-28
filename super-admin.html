@@ -244,7 +244,7 @@
 
         <article class="app-card">
           <h2>Award Special Badge</h2>
-          <p>Choose a student and manually award an active special badge.</p>
+          <p>Choose a badge, filter by section, then check the students who should receive it.</p>
           <div class="admin-toolbar">
             <select id="award-badge-select" aria-label="Special badge">
               <option value="">Select badge</option>
@@ -252,11 +252,11 @@
             <select id="award-section-filter" aria-label="Filter students by section">
               <option value="">All sections</option>
             </select>
-            <select id="award-student-select" aria-label="Student">
-              <option value="">Select student</option>
-            </select>
-            <button id="award-special-badge-btn" type="button">Award Badge</button>
           </div>
+          <div id="award-students-list" class="award-students-list" aria-live="polite">
+            <p class="empty-cell">Loading students...</p>
+          </div>
+          <button id="award-special-badge-btn" type="button">Award Checked Students</button>
           <p id="award-badge-message" class="form-message" role="status" aria-live="polite"></p>
         </article>
       </section>

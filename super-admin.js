@@ -67,7 +67,7 @@ const specialBadgeMessageElement = document.getElementById('special-badge-messag
 const specialBadgesListElement = document.getElementById('special-badges-list');
 const awardBadgeSelect = document.getElementById('award-badge-select');
 const awardSectionFilterSelect = document.getElementById('award-section-filter');
-const awardStudentSelect = document.getElementById('award-student-select');
+const awardStudentsListElement = document.getElementById('award-students-list');
 const awardSpecialBadgeButton = document.getElementById('award-special-badge-btn');
 const awardBadgeMessageElement = document.getElementById('award-badge-message');
 const achievementBadgesPreviewListElement = document.getElementById('achievement-badges-preview-list');
@@ -540,6 +540,31 @@ function getStudentSectionLabel(student = {}) {
   return safeText(student.sectionName || student.section, 'No section assigned');
 }
 
+function getStudentSexRank(student = {}) {
+  const sex = safeText(student.sex || student.gender, '').toLowerCase();
+  if (sex === 'male' || sex === 'm') return 1;
+  if (sex === 'female' || sex === 'f') return 2;
+  return 3;
+}
+
+function getStudentSexLabel(student = {}) {
+  const sex = safeText(student.sex || student.gender, '').toLowerCase();
+  if (sex === 'male' || sex === 'm') return 'Male';
+  if (sex === 'female' || sex === 'f') return 'Female';
+  return 'Other / Not Set';
+}
+
+function sortStudentsForAward(records = []) {
+  return records.slice().sort((a, b) => {
+    const sexCompare = getStudentSexRank(a) - getStudentSexRank(b);
+    if (sexCompare !== 0) return sexCompare;
+
+    return safeText(a.displayName, '').localeCompare(safeText(b.displayName, ''), undefined, {
+      sensitivity: 'base'
+    });
+  });
+}
+
 function populateAwardSectionFilter(records) {
   if (!awardSectionFilterSelect) return;
 
@@ -567,25 +592,49 @@ function populateAwardSectionFilter(records) {
   }
 }
 
-function populateAwardStudentSelect(records) {
-  if (!awardStudentSelect) return;
+function renderAwardStudentCheckboxes(records) {
+  if (!awardStudentsListElement) return;
 
-  const currentValue = awardStudentSelect.value;
   const selectedSection = safeText(awardSectionFilterSelect?.value, '').trim();
   const filteredRecords = selectedSection
     ? records.filter((record) => getStudentSectionFilterValue(record) === selectedSection)
     : records;
 
-  const options = filteredRecords
-    .map((record) => `<option value="${escapeHtml(record.id)}">${escapeHtml(record.displayName)}</option>`)
+  if (!filteredRecords.length) {
+    awardStudentsListElement.innerHTML =
+      '<p class="empty-cell">No students found for the selected section.</p>';
+    return;
+  }
+
+  let currentGroup = '';
+  const listHtml = sortStudentsForAward(filteredRecords)
+    .map((record) => {
+      const sexLabel = getStudentSexLabel(record);
+      const groupHeader = sexLabel === currentGroup ? '' : `<h3>${escapeHtml(sexLabel)}</h3>`;
+      currentGroup = sexLabel;
+
+      return `
+        ${groupHeader}
+        <label class="award-student-option">
+          <input type="checkbox" value="${escapeHtml(record.id)}" />
+          <span>
+            <strong>${escapeHtml(record.displayName)}</strong>
+            <small>${escapeHtml(getStudentSectionLabel(record))}</small>
+          </span>
+        </label>
+      `;
+    })
     .join('');
 
-  awardStudentSelect.innerHTML =
-    `<option value="">${filteredRecords.length ? 'Select student' : 'No students in this section'}</option>` + options;
+  awardStudentsListElement.innerHTML = listHtml;
+}
 
-  if (currentValue && filteredRecords.some((record) => record.id === currentValue)) {
-    awardStudentSelect.value = currentValue;
-  }
+function getSelectedAwardStudentIds() {
+  if (!awardStudentsListElement) return [];
+
+  return Array.from(awardStudentsListElement.querySelectorAll('input[type="checkbox"]:checked'))
+    .map((input) => safeText(input.value, '').trim())
+    .filter(Boolean);
 }
 
 function populateSchoolYearSelect(records) {
@@ -1258,7 +1307,7 @@ async function loadStudentOptions() {
 
     studentOptionsCache = records;
     populateAwardSectionFilter(records);
-    populateAwardStudentSelect(records);
+    renderAwardStudentCheckboxes(records);
   } catch (error) {
     console.error('Failed to load students for badge awards:', error);
     setMessageOnElement(awardBadgeMessageElement, 'Unable to load students right now.', 'error');
@@ -1283,49 +1332,100 @@ async function toggleSpecialBadgeStatus(id, currentStatus) {
 
 async function awardSpecialBadge() {
   const badgeId = safeText(awardBadgeSelect?.value, '').trim();
-  const studentId = safeText(awardStudentSelect?.value, '').trim();
+  const selectedStudentIds = getSelectedAwardStudentIds();
   const badge = specialBadgeOptionsCache.find((record) => record.id === badgeId);
-  const student = studentOptionsCache.find((record) => record.id === studentId);
 
-  if (!badgeId || !studentId || !badge || !student) {
-    setMessageOnElement(awardBadgeMessageElement, 'Please select a badge and student.', 'error');
+  if (!badgeId || !badge) {
+    setMessageOnElement(awardBadgeMessageElement, 'Please select a badge.', 'error');
     return;
   }
 
+  if (!selectedStudentIds.length) {
+    setMessageOnElement(awardBadgeMessageElement, 'Please check at least one student.', 'error');
+    return;
+  }
+
+  const selectedStudents = selectedStudentIds
+    .map((studentId) => studentOptionsCache.find((record) => record.id === studentId))
+    .filter(Boolean);
+
+  if (!selectedStudents.length) {
+    setMessageOnElement(awardBadgeMessageElement, 'Selected students are no longer available.', 'error');
+    return;
+  }
+
+  if (awardSpecialBadgeButton) {
+    awardSpecialBadgeButton.disabled = true;
+    awardSpecialBadgeButton.textContent = 'Awarding...';
+  }
+
   try {
-    const duplicateQuery = query(
-      collection(db, 'studentSpecialBadges'),
-      where('studentId', '==', studentId)
+    const duplicateSnapshots = await Promise.all(
+      selectedStudents.map((student) =>
+        getDocs(query(collection(db, 'studentSpecialBadges'), where('studentId', '==', student.id)))
+      )
     );
-    const duplicateSnapshot = await getDocs(duplicateQuery);
-    const hasActiveDuplicate = duplicateSnapshot.docs.some((item) => {
-      const data = item.data() || {};
-      return data.badgeId === badgeId && safeText(data.status, 'active') === 'active';
+
+    const duplicateStudentIds = new Set();
+    duplicateSnapshots.forEach((snapshot, index) => {
+      const hasActiveDuplicate = snapshot.docs.some((item) => {
+        const data = item.data() || {};
+        return data.badgeId === badgeId && safeText(data.status, 'active') === 'active';
+      });
+
+      if (hasActiveDuplicate) {
+        duplicateStudentIds.add(selectedStudents[index].id);
+      }
     });
 
-    if (hasActiveDuplicate) {
-      setMessageOnElement(awardBadgeMessageElement, 'This student already has that active special badge.', 'error');
+    const studentsToAward = selectedStudents.filter((student) => !duplicateStudentIds.has(student.id));
+
+    if (!studentsToAward.length) {
+      setMessageOnElement(awardBadgeMessageElement, 'All checked students already have that active special badge.', 'error');
       return;
     }
 
-    await addDoc(collection(db, 'studentSpecialBadges'), {
-      badgeId,
-      studentId,
-      studentName: student.displayName,
-      name: badge.name || 'Untitled Badge',
-      imageUrl: getBadgeImageDisplayUrl(badge.imageUrl || badge.originalImageUrl || ''),
-      originalImageUrl: badge.originalImageUrl || badge.imageUrl || '',
-      description: badge.description || '',
-      type: 'special',
-      status: 'active',
-      awardedBy: currentSuperAdminUser?.uid || '',
-      awardedAt: serverTimestamp()
-    });
+    const MAX_BATCH_SIZE = 450;
+    for (let index = 0; index < studentsToAward.length; index += MAX_BATCH_SIZE) {
+      const chunk = studentsToAward.slice(index, index + MAX_BATCH_SIZE);
+      const batch = writeBatch(db);
 
-    setMessageOnElement(awardBadgeMessageElement, `Awarded ${badge.name} to ${student.displayName}.`, 'success');
+      chunk.forEach((student) => {
+        const awardRef = doc(collection(db, 'studentSpecialBadges'));
+        batch.set(awardRef, {
+          badgeId,
+          studentId: student.id,
+          studentName: student.displayName,
+          name: badge.name || 'Untitled Badge',
+          imageUrl: getBadgeImageDisplayUrl(badge.imageUrl || badge.originalImageUrl || ''),
+          originalImageUrl: badge.originalImageUrl || badge.imageUrl || '',
+          description: badge.description || '',
+          type: 'special',
+          status: 'active',
+          awardedBy: currentSuperAdminUser?.uid || '',
+          awardedAt: serverTimestamp()
+        });
+      });
+
+      await batch.commit();
+    }
+
+    renderAwardStudentCheckboxes(studentOptionsCache);
+
+    const skippedText = duplicateStudentIds.size ? ` ${duplicateStudentIds.size} already had it and were skipped.` : '';
+    setMessageOnElement(
+      awardBadgeMessageElement,
+      `Awarded ${badge.name || 'badge'} to ${studentsToAward.length} student(s).${skippedText}`,
+      'success'
+    );
   } catch (error) {
     console.error('Failed to award special badge:', error);
     setMessageOnElement(awardBadgeMessageElement, 'Failed to award special badge.', 'error');
+  } finally {
+    if (awardSpecialBadgeButton) {
+      awardSpecialBadgeButton.disabled = false;
+      awardSpecialBadgeButton.textContent = 'Award Checked Students';
+    }
   }
 }
 
@@ -1426,7 +1526,7 @@ addSubjectButton?.addEventListener('click', addSubject);
 addSectionButton?.addEventListener('click', addSection);
 addSpecialBadgeButton?.addEventListener('click', addSpecialBadge);
 awardSpecialBadgeButton?.addEventListener('click', awardSpecialBadge);
-awardSectionFilterSelect?.addEventListener('change', () => populateAwardStudentSelect(studentOptionsCache));
+awardSectionFilterSelect?.addEventListener('change', () => renderAwardStudentCheckboxes(studentOptionsCache));
 recomputeRankingsButton?.addEventListener('click', recomputeSectionRankings);
 recomputeStudentRankingsButton?.addEventListener('click', recomputeStudentRankings);
 rankingSchoolYearSelect?.addEventListener('change', refreshSectionLeaderboard);
