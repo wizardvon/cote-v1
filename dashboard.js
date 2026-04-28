@@ -1182,9 +1182,9 @@ async function loadPointLogs(studentId) {
       logsSnapshot.docs.map(async (logDoc) => {
         const log = logDoc.data() || {};
         const source = String(log.source || '').trim().toLowerCase();
-        const isAcademic = source === 'academic';
+        const logType = String(log.type || '').trim().toLowerCase();
 
-        if (isAcademic) {
+        if (source === 'academic') {
           const pointDifference = normalizeNumericValue(log.pointDifference, 0);
           if (pointDifference === 0) {
             return '';
@@ -1209,13 +1209,33 @@ async function loadPointLogs(studentId) {
           }<br><strong>Teacher:</strong> ${escapeHtml(teacherName)}</li>`;
         }
 
-        const points = normalizePoints(log.points);
-        const sign = log.type === 'demerit' ? '-' : '+';
-        const label = log.type === 'demerit' ? 'Demerit' : 'Merit';
-        const reason = String(log.reason || 'No reason provided').trim() || 'No reason provided';
-        const teacherName = await resolveTeacherName(log);
+        if (source === 'achievement') {
+          const achievementPoints = normalizeNumericValue(log.pointDifference ?? log.awardedPoints, 0);
+          const sign = achievementPoints > 0 ? '+' : '';
+          const achievementLabel = String(log.achievementTitle || log.reason || 'Achievement reward').trim() || 'Achievement reward';
+          return `<li>${sign}${escapeHtml(String(achievementPoints))} Achievement — ${escapeHtml(
+            achievementLabel
+          )}<br>System</li>`;
+        }
 
-        return `<li>${sign}${points} ${label} — ${escapeHtml(reason)}<br><strong>Teacher:</strong> ${escapeHtml(
+        if (source === 'merit' || source === 'demerit' || logType === 'merit' || logType === 'demerit') {
+          const points = normalizePoints(log.points);
+          const isDemerit = source === 'demerit' || logType === 'demerit';
+          const sign = isDemerit ? '-' : '+';
+          const label = isDemerit ? 'Demerit' : 'Merit';
+          const reason = String(log.reason || 'No reason provided').trim() || 'No reason provided';
+          const teacherName = await resolveTeacherName(log);
+
+          return `<li>${sign}${points} ${label} — ${escapeHtml(reason)}<br><strong>Teacher:</strong> ${escapeHtml(
+            teacherName
+          )}</li>`;
+        }
+
+        const displayPoints = normalizeNumericValue(log.pointDifference ?? log.awardedPoints ?? log.points, 0);
+        const sign = displayPoints > 0 ? '+' : '';
+        const reason = String(log.reason || 'Point log update').trim() || 'Point log update';
+        const teacherName = await resolveTeacherName(log);
+        return `<li>${sign}${escapeHtml(String(displayPoints))} Points — ${escapeHtml(reason)}<br><strong>Teacher:</strong> ${escapeHtml(
           teacherName
         )}</li>`;
       })
