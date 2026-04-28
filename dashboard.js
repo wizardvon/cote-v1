@@ -29,6 +29,12 @@ const profileFullNameElement = document.getElementById('profile-full-name');
 const profileEmailElement = document.getElementById('profile-email');
 const profileGradeSectionElement = document.getElementById('profile-grade-section');
 const profileAvatarElement = document.getElementById('profile-avatar');
+const profilePictureEditButton = document.getElementById('profile-picture-edit-btn');
+const profilePictureFormElement = document.getElementById('profile-picture-form');
+const profilePictureUrlInput = document.getElementById('profile-picture-url');
+const profilePictureSaveButton = document.getElementById('profile-picture-save-btn');
+const profilePictureCancelButton = document.getElementById('profile-picture-cancel-btn');
+const profilePictureMessageElement = document.getElementById('profile-picture-message');
 const sidebarStudentNameElement = document.getElementById('sidebar-student-name');
 const sidebarStudentEmailElement = document.getElementById('sidebar-student-email');
 const pointsTotalElement = document.getElementById('points-total');
@@ -381,6 +387,110 @@ function getBadgeImageDisplayUrl(url) {
   }
 
   return rawUrl;
+}
+
+function isValidHttpUrl(url) {
+  const rawUrl = String(url || '').trim();
+  if (!rawUrl) return false;
+
+  try {
+    const parsed = new URL(rawUrl);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch (_error) {
+    return false;
+  }
+}
+
+function getProfilePictureOriginalUrl(data = {}) {
+  return String(data.originalProfileImageUrl || data.profilePictureUrl || data.profileImageUrl || '').trim();
+}
+
+function getProfilePictureDisplayUrl(data = {}) {
+  return getBadgeImageDisplayUrl(getProfilePictureOriginalUrl(data));
+}
+
+function getProfilePictureCandidateUrls(data = {}) {
+  const originalUrl = getProfilePictureOriginalUrl(data);
+  if (!originalUrl) return [];
+
+  const driveFileId = getDriveFileId(originalUrl);
+  const candidates = driveFileId
+    ? [
+        `https://drive.google.com/thumbnail?id=${encodeURIComponent(driveFileId)}&sz=w512`,
+        `https://drive.google.com/uc?export=view&id=${encodeURIComponent(driveFileId)}`
+      ]
+    : [getProfilePictureDisplayUrl(data)];
+
+  candidates.push(originalUrl);
+  return Array.from(new Set(candidates.filter(Boolean)));
+}
+
+function renderProfileAvatar(data = {}) {
+  if (!profileAvatarElement) return;
+
+  const initials = escapeHtml(makeInitials(data));
+  const candidateUrls = getProfilePictureCandidateUrls(data);
+
+  if (!candidateUrls.length) {
+    profileAvatarElement.innerHTML = `<span>${initials}</span>`;
+    return;
+  }
+
+  profileAvatarElement.innerHTML = `
+    <span>${initials}</span>
+    <img src="${escapeHtml(candidateUrls[0])}" alt="" />
+  `;
+
+  const avatarImage = profileAvatarElement.querySelector('img');
+  let candidateIndex = 0;
+
+  avatarImage?.addEventListener('error', () => {
+    candidateIndex += 1;
+    if (candidateIndex < candidateUrls.length) {
+      avatarImage.src = candidateUrls[candidateIndex];
+      return;
+    }
+
+    avatarImage.remove();
+    setFormMessage(
+      profilePictureMessageElement,
+      'Profile picture link saved, but the image could not be displayed. Use a public direct image link.',
+      'error'
+    );
+  });
+}
+
+function setFormMessage(element, message, type = '') {
+  if (!element) return;
+
+  element.textContent = message;
+  element.classList.remove('success', 'error');
+  if (type) {
+    element.classList.add(type);
+  }
+}
+
+function setProfilePictureEditorOpen(isOpen) {
+  if (profilePictureFormElement) {
+    profilePictureFormElement.classList.toggle('is-open', isOpen);
+  }
+
+  if (profilePictureEditButton) {
+    profilePictureEditButton.setAttribute('aria-expanded', String(isOpen));
+  }
+
+  if (isOpen) {
+    profilePictureUrlInput?.focus();
+  }
+}
+
+function resetProfilePictureEditor() {
+  if (profilePictureUrlInput && currentStudentProfile) {
+    profilePictureUrlInput.value = getProfilePictureOriginalUrl(currentStudentProfile);
+  }
+
+  setFormMessage(profilePictureMessageElement, '');
+  setProfilePictureEditorOpen(false);
 }
 
 function renderResourceMedia(resource) {
@@ -1570,7 +1680,11 @@ function setStudentData(data, fallbackEmail = '') {
   }
 
   if (profileAvatarElement) {
-    profileAvatarElement.textContent = makeInitials(data);
+    renderProfileAvatar(data);
+  }
+
+  if (profilePictureUrlInput) {
+    profilePictureUrlInput.value = getProfilePictureOriginalUrl(data);
   }
 
   if (pointsTotalElement) {
@@ -1607,6 +1721,7 @@ function setStudentData(data, fallbackEmail = '') {
       <p><strong>LRN:</strong> ${safe(data.lrn)}</p>
       <p><strong>Phone Number:</strong> ${safe(data.phoneNumber)}</p>
       <p><strong>Address:</strong> ${safe(data.address)}</p>
+      <p><strong>Profile Picture:</strong> ${getProfilePictureOriginalUrl(data) ? 'Linked' : 'Not provided'}</p>
       <p><strong>Grade Level:</strong> ${safe(data.gradeLevel)}</p>
       <p><strong>Section:</strong> ${safe(data.section)}</p>
       <p><strong>Total Points:</strong> ${points}</p>
@@ -1879,6 +1994,60 @@ function renderNoProfile(email = '') {
   }
 }
 
+async function saveProfilePicture(event) {
+  event.preventDefault();
+
+  if (!currentStudentUser?.uid || !currentStudentProfile) {
+    setFormMessage(profilePictureMessageElement, 'Profile is not ready yet.', 'error');
+    return;
+  }
+
+  const originalProfileImageUrl = String(profilePictureUrlInput?.value || '').trim();
+
+  if (originalProfileImageUrl && !isValidHttpUrl(originalProfileImageUrl)) {
+    setFormMessage(profilePictureMessageElement, 'Please enter a valid image link.', 'error');
+    return;
+  }
+
+  if (profilePictureSaveButton) {
+    profilePictureSaveButton.disabled = true;
+    profilePictureSaveButton.textContent = 'Saving...';
+  }
+
+  try {
+    const profileImageUrl = getBadgeImageDisplayUrl(originalProfileImageUrl);
+    await updateDoc(doc(db, 'students', currentStudentUser.uid), {
+      originalProfileImageUrl,
+      profileImageUrl,
+      profilePictureUrl: originalProfileImageUrl,
+      updatedAt: serverTimestamp()
+    });
+
+    currentStudentProfile = {
+      ...currentStudentProfile,
+      originalProfileImageUrl,
+      profileImageUrl,
+      profilePictureUrl: originalProfileImageUrl
+    };
+
+    setStudentData(currentStudentProfile, currentStudentUser.email || '');
+    setProfilePictureEditorOpen(false);
+    setFormMessage(
+      profilePictureMessageElement,
+      originalProfileImageUrl ? 'Profile picture updated.' : 'Profile picture removed.',
+      'success'
+    );
+  } catch (error) {
+    console.error('Failed to update profile picture:', error);
+    setFormMessage(profilePictureMessageElement, 'Failed to update profile picture.', 'error');
+  } finally {
+    if (profilePictureSaveButton) {
+      profilePictureSaveButton.disabled = false;
+      profilePictureSaveButton.textContent = 'Save Picture';
+    }
+  }
+}
+
 menuButtons.forEach((button) => {
   button.addEventListener('click', () => {
     const target = button.dataset.target;
@@ -1894,10 +2063,17 @@ menuButtons.forEach((button) => {
 
 burgerButton?.addEventListener('click', toggleSidebar);
 sidebarOverlay?.addEventListener('click', closeSidebar);
+profilePictureEditButton?.addEventListener('click', () => {
+  const isOpen = profilePictureFormElement?.classList.contains('is-open') || false;
+  setProfilePictureEditorOpen(!isOpen);
+});
+profilePictureCancelButton?.addEventListener('click', resetProfilePictureEditor);
+profilePictureFormElement?.addEventListener('submit', saveProfilePicture);
 
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
     closeSidebar();
+    resetProfilePictureEditor();
   }
 });
 

@@ -152,10 +152,31 @@
       <section id="page-profile" class="page" data-page="profile" aria-label="Profile">
         <article class="app-card profile-hero">
           <div class="avatar-placeholder" id="profile-avatar" aria-hidden="true">👤</div>
-          <div>
+          <div class="profile-hero-content">
             <h2 id="profile-full-name">Loading...</h2>
             <p id="profile-email">Loading...</p>
             <p id="profile-grade-section">Loading...</p>
+            <button
+              id="profile-picture-edit-btn"
+              class="profile-picture-edit-btn"
+              type="button"
+              aria-expanded="false"
+              aria-controls="profile-picture-form"
+              title="Edit profile picture"
+            >
+              ✎
+            </button>
+            <form id="profile-picture-form" class="profile-picture-form">
+              <input
+                id="profile-picture-url"
+                type="url"
+                placeholder="Profile picture URL"
+                aria-label="Profile picture URL"
+              />
+              <button id="profile-picture-save-btn" type="submit">Save Picture</button>
+              <button id="profile-picture-cancel-btn" type="button">Cancel</button>
+            </form>
+            <p id="profile-picture-message" class="form-message" role="status" aria-live="polite"></p>
           </div>
         </article>
 

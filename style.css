@@ -594,6 +594,13 @@ button:active {
   gap: 0.9rem;
 }
 
+.profile-hero-content {
+  position: relative;
+  min-width: 0;
+  flex: 1;
+  padding-right: 2.35rem;
+}
+
 .avatar-placeholder {
   width: 62px;
   height: 62px;
@@ -603,6 +610,66 @@ button:active {
   display: grid;
   place-items: center;
   color: #ffffff;
+  font-weight: 800;
+  overflow: hidden;
+}
+
+.avatar-placeholder > * {
+  grid-area: 1 / 1;
+}
+
+.avatar-placeholder img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-picture-form {
+  display: none;
+  margin-top: 0.7rem;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 0.55rem;
+}
+
+.profile-picture-form.is-open {
+  display: grid;
+}
+
+.profile-picture-edit-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(231, 188, 88, 0.5);
+  background: rgba(6, 18, 34, 0.78);
+  color: var(--gold-soft);
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.profile-picture-edit-btn:hover,
+.profile-picture-edit-btn:focus-visible {
+  border-color: rgba(252, 235, 196, 0.8);
+  box-shadow: 0 0 14px rgba(231, 188, 88, 0.2);
+}
+
+.profile-picture-form input,
+.profile-picture-form button {
+  min-height: 40px;
+}
+
+.profile-picture-form input {
+  width: 100%;
+}
+
+.profile-picture-form + .form-message {
+  margin-top: 0.45rem;
 }
 
 .points-highlight {
@@ -1334,6 +1401,9 @@ button:active {
   .profile-badge-item {
     width: 62px;
     height: 62px;
+  }
+  .profile-picture-form {
+    grid-template-columns: 1fr;
   }
   .student-table {
     min-width: 560px;
