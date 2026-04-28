@@ -59,9 +59,23 @@ const rankingSchoolYearSelect = document.getElementById('ranking-school-year');
 const recomputeRankingsButton = document.getElementById('recompute-rankings-btn');
 const sectionLeaderboardTableBodyElement = document.getElementById('section-leaderboard-body');
 const recomputeStudentRankingsButton = document.getElementById('recompute-student-rankings-btn');
+const specialBadgeNameInput = document.getElementById('special-badge-name');
+const specialBadgeImageUrlInput = document.getElementById('special-badge-image-url');
+const specialBadgeDescriptionInput = document.getElementById('special-badge-description');
+const addSpecialBadgeButton = document.getElementById('add-special-badge-btn');
+const specialBadgeMessageElement = document.getElementById('special-badge-message');
+const specialBadgesListElement = document.getElementById('special-badges-list');
+const awardBadgeSelect = document.getElementById('award-badge-select');
+const awardSectionFilterSelect = document.getElementById('award-section-filter');
+const awardStudentSelect = document.getElementById('award-student-select');
+const awardSpecialBadgeButton = document.getElementById('award-special-badge-btn');
+const awardBadgeMessageElement = document.getElementById('award-badge-message');
 
 let overlaySequenceJob = 0;
 let schoolYearOptionsCache = [];
+let specialBadgeOptionsCache = [];
+let studentOptionsCache = [];
+let currentSuperAdminUser = null;
 
 function getTierFromRank(rank) {
   if (rank === 1) return 'Class A';
@@ -105,7 +119,8 @@ const pageTitles = {
   'active-teachers': 'Active Teachers',
   'academic-setup': 'Academic Setup',
   subjects: 'Subjects',
-  sections: 'Sections'
+  sections: 'Sections',
+  'special-badges': 'Special Badges'
 };
 
 function showLoadingOverlay(text = 'Initializing C.O.T.E System...') {
@@ -173,6 +188,15 @@ function safeText(value, fallback = '—') {
   if (value === undefined || value === null) return fallback;
   const text = String(value).trim();
   return text || fallback;
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }
 
 function makeFullName(teacher, user) {
@@ -358,6 +382,131 @@ function renderSections(records) {
     `;
     })
     .join('');
+}
+
+function makeStudentName(student = {}) {
+  const fullName = [student.firstName, student.middleName, student.lastName]
+    .map((part) => safeText(part, '').trim())
+    .filter(Boolean)
+    .join(' ');
+
+  return fullName || safeText(student.email, 'Unnamed Student');
+}
+
+function renderSpecialBadges(records) {
+  if (!specialBadgesListElement) return;
+
+  if (!records.length) {
+    specialBadgesListElement.innerHTML = '<p class="empty-cell">No special badges yet.</p>';
+    return;
+  }
+
+  specialBadgesListElement.innerHTML = records
+    .map((record) => {
+      const status = safeText(record.status, 'active');
+      const nextStatus = status === 'active' ? 'inactive' : 'active';
+      const imageUrl = safeText(record.imageUrl, '');
+      const previewHtml = imageUrl
+        ? `<img src="${escapeHtml(imageUrl)}" alt="" class="special-badge-preview" loading="lazy" />`
+        : '<div class="special-badge-preview special-badge-preview-empty">No image</div>';
+
+      return `
+      <article class="app-card super-admin-item special-badge-item">
+        ${previewHtml}
+        <div>
+          <p><strong>Name:</strong> ${escapeHtml(record.name || 'Untitled Badge')}</p>
+          <p><strong>Description:</strong> ${escapeHtml(record.description || 'No description')}</p>
+          <p><strong>Status:</strong> <span class="status-pill ${
+            status === 'active' ? 'status-active' : 'status-pending'
+          }">${escapeHtml(status)}</span></p>
+          <button type="button" class="approve-button" data-special-badge-id="${escapeHtml(
+            record.id
+          )}" data-current-status="${escapeHtml(status)}">
+            Mark as ${escapeHtml(nextStatus)}
+          </button>
+        </div>
+      </article>
+    `;
+    })
+    .join('');
+}
+
+function populateAwardBadgeSelect(records) {
+  if (!awardBadgeSelect) return;
+
+  const currentValue = awardBadgeSelect.value;
+  const activeRecords = records.filter((record) => safeText(record.status, 'active') === 'active');
+  const options = activeRecords
+    .map((record) => `<option value="${escapeHtml(record.id)}">${escapeHtml(record.name || 'Untitled Badge')}</option>`)
+    .join('');
+
+  awardBadgeSelect.innerHTML = '<option value="">Select badge</option>' + options;
+
+  if (currentValue && activeRecords.some((record) => record.id === currentValue)) {
+    awardBadgeSelect.value = currentValue;
+  }
+}
+
+function getStudentSectionFilterValue(student = {}) {
+  const sectionId = safeText(student.sectionId, '').trim();
+  if (sectionId) return `id:${sectionId}`;
+
+  const sectionName = safeText(student.sectionName || student.section, '').trim();
+  if (sectionName) return `name:${sectionName.toLowerCase()}`;
+
+  return 'unassigned';
+}
+
+function getStudentSectionLabel(student = {}) {
+  return safeText(student.sectionName || student.section, 'No section assigned');
+}
+
+function populateAwardSectionFilter(records) {
+  if (!awardSectionFilterSelect) return;
+
+  const currentValue = awardSectionFilterSelect.value;
+  const sectionMap = new Map();
+
+  records.forEach((record) => {
+    const value = getStudentSectionFilterValue(record);
+    const label = getStudentSectionLabel(record);
+
+    if (!sectionMap.has(value)) {
+      sectionMap.set(value, label);
+    }
+  });
+
+  const options = Array.from(sectionMap.entries())
+    .sort((a, b) => a[1].localeCompare(b[1], undefined, { sensitivity: 'base' }))
+    .map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`)
+    .join('');
+
+  awardSectionFilterSelect.innerHTML = '<option value="">All sections</option>' + options;
+
+  if (currentValue && sectionMap.has(currentValue)) {
+    awardSectionFilterSelect.value = currentValue;
+  }
+}
+
+function populateAwardStudentSelect(records) {
+  if (!awardStudentSelect) return;
+
+  const currentValue = awardStudentSelect.value;
+  const selectedSection = safeText(awardSectionFilterSelect?.value, '').trim();
+  const filteredRecords = selectedSection
+    ? records.filter((record) => getStudentSectionFilterValue(record) === selectedSection)
+    : records;
+
+  const options = filteredRecords
+    .map((record) => `<option value="${escapeHtml(record.id)}">${escapeHtml(record.displayName)}</option>`)
+    .join('');
+
+  awardStudentSelect.innerHTML =
+    `<option value="">${filteredRecords.length ? 'Select student' : 'No students in this section'}</option>` + options;
+
+  if (currentValue && filteredRecords.some((record) => record.id === currentValue)) {
+    awardStudentSelect.value = currentValue;
+  }
 }
 
 function populateSchoolYearSelect(records) {
@@ -942,6 +1091,144 @@ async function toggleSectionStatus(id, currentStatus) {
   }
 }
 
+async function addSpecialBadge() {
+  const name = safeText(specialBadgeNameInput?.value, '').trim();
+  const imageUrl = safeText(specialBadgeImageUrlInput?.value, '').trim();
+  const description = safeText(specialBadgeDescriptionInput?.value, '').trim();
+
+  if (!name || !imageUrl) {
+    setMessageOnElement(specialBadgeMessageElement, 'Please enter a badge name and image URL.', 'error');
+    return;
+  }
+
+  try {
+    await addDoc(collection(db, 'specialBadges'), {
+      name,
+      imageUrl,
+      description,
+      type: 'special',
+      status: 'active',
+      createdBy: currentSuperAdminUser?.uid || '',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+
+    if (specialBadgeNameInput) specialBadgeNameInput.value = '';
+    if (specialBadgeImageUrlInput) specialBadgeImageUrlInput.value = '';
+    if (specialBadgeDescriptionInput) specialBadgeDescriptionInput.value = '';
+
+    setMessageOnElement(specialBadgeMessageElement, 'Special badge created successfully.', 'success');
+    await loadSpecialBadges();
+  } catch (error) {
+    console.error('Failed to create special badge:', error);
+    setMessageOnElement(specialBadgeMessageElement, 'Failed to create special badge.', 'error');
+  }
+}
+
+async function loadSpecialBadges() {
+  try {
+    const badgesQuery = query(collection(db, 'specialBadges'), orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(badgesQuery);
+    const records = snapshot.docs.map((item) => ({
+      id: item.id,
+      ...item.data()
+    }));
+
+    specialBadgeOptionsCache = records;
+    renderSpecialBadges(records);
+    populateAwardBadgeSelect(records);
+  } catch (error) {
+    console.error('Failed to load special badges:', error);
+    setMessageOnElement(specialBadgeMessageElement, 'Unable to load special badges right now.', 'error');
+  }
+}
+
+async function loadStudentOptions() {
+  try {
+    const snapshot = await getDocs(collection(db, 'students'));
+    const records = snapshot.docs
+      .map((studentDoc) => {
+        const data = studentDoc.data() || {};
+        return {
+          id: studentDoc.id,
+          ...data,
+          displayName: makeStudentName(data)
+        };
+      })
+      .sort((a, b) => a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' }));
+
+    studentOptionsCache = records;
+    populateAwardSectionFilter(records);
+    populateAwardStudentSelect(records);
+  } catch (error) {
+    console.error('Failed to load students for badge awards:', error);
+    setMessageOnElement(awardBadgeMessageElement, 'Unable to load students right now.', 'error');
+  }
+}
+
+async function toggleSpecialBadgeStatus(id, currentStatus) {
+  const nextStatus = currentStatus === 'active' ? 'inactive' : 'active';
+
+  try {
+    await updateDoc(doc(db, 'specialBadges', id), {
+      status: nextStatus,
+      updatedAt: serverTimestamp()
+    });
+    setMessageOnElement(specialBadgeMessageElement, `Special badge marked as ${nextStatus}.`, 'success');
+    await loadSpecialBadges();
+  } catch (error) {
+    console.error('Failed to update special badge:', error);
+    setMessageOnElement(specialBadgeMessageElement, 'Failed to update special badge.', 'error');
+  }
+}
+
+async function awardSpecialBadge() {
+  const badgeId = safeText(awardBadgeSelect?.value, '').trim();
+  const studentId = safeText(awardStudentSelect?.value, '').trim();
+  const badge = specialBadgeOptionsCache.find((record) => record.id === badgeId);
+  const student = studentOptionsCache.find((record) => record.id === studentId);
+
+  if (!badgeId || !studentId || !badge || !student) {
+    setMessageOnElement(awardBadgeMessageElement, 'Please select a badge and student.', 'error');
+    return;
+  }
+
+  try {
+    const duplicateQuery = query(
+      collection(db, 'studentSpecialBadges'),
+      where('studentId', '==', studentId)
+    );
+    const duplicateSnapshot = await getDocs(duplicateQuery);
+    const hasActiveDuplicate = duplicateSnapshot.docs.some((item) => {
+      const data = item.data() || {};
+      return data.badgeId === badgeId && safeText(data.status, 'active') === 'active';
+    });
+
+    if (hasActiveDuplicate) {
+      setMessageOnElement(awardBadgeMessageElement, 'This student already has that active special badge.', 'error');
+      return;
+    }
+
+    await addDoc(collection(db, 'studentSpecialBadges'), {
+      badgeId,
+      studentId,
+      studentName: student.displayName,
+      name: badge.name || 'Untitled Badge',
+      imageUrl: badge.imageUrl || '',
+      description: badge.description || '',
+      type: 'special',
+      status: 'active',
+      awardedBy: currentSuperAdminUser?.uid || '',
+      awardedAt: serverTimestamp()
+    });
+
+    setMessageOnElement(awardBadgeMessageElement, `Awarded ${badge.name} to ${student.displayName}.`, 'success');
+  } catch (error) {
+    console.error('Failed to award special badge:', error);
+    setMessageOnElement(awardBadgeMessageElement, 'Failed to award special badge.', 'error');
+  }
+}
+
 pendingTeachersListElement?.addEventListener('click', async (event) => {
   const target = event.target;
 
@@ -1022,10 +1309,24 @@ sectionsListElement?.addEventListener('click', async (event) => {
   await toggleSectionStatus(target.dataset.sectionId, target.dataset.currentStatus || 'inactive');
 });
 
+specialBadgesListElement?.addEventListener('click', async (event) => {
+  const target = event.target;
+
+  if (!(target instanceof HTMLButtonElement) || !target.dataset.specialBadgeId) {
+    return;
+  }
+
+  target.disabled = true;
+  await toggleSpecialBadgeStatus(target.dataset.specialBadgeId, target.dataset.currentStatus || 'inactive');
+});
+
 addSchoolYearButton?.addEventListener('click', addSchoolYear);
 addTermButton?.addEventListener('click', addTerm);
 addSubjectButton?.addEventListener('click', addSubject);
 addSectionButton?.addEventListener('click', addSection);
+addSpecialBadgeButton?.addEventListener('click', addSpecialBadge);
+awardSpecialBadgeButton?.addEventListener('click', awardSpecialBadge);
+awardSectionFilterSelect?.addEventListener('change', () => populateAwardStudentSelect(studentOptionsCache));
 recomputeRankingsButton?.addEventListener('click', recomputeSectionRankings);
 recomputeStudentRankingsButton?.addEventListener('click', recomputeStudentRankings);
 rankingSchoolYearSelect?.addEventListener('change', refreshSectionLeaderboard);
@@ -1055,6 +1356,8 @@ onAuthStateChanged(auth, async (user) => {
     window.location.replace('index.html');
     return;
   }
+
+  currentSuperAdminUser = user;
 
   try {
     const userRef = doc(db, 'users', user.uid);
@@ -1088,7 +1391,9 @@ await Promise.all([
   loadSchoolYears(),
   loadTerms(),
   loadSubjects(),
-  loadSections()
+  loadSections(),
+  loadSpecialBadges(),
+  loadStudentOptions()
 ]);
   } catch (error) {
     console.error('Failed to validate super admin role:', error);

@@ -58,6 +58,10 @@
             <span aria-hidden="true">🏫</span>
             <span>Sections</span>
           </button>
+          <button type="button" class="menu-btn" data-target="special-badges">
+            <span aria-hidden="true">SB</span>
+            <span>Special Badges</span>
+          </button>
         </nav>
       </div>
 
@@ -212,6 +216,39 @@
           </div>
           <p id="section-message" class="form-message" role="status" aria-live="polite"></p>
           <div id="sections-list" class="super-admin-list"></div>
+        </article>
+      </section>
+
+      <section id="page-special-badges" class="page" data-page="special-badges" aria-label="Special badges">
+        <article class="app-card">
+          <h2>Special Badges</h2>
+          <p>Create rare badges for events, awards, or special recognition.</p>
+          <div class="admin-toolbar special-badge-toolbar">
+            <input id="special-badge-name" type="text" placeholder="Badge Name" />
+            <input id="special-badge-image-url" type="url" placeholder="Badge Image URL" />
+            <textarea id="special-badge-description" placeholder="Description"></textarea>
+            <button id="add-special-badge-btn" type="button">Create Badge</button>
+          </div>
+          <p id="special-badge-message" class="form-message" role="status" aria-live="polite"></p>
+          <div id="special-badges-list" class="super-admin-list"></div>
+        </article>
+
+        <article class="app-card">
+          <h2>Award Special Badge</h2>
+          <p>Choose a student and manually award an active special badge.</p>
+          <div class="admin-toolbar">
+            <select id="award-badge-select" aria-label="Special badge">
+              <option value="">Select badge</option>
+            </select>
+            <select id="award-section-filter" aria-label="Filter students by section">
+              <option value="">All sections</option>
+            </select>
+            <select id="award-student-select" aria-label="Student">
+              <option value="">Select student</option>
+            </select>
+            <button id="award-special-badge-btn" type="button">Award Badge</button>
+          </div>
+          <p id="award-badge-message" class="form-message" role="status" aria-live="polite"></p>
         </article>
       </section>
     </main>

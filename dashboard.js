@@ -49,6 +49,8 @@ const profileRankElement = document.getElementById('profile-rank');
 const profileStudentRankElement = document.getElementById('profile-student-rank');
 const profileSectionTierElement = document.getElementById('profile-section-tier');
 const profileSectionRankElement = document.getElementById('profile-section-rank');
+const profileBadgesListElement = document.getElementById('profile-badges-list');
+const profileBadgeCountElement = document.getElementById('profile-badge-count');
 
 const sidebar = document.getElementById('sidebar');
 const sidebarOverlay = document.getElementById('sidebar-overlay');
@@ -1302,6 +1304,110 @@ function renderAchievementCard(achievement, unlockedIds, achievementStatusMap = 
   `;
 }
 
+function getProfileBadgeAchievements(visibleAchievements = [], unlockedIds = new Set()) {
+  return visibleAchievements.filter((achievement) => {
+    if (!unlockedIds.has(achievement.id)) return false;
+    if (achievement.nextAchievementId === null) return true;
+
+    const chainKey = String(achievement.chainKey || achievement.id);
+    const currentOrder = Number(achievement.chainOrder || 0);
+    const hasHigherVisibleTier = visibleAchievements.some((candidate) => {
+      return String(candidate.chainKey || candidate.id) === chainKey && Number(candidate.chainOrder || 0) > currentOrder;
+    });
+
+    return !hasHigherVisibleTier;
+  });
+}
+
+function getBadgeImageUrl(achievement = {}) {
+  return String(achievement.badgeImageUrl || achievement.badgeImage || achievement.badgeUrl || achievement.imageUrl || '').trim();
+}
+
+function getBadgeInitials(achievement = {}) {
+  return String(achievement.title || achievement.name || 'Badge')
+    .split(/\s+/)
+    .map((word) => word.charAt(0))
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+}
+
+function renderProfileBadge(achievement) {
+  const title = escapeHtml(achievement.title || achievement.name || 'Untitled Badge');
+  const imageUrl = getBadgeImageUrl(achievement);
+  const badgeVisual = imageUrl
+    ? `<img src="${escapeHtml(imageUrl)}" alt="" loading="lazy" />`
+    : `<span>${escapeHtml(getBadgeInitials(achievement))}</span>`;
+
+  return `
+    <button type="button" class="profile-badge-item" aria-label="${title}" title="${title}">
+      <span class="profile-badge-tooltip" role="tooltip">${title}</span>
+      <span class="profile-badge-icon" aria-hidden="true">${badgeVisual}</span>
+    </button>
+  `;
+}
+
+function renderProfileBadges(badgeAchievements = []) {
+  if (!profileBadgesListElement) return;
+
+  if (profileBadgeCountElement) {
+    profileBadgeCountElement.textContent = `${badgeAchievements.length} earned`;
+  }
+
+  if (!badgeAchievements.length) {
+    profileBadgesListElement.innerHTML = '<p class="profile-badges-empty">No badges earned yet.</p>';
+    return;
+  }
+
+  const sortedAchievements = badgeAchievements
+    .slice()
+    .sort((a, b) => {
+      const dateB = b.achievedAt?.toMillis?.() || b.awardedAt?.toMillis?.() || 0;
+      const dateA = a.achievedAt?.toMillis?.() || a.awardedAt?.toMillis?.() || 0;
+      return dateB - dateA;
+    });
+
+  profileBadgesListElement.innerHTML = sortedAchievements
+    .map((achievement) => renderProfileBadge(achievement))
+    .join('');
+}
+
+function resetProfileBadges(message = 'No badges earned yet.') {
+  if (profileBadgeCountElement) {
+    profileBadgeCountElement.textContent = '0 earned';
+  }
+  if (profileBadgesListElement) {
+    profileBadgesListElement.innerHTML = `<p class="profile-badges-empty">${escapeHtml(message)}</p>`;
+  }
+}
+
+async function loadSpecialProfileBadges(studentId) {
+  const normalizedStudentId = String(studentId || '').trim();
+  if (!normalizedStudentId) return [];
+
+  try {
+    const snapshot = await getDocs(
+      query(
+        collection(db, 'studentSpecialBadges'),
+        where('studentId', '==', normalizedStudentId)
+      )
+    );
+
+    return snapshot.docs
+      .map((badgeDoc) => ({
+        id: badgeDoc.id,
+        ...badgeDoc.data(),
+        title: badgeDoc.data()?.name || 'Special Badge',
+        type: 'special'
+      }))
+      .filter((badge) => String(badge.status || 'active').trim() === 'active');
+  } catch (error) {
+    console.error('Failed to load special profile badges:', error);
+    return [];
+  }
+}
+
 async function refreshAchievementsUI() {
   if (!currentStudentUser?.uid) return;
   await loadAchievementsDashboard(currentStudentUser.uid);
@@ -1321,10 +1427,11 @@ async function loadAchievementsDashboard(studentId) {
   }
 
   try {
-    const [visibleAchievements, unlockedIds, achievementStatusMap] = await Promise.all([
+    const [visibleAchievements, unlockedIds, achievementStatusMap, specialProfileBadges] = await Promise.all([
       getVisibleAchievementsForStudent(studentId),
       getStudentUnlockedAchievementIds(studentId),
-      getStudentAchievementStatusMap(studentId)
+      getStudentAchievementStatusMap(studentId),
+      loadSpecialProfileBadges(studentId)
     ]);
 
     const unlockedAchievements = visibleAchievements.filter((achievement) => unlockedIds.has(achievement.id));
@@ -1339,6 +1446,12 @@ async function loadAchievementsDashboard(studentId) {
       .sort((a, b) => (b.achievedAt?.toMillis?.() || 0) - (a.achievedAt?.toMillis?.() || 0))[0];
 
     const nextAchievement = lockedVisibleAchievements[0] || null;
+    const profileBadgeAchievements = [
+      ...getProfileBadgeAchievements(visibleAchievements, unlockedIds),
+      ...specialProfileBadges
+    ];
+
+    renderProfileBadges(profileBadgeAchievements);
 
     if (achievementsSummaryElement) {
       achievementsSummaryElement.innerHTML = `
@@ -1369,6 +1482,7 @@ async function loadAchievementsDashboard(studentId) {
     }
   } catch (error) {
     console.error('Failed to load achievements dashboard:', error);
+    resetProfileBadges('Unable to load badges right now.');
     if (achievementsSummaryElement) achievementsSummaryElement.innerHTML = '<p>Unable to load achievements summary right now.</p>';
     if (unlockedAchievementsListElement) unlockedAchievementsListElement.innerHTML = '<li>Unable to load unlocked achievements.</li>';
     if (nextAchievementsListElement) nextAchievementsListElement.innerHTML = '<li>Unable to load next achievements.</li>';
@@ -1664,6 +1778,7 @@ function renderStudentProfileNotFound(email = '', uid = '') {
     profileStudentRankElement.textContent = 'Not yet assigned';
   }
   setSectionStanding({});
+  resetProfileBadges('No student profile found.');
 
   if (profileDataElement) {
     profileDataElement.innerHTML = `
@@ -1726,6 +1841,7 @@ function renderNoProfile(email = '') {
     profileStudentRankElement.textContent = 'Not yet assigned';
   }
   setSectionStanding({});
+  resetProfileBadges('No student profile found.');
 
   if (profileDataElement) {
     profileDataElement.innerHTML = `
@@ -1908,6 +2024,7 @@ onAuthStateChanged(auth, async () => {
       profileStudentRankElement.textContent = 'Not yet assigned';
     }
     setSectionStanding({});
+    resetProfileBadges('Unable to load badges right now.');
   }
 });
 
