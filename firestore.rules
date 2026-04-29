@@ -407,11 +407,25 @@ service cloud.firestore {
       allow read: if isLoggedIn()
         && resource.data.recipientId == request.auth.uid;
 
-      allow create: if isLoggedIn();
+      allow create: if isLoggedIn()
+        && request.resource.data.recipientId is string
+        && request.resource.data.recipientRole == "student"
+        && request.resource.data.title is string
+        && request.resource.data.message is string
+        && request.resource.data.type is string
+        && request.resource.data.sourceType is string
+        && request.resource.data.isRead == false
+        && request.resource.data.createdAt is timestamp
+        && (
+          isStaff()
+          || request.resource.data.recipientId == request.auth.uid
+        );
 
       allow update: if isLoggedIn()
         && resource.data.recipientId == request.auth.uid
-        && request.resource.data.recipientId == resource.data.recipientId;
+        && request.resource.data.recipientId == resource.data.recipientId
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(["isRead", "readAt"])
+        && request.resource.data.isRead is bool;
 
       allow delete: if isActiveAdmin();
     }

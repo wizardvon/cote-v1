@@ -15,6 +15,7 @@ import {
   writeBatch,
   increment
 } from './firebase.js';
+import { buildStudentNotificationPayload } from './notifications.js';
 
 const QUEST_STATUS_ACTIVE = 'active';
 const QUEST_STATUS_INACTIVE = 'inactive';
@@ -274,7 +275,7 @@ export async function assignQuestToStudents(questId) {
   if (!studentIds.length) return 0;
 
   let assignedCount = 0;
-  const MAX_BATCH_SIZE = 450;
+  const MAX_BATCH_SIZE = 240;
   for (let index = 0; index < studentIds.length; index += MAX_BATCH_SIZE) {
     const chunk = studentIds.slice(index, index + MAX_BATCH_SIZE);
     const existingSnaps = await Promise.all(
@@ -292,6 +293,19 @@ export async function assignQuestToStudents(questId) {
         pointsAwarded: 0,
         assignedAt: serverTimestamp()
       });
+      batch.set(doc(db, 'notifications', `quest_assigned_${normalizedQuestId}_${studentId}`), buildStudentNotificationPayload({
+        studentId,
+        title: 'New Quest Assigned',
+        message: `${quest.title || 'A quest'} is now available.`,
+        type: 'quest',
+        sourceType: 'quest',
+        sourceId: normalizedQuestId,
+        actionPage: 'quest',
+        metadata: {
+          questId: normalizedQuestId,
+          status: STUDENT_QUEST_STATUS_ASSIGNED
+        }
+      }), { merge: true });
       assignedCount += 1;
     });
 
@@ -392,6 +406,21 @@ async function completeQuestAssignment(studentQuestId, options = {}) {
       updatedAt: serverTimestamp()
     });
 
+    transaction.set(doc(db, 'notifications', `quest_completed_${questSnap.id}_${studentId}`), buildStudentNotificationPayload({
+      studentId,
+      title: 'Quest Completed',
+      message: `${quest.title || 'Quest'} completed${pointsAwarded > 0 ? ` for +${pointsAwarded} points` : ''}.`,
+      type: 'quest',
+      sourceType: 'quest',
+      sourceId: questSnap.id,
+      actionPage: 'quest',
+      metadata: {
+        questId: questSnap.id,
+        pointsAwarded,
+        completedByRole: cleanText(options.completedByRole || 'student')
+      }
+    }), { merge: true });
+
     const badgeId = cleanText(quest.badgeId);
     if (badgeId) {
       const badgeAwardRef = doc(db, 'studentSpecialBadges', `quest_${questSnap.id}_${studentId}_${badgeId}`);
@@ -418,6 +447,19 @@ async function completeQuestAssignment(studentQuestId, options = {}) {
         badgePayload,
         { merge: true }
       );
+      transaction.set(doc(db, 'notifications', `quest_badge_${questSnap.id}_${studentId}_${badgeId}`), buildStudentNotificationPayload({
+        studentId,
+        title: 'New Badge Earned',
+        message: `${quest.title || 'Quest Badge'} was added to your badges.`,
+        type: 'badge',
+        sourceType: 'quest',
+        sourceId: questSnap.id,
+        actionPage: 'profile',
+        metadata: {
+          badgeId,
+          questId: questSnap.id
+        }
+      }), { merge: true });
     }
 
     return { completed: true, pointsAwarded };

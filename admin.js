@@ -14,7 +14,8 @@ import {
   where,
   orderBy,
   serverTimestamp,
-  runTransaction
+  runTransaction,
+  setDoc
 } from './firebase.js';
 import { checkAchievements, seedAchievementsIfEmpty } from './achievements.js';
 import {
@@ -28,6 +29,12 @@ import {
   isQuestPastDeadline
 } from './quests.js';
 import { initMessagingUI, refreshConversations, startMessagingAutoRefresh } from './messaging-ui.js';
+import {
+  buildStudentNotificationPayload,
+  createStudentNotifications,
+  getApprovedClassStudentIds,
+  getAllStudentIds
+} from './notifications.js';
 
 const adminEmailElement = document.getElementById('admin-email');
 const sidebarTeacherNameElement = document.getElementById('sidebar-teacher-name');
@@ -1434,11 +1441,30 @@ async function saveAnnouncement() {
         saveAnnouncementButton.textContent = 'Posting...';
       }
 
-      await addDoc(collection(db, 'teacherAnnouncements'), {
+      const announcementRef = doc(collection(db, 'teacherAnnouncements'));
+      await setDoc(announcementRef, {
         ...payload,
         status: 'active',
         createdAt: serverTimestamp()
       });
+      const recipientIds = target === 'class' ? await getApprovedClassStudentIds(classId) : await getAllStudentIds();
+      await createStudentNotifications(
+        recipientIds,
+        () => ({
+          title: 'New Announcement',
+          message: title,
+          type: 'announcement',
+          sourceType: 'teacherAnnouncement',
+          sourceId: announcementRef.id,
+          actionPage: 'home',
+          metadata: {
+            announcementId: announcementRef.id,
+            target,
+            classId: target === 'class' ? classId : ''
+          }
+        }),
+        { type: 'announcement', sourceId: announcementRef.id }
+      );
       setAnnouncementMessage('Announcement posted successfully.', 'success');
     }
 
@@ -2597,6 +2623,23 @@ async function saveScoreWithAcademicPoints(payload) {
 
   currentClassRecordScores.set(scoreKey, updatedScore);
 
+  if (transactionResult.pointDifference !== 0) {
+    await addDoc(collection(db, 'notifications'), buildStudentNotificationPayload({
+      studentId,
+      title: 'Academic Points Updated',
+      message: `${activityTitle}: ${transactionResult.pointDifference > 0 ? '+' : ''}${transactionResult.pointDifference} point(s).`,
+      type: 'points',
+      sourceType: 'academic',
+      sourceId: pointLogId,
+      actionPage: 'records',
+      metadata: {
+        classId,
+        activityId,
+        pointDifference: transactionResult.pointDifference
+      }
+    }));
+  }
+
   try {
     await checkAchievements(studentId, {
       triggerType: 'score_update',
@@ -3137,7 +3180,7 @@ async function updatePointsForSelected(action) {
 
       await updateDoc(studentRef, { points: currentPoints + delta });
 
-      await addDoc(collection(db, 'pointLogs'), {
+      const pointLogRef = await addDoc(collection(db, 'pointLogs'), {
         classId: selectedTeacherClassId,
         studentId,
         studentName: `${safeText(current?.firstName, '')} ${safeText(current?.middleName, '')} ${safeText(
@@ -3156,6 +3199,20 @@ async function updatePointsForSelected(action) {
         teacherEmail: auth.currentUser?.email || '',
         createdAt: serverTimestamp()
       });
+
+      await addDoc(collection(db, 'notifications'), buildStudentNotificationPayload({
+        studentId,
+        title: action === 'add' ? 'Merit Points Awarded' : 'Demerit Points Added',
+        message: `${action === 'add' ? '+' : '-'}${pointValue} point(s): ${reason}`,
+        type: 'points',
+        sourceType: action === 'add' ? 'merit' : 'demerit',
+        sourceId: pointLogRef.id,
+        actionPage: 'records',
+        metadata: {
+          classId: selectedTeacherClassId,
+          pointDifference: delta
+        }
+      }));
 
       return { studentId, points: currentPoints + delta };
     });

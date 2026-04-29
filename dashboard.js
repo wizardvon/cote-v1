@@ -54,6 +54,7 @@ const homeSectionTierElement = document.getElementById('home-section-tier');
 const homeSectionRankElement = document.getElementById('home-section-rank');
 const homeSectionPointsElement = document.getElementById('home-section-points');
 const teacherAnnouncementsListElement = document.getElementById('teacher-announcements-list');
+const studentNotificationsListElement = document.getElementById('student-notifications-list');
 const leaderboardListElement = document.getElementById('leaderboard-list');
 const profileRankElement = document.getElementById('profile-rank');
 const profileStudentRankElement = document.getElementById('profile-student-rank');
@@ -87,8 +88,10 @@ let currentStudentProfile = null;
 let currentStudentUser = null;
 let enrolledClassIds = new Set();
 let currentTeacherAnnouncements = [];
+let currentStudentNotifications = [];
 let currentStudentQuests = [];
 let pendingQuestIdFromUrl = '';
+let studentNotificationRefreshTimer = null;
 const teacherNameCache = new Map();
 
 const pageTitles = {
@@ -339,9 +342,95 @@ function markAnnouncementsSeen(records = []) {
 }
 
 function updateAnnouncementNotificationBadge(records = []) {
-  const lastSeen = getAnnouncementLastSeenMillis();
-  const unreadCount = records.filter((announcement) => getTimestampMillis(announcement.createdAt) > lastSeen).length;
-  setAnnouncementNotificationBadge(unreadCount);
+  setAnnouncementNotificationBadge(currentStudentNotifications.filter((notification) => !notification.isRead).length);
+}
+
+function getNotificationDateText(notification = {}) {
+  const date = notification.createdAt?.toDate?.();
+  if (!date) return '';
+  return date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+function renderStudentNotifications(records = []) {
+  if (!studentNotificationsListElement) return;
+
+  if (!records.length) {
+    studentNotificationsListElement.innerHTML = '<li>No notifications yet.</li>';
+    return;
+  }
+
+  studentNotificationsListElement.innerHTML = records
+    .slice(0, 8)
+    .map((notification) => {
+      const title = notification.title || 'Notification';
+      const message = notification.message || '';
+      const dateText = getNotificationDateText(notification);
+      const unreadClass = notification.isRead ? '' : ' is-unread';
+
+      return `
+        <li class="student-notification-item${unreadClass}">
+          <strong>${escapeHtml(title)}</strong>
+          ${dateText ? `<span>${escapeHtml(dateText)}</span>` : ''}
+          ${message ? `<p>${escapeHtml(message)}</p>` : ''}
+        </li>
+      `;
+    })
+    .join('');
+}
+
+async function loadStudentNotifications() {
+  if (!currentStudentUser?.uid || !studentNotificationsListElement) return;
+
+  try {
+    const snapshot = await getDocs(query(collection(db, 'notifications'), where('recipientId', '==', currentStudentUser.uid)));
+    currentStudentNotifications = snapshot.docs
+      .map((item) => ({ id: item.id, ...item.data() }))
+      .sort((a, b) => getTimestampMillis(b.createdAt) - getTimestampMillis(a.createdAt));
+
+    renderStudentNotifications(currentStudentNotifications);
+    updateAnnouncementNotificationBadge();
+  } catch (error) {
+    console.warn('Student notifications unavailable:', error);
+    currentStudentNotifications = [];
+    renderStudentNotifications([]);
+    setAnnouncementNotificationBadge(0);
+  }
+}
+
+function startStudentNotificationRefresh() {
+  if (studentNotificationRefreshTimer) {
+    clearInterval(studentNotificationRefreshTimer);
+  }
+
+  studentNotificationRefreshTimer = setInterval(() => {
+    if (currentStudentUser?.uid) {
+      loadStudentNotifications();
+    }
+  }, 30000);
+}
+
+async function markStudentNotificationsRead() {
+  const unreadNotifications = currentStudentNotifications.filter((notification) => !notification.isRead);
+  if (!unreadNotifications.length) {
+    setAnnouncementNotificationBadge(0);
+    return;
+  }
+
+  await Promise.all(
+    unreadNotifications.map((notification) =>
+      updateDoc(doc(db, 'notifications', notification.id), {
+        isRead: true,
+        readAt: serverTimestamp()
+      })
+    )
+  );
+
+  currentStudentNotifications = currentStudentNotifications.map((notification) => ({
+    ...notification,
+    isRead: true
+  }));
+  renderStudentNotifications(currentStudentNotifications);
+  setAnnouncementNotificationBadge(0);
 }
 
 function getActivePageName() {
@@ -431,15 +520,9 @@ async function loadTeacherAnnouncements() {
 
     currentTeacherAnnouncements = records;
     renderTeacherAnnouncements(records);
-    if (getActivePageName() === 'home') {
-      markAnnouncementsSeen(records);
-    } else {
-      updateAnnouncementNotificationBadge(records);
-    }
   } catch (error) {
     console.warn('Teacher announcements unavailable:', error);
     currentTeacherAnnouncements = [];
-    setAnnouncementNotificationBadge(0);
     renderTeacherAnnouncements([]);
   }
 }
@@ -2286,6 +2369,7 @@ async function completeScannedQuest(rawValue) {
     }
     loadPointLogs(currentStudentUser.uid);
     loadAchievementsDashboard(currentStudentUser.uid);
+    loadStudentNotifications();
   } catch (error) {
     console.error('Failed to complete scanned quest:', error);
     setStudentQuestMessage(error?.message || 'Unable to complete scanned quest.', 'error');
@@ -2371,7 +2455,7 @@ async function openQuestScanner() {
 
 function runPageLoaders(pageName) {
   if (pageName === 'home') {
-    markAnnouncementsSeen(currentTeacherAnnouncements);
+    loadStudentNotifications();
   }
   if (pageName === 'resources') {
     loadStudentResources();
@@ -2505,10 +2589,11 @@ document.addEventListener('click', async (event) => {
   }
 });
 
-notificationsButton?.addEventListener('click', () => {
+notificationsButton?.addEventListener('click', async () => {
   showPage('home');
   markAnnouncementsSeen(currentTeacherAnnouncements);
-  teacherAnnouncementsListElement?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  await markStudentNotificationsRead();
+  studentNotificationsListElement?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
 
 messagesButton?.addEventListener('click', () => {
@@ -2520,6 +2605,10 @@ onAuthStateChanged(auth, async () => {
   const user = auth.currentUser;
 
   if (!user) {
+    if (studentNotificationRefreshTimer) {
+      clearInterval(studentNotificationRefreshTimer);
+      studentNotificationRefreshTimer = null;
+    }
     window.location.replace('index.html');
     return;
   }
@@ -2568,6 +2657,8 @@ onAuthStateChanged(auth, async () => {
     loadStudentQuests();
     loadMyEnrollments();
     loadAvailableClasses();
+    loadStudentNotifications();
+    startStudentNotificationRefresh();
     await initMessagingUI();
     startMessagingAutoRefresh();
     const restoredPage = getSavedPage();

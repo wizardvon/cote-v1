@@ -26,6 +26,7 @@ import {
   isQuestPastDeadline
 } from './quests.js';
 import { initMessagingUI, refreshConversations, startMessagingAutoRefresh } from './messaging-ui.js';
+import { buildStudentNotificationPayload } from './notifications.js';
 const superAdminEmailElement = document.getElementById('super-admin-email');
 const sidebarSuperAdminNameElement = document.getElementById('sidebar-super-admin-name');
 const logoutButton = document.getElementById('logout-button');
@@ -1807,7 +1808,7 @@ async function awardSpecialBadge() {
       return;
     }
 
-    const MAX_BATCH_SIZE = 450;
+    const MAX_BATCH_SIZE = 240;
     for (let index = 0; index < studentsToAward.length; index += MAX_BATCH_SIZE) {
       const chunk = studentsToAward.slice(index, index + MAX_BATCH_SIZE);
       const batch = writeBatch(db);
@@ -1827,6 +1828,19 @@ async function awardSpecialBadge() {
           awardedBy: currentSuperAdminUser?.uid || '',
           awardedAt: serverTimestamp()
         });
+        batch.set(doc(db, 'notifications', `special_badge_${badgeId}_${student.id}`), buildStudentNotificationPayload({
+          studentId: student.id,
+          title: 'New Special Badge',
+          message: `${badge.name || 'A special badge'} was added to your profile.`,
+          type: 'badge',
+          sourceType: 'specialBadge',
+          sourceId: badgeId,
+          actionPage: 'profile',
+          metadata: {
+            badgeId,
+            awardType: 'special'
+          }
+        }), { merge: true });
       });
 
       await batch.commit();

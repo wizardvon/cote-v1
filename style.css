@@ -615,6 +615,39 @@ button:active {
   gap: 0.4rem;
 }
 
+.student-notifications-list {
+  padding-left: 0;
+  list-style: none;
+}
+
+.student-notification-item {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.72rem;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 8px;
+  background: rgba(3, 11, 24, 0.34);
+}
+
+.student-notification-item.is-unread {
+  border-color: rgba(231, 188, 88, 0.6);
+  background: rgba(231, 188, 88, 0.1);
+}
+
+.student-notification-item strong {
+  color: var(--text-main);
+}
+
+.student-notification-item span {
+  color: var(--text-soft);
+  font-size: 0.75rem;
+}
+
+.student-notification-item p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .teacher-announcements-card {
   border-color: rgba(96, 165, 250, 0.32);
 }
