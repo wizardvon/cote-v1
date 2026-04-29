@@ -27,6 +27,7 @@ import {
   completeQuestForStudent,
   isQuestPastDeadline
 } from './quests.js';
+import { initMessagingUI, refreshConversations, startMessagingAutoRefresh } from './messaging-ui.js';
 
 const adminEmailElement = document.getElementById('admin-email');
 const sidebarTeacherNameElement = document.getElementById('sidebar-teacher-name');
@@ -115,6 +116,7 @@ const pageTitles = {
   quest: 'Quest',
   resources: 'Resources',
   announcements: 'Announcements',
+  messages: 'Messages',
   'my-classes': 'My Classes',
   'class-record': 'Class Record',
   'enrollment-requests': 'Enrollment Requests'
@@ -607,6 +609,10 @@ function runPageLoaders(pageName) {
 
   if (pageName === 'quest' && auth.currentUser?.uid) {
     loadTeacherQuests();
+  }
+
+  if (pageName === 'messages' && auth.currentUser?.uid) {
+    refreshConversations();
   }
 }
 
@@ -3656,6 +3662,8 @@ onAuthStateChanged(auth, async (user) => {
     await loadTeacherQuests();
     await loadTeacherSectionLeaderboardPreview();
     await loadTeacherStudentRankPreview();
+    await initMessagingUI();
+    startMessagingAutoRefresh();
     const restoredPage = getSavedPage();
     showPage(restoredPage, { persist: false });
     runPageLoaders(restoredPage);

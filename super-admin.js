@@ -25,6 +25,7 @@ import {
   getQuestAssignmentCounts,
   isQuestPastDeadline
 } from './quests.js';
+import { initMessagingUI, refreshConversations, startMessagingAutoRefresh } from './messaging-ui.js';
 const superAdminEmailElement = document.getElementById('super-admin-email');
 const sidebarSuperAdminNameElement = document.getElementById('sidebar-super-admin-name');
 const logoutButton = document.getElementById('logout-button');
@@ -151,6 +152,7 @@ const pageTitles = {
   sections: 'Sections',
   'special-badges': 'Special Badges',
   quests: 'Quests',
+  messages: 'Messages',
   'announcement-moderation': 'Announcements'
 };
 const LAST_PAGE_STORAGE_KEY = 'cote.superAdmin.lastPage';
@@ -2016,6 +2018,9 @@ menuButtons.forEach((button) => {
     if (targetPage === 'quests') {
       loadSuperAdminQuests();
     }
+    if (targetPage === 'messages') {
+      refreshConversations();
+    }
   });
 });
 
@@ -2078,6 +2083,8 @@ await Promise.all([
   loadStudentOptions(),
   loadSuperAdminQuests()
 ]);
+await initMessagingUI();
+startMessagingAutoRefresh();
 showPage(getSavedPage(), { persist: false });
   } catch (error) {
     console.error('Failed to validate super admin role:', error);

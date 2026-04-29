@@ -1022,6 +1022,194 @@ button:active {
   object-fit: cover;
 }
 
+.message-contact-bar {
+  grid-template-columns: minmax(220px, 1fr) auto;
+}
+
+.message-app {
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+  gap: 0;
+  min-height: 620px;
+  padding: 0;
+  overflow: hidden;
+  border-color: rgba(58, 190, 255, 0.2);
+  background: rgba(3, 12, 23, 0.86);
+}
+
+.message-thread-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  max-height: 620px;
+  overflow: auto;
+  padding: 0.7rem;
+  border-right: 1px solid rgba(58, 190, 255, 0.14);
+  background: rgba(6, 18, 34, 0.72);
+}
+
+.message-thread-item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 0.65rem;
+  align-items: center;
+  text-align: left;
+  padding: 0.58rem;
+  border-radius: 14px;
+  border: 0;
+  background: transparent;
+  color: #e8f4ff;
+}
+
+.message-thread-item:hover,
+.message-thread-item.active {
+  background: rgba(58, 190, 255, 0.12);
+}
+
+.message-avatar {
+  width: 42px;
+  height: 42px;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  color: #061321;
+  font-weight: 800;
+  font-size: 0.88rem;
+  background: linear-gradient(135deg, #7dd3fc, #f8d37b);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.34);
+}
+
+.message-thread-copy {
+  min-width: 0;
+  display: grid;
+  gap: 0.1rem;
+}
+
+.message-thread-copy strong {
+  color: #f4f9ff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-thread-copy span {
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 0;
+  min-width: 0;
+  min-height: 620px;
+  background: rgba(8, 21, 36, 0.72);
+}
+
+.message-panel h3 {
+  min-height: 68px;
+  display: flex;
+  align-items: center;
+  gap: 0.72rem;
+  margin: 0;
+  padding: 0.78rem 1rem;
+  border-bottom: 1px solid rgba(58, 190, 255, 0.14);
+  background: rgba(6, 18, 34, 0.86);
+}
+
+.message-panel h3 span:last-child {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.message-panel h3 strong {
+  font-size: 1rem;
+}
+
+.message-panel h3 small {
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.message-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.32rem;
+  min-height: 0;
+  max-height: none;
+  overflow: auto;
+  padding: 1rem;
+  border-radius: 0;
+  border: 0;
+  background:
+    radial-gradient(circle at 18% 8%, rgba(58, 190, 255, 0.08), transparent 30%),
+    rgba(4, 13, 25, 0.38);
+}
+
+.message-bubble {
+  max-width: min(74%, 560px);
+  align-self: flex-start;
+  display: grid;
+  gap: 0.24rem;
+  padding: 0.58rem 0.78rem;
+  border-radius: 18px 18px 18px 6px;
+  border: 0;
+  background: rgba(31, 50, 71, 0.96);
+}
+
+.message-bubble.mine {
+  align-self: flex-end;
+  border-radius: 18px 18px 6px 18px;
+  color: #061321;
+  background: linear-gradient(135deg, #7dd3fc, #f8d37b);
+}
+
+.message-bubble p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.message-bubble small {
+  color: rgba(221, 236, 250, 0.72);
+  font-size: 0.76rem;
+}
+
+.message-bubble.mine small {
+  color: rgba(6, 19, 33, 0.68);
+}
+
+.message-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.65rem;
+  align-items: end;
+  padding: 0.78rem;
+  border-top: 1px solid rgba(58, 190, 255, 0.14);
+  background: rgba(6, 18, 34, 0.86);
+}
+
+.message-form textarea {
+  resize: vertical;
+  min-height: 46px;
+  max-height: 130px;
+  border-radius: 20px;
+  padding: 0.76rem 0.95rem;
+  background: rgba(234, 244, 255, 0.1);
+}
+
+.message-form button {
+  min-height: 46px;
+  border-radius: 999px;
+  padding-inline: 1.05rem;
+}
+
 @media (max-width: 620px) {
   .quest-qr-panel {
     grid-template-columns: 1fr;
@@ -1030,6 +1218,27 @@ button:active {
   .quest-qr-panel img {
     width: 148px;
     height: 148px;
+  }
+
+  .message-contact-bar,
+  .message-app,
+  .message-form {
+    grid-template-columns: 1fr;
+  }
+
+  .message-app,
+  .message-panel {
+    min-height: 560px;
+  }
+
+  .message-thread-list {
+    max-height: 220px;
+    border-right: 0;
+    border-bottom: 1px solid rgba(58, 190, 255, 0.14);
+  }
+
+  .message-bubble {
+    max-width: 88%;
   }
 }
 

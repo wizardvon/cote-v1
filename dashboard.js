@@ -24,6 +24,7 @@ import {
   claimAllAchievements
 } from './achievements.js';
 import { getQuestsForUser, completeQuestByQuestId, isQuestPastDeadline } from './quests.js';
+import { initMessagingUI, refreshConversations, startMessagingAutoRefresh } from './messaging-ui.js';
 
 const profileDataElement = document.getElementById('profileData');
 const profileFullNameElement = document.getElementById('profile-full-name');
@@ -97,6 +98,7 @@ const pageTitles = {
   'my-classes': 'My Classes',
   resources: 'Resources',
   achievements: 'Achievements',
+  messages: 'Messages',
   quest: 'Quest',
 };
 const LAST_PAGE_STORAGE_KEY = 'cote.student.lastPage';
@@ -2380,6 +2382,9 @@ function runPageLoaders(pageName) {
   if (pageName === 'quest' && currentStudentUser?.uid) {
     loadStudentQuests();
   }
+  if (pageName === 'messages' && currentStudentUser?.uid) {
+    refreshConversations();
+  }
 }
 
 async function saveProfilePicture(event) {
@@ -2507,7 +2512,8 @@ notificationsButton?.addEventListener('click', () => {
 });
 
 messagesButton?.addEventListener('click', () => {
-  alert('Messages or chat feature will be added here.');
+  showPage('messages');
+  runPageLoaders('messages');
 });
 
 onAuthStateChanged(auth, async () => {
@@ -2562,6 +2568,8 @@ onAuthStateChanged(auth, async () => {
     loadStudentQuests();
     loadMyEnrollments();
     loadAvailableClasses();
+    await initMessagingUI();
+    startMessagingAutoRefresh();
     const restoredPage = getSavedPage();
     const initialPage = pendingQuestIdFromUrl ? 'quest' : restoredPage;
     showPage(initialPage, { persist: false });

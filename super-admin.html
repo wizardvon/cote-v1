@@ -66,6 +66,10 @@
             <span aria-hidden="true">Q</span>
             <span>Quests</span>
           </button>
+          <button type="button" class="menu-btn" data-target="messages">
+            <span aria-hidden="true">MSG</span>
+            <span>Messages</span>
+          </button>
           <button type="button" class="menu-btn" data-target="announcement-moderation">
             <span aria-hidden="true">AM</span>
             <span>Announcements</span>
@@ -331,6 +335,42 @@
           <h2>All Quests</h2>
           <div id="super-admin-quests-list" class="quest-list" aria-live="polite">
             <p class="empty-cell">Loading quests...</p>
+          </div>
+        </article>
+      </section>
+
+      <section id="page-messages" class="page" data-page="messages" aria-label="Messages">
+        <article class="app-card">
+          <h2>Messages</h2>
+          <p>Start a private conversation with an active teacher.</p>
+          <div class="admin-toolbar message-contact-bar">
+            <div class="field">
+              <label for="message-contact-select">Contact</label>
+              <select id="message-contact-select">
+                <option value="">Loading contacts...</option>
+              </select>
+            </div>
+            <div class="field admin-load-field">
+              <label for="message-start-button">Open</label>
+              <button id="message-start-button" type="button">Open Conversation</button>
+            </div>
+          </div>
+          <p id="message-status" class="form-message" role="status" aria-live="polite"></p>
+        </article>
+
+        <article class="app-card message-app">
+          <div class="message-thread-list" id="message-thread-list" aria-live="polite">
+            <p class="empty-cell">No messages yet.</p>
+          </div>
+          <div class="message-panel">
+            <h3 id="message-thread-heading">Conversation</h3>
+            <div id="message-list" class="message-list" aria-live="polite">
+              <p class="empty-cell">Select or start a conversation.</p>
+            </div>
+            <form id="message-form" class="message-form">
+              <textarea id="message-input" rows="3" maxlength="1200" placeholder="Write a message"></textarea>
+              <button type="submit">Send</button>
+            </form>
           </div>
         </article>
       </section>
