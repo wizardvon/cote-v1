@@ -321,34 +321,16 @@
       </section>
 
       <section id="page-quest" class="page" data-page="quest" aria-label="Quest">
-        <article class="app-card quest-card">
-          <h3>Daily Attendance Mission</h3>
-          <p>Maintain complete and on-time attendance for the day.</p>
-          <p><strong>Reward:</strong> +10 points</p>
-          <button type="button">Start Mission</button>
-        </article>
-
-        <article class="app-card quest-card">
-          <h3>Academic Focus Mission</h3>
-          <p>Complete one required task before the deadline and maintain proper submission quality.</p>
-          <p><strong>Reward:</strong> +15 points</p>
-          <button type="button">View Details</button>
-        </article>
-
-        <article class="app-card quest-card">
-          <h3>Campus Contribution Mission</h3>
-          <p>Participate in approved campus improvement or service-related activities.</p>
-          <p><strong>Reward:</strong> Badge + points</p>
-          <button type="button">Join Mission</button>
-        </article>
-
-        <article class="app-card quest-card">
-          <h3>Special Examination Event</h3>
-          <p>
-            Major school-wide challenge events may be announced here with special mechanics and outcomes.
-          </p>
-          <p><strong>Reward:</strong> Variable</p>
-          <button type="button">Coming Soon</button>
+        <article class="app-card">
+          <h3>Assigned Quests</h3>
+          <p>Complete active missions before their deadlines to claim quest rewards.</p>
+          <div class="admin-actions">
+            <button id="student-scan-quest-button" type="button">Scan Quest QR</button>
+          </div>
+          <p id="student-quest-message" class="form-message" role="status" aria-live="polite"></p>
+          <div id="student-quests-list" class="quest-list" aria-live="polite">
+            <p class="empty-cell">Loading quests...</p>
+          </div>
         </article>
       </section>
     </main>
@@ -358,6 +340,6 @@
       <img id="modalImage" src="" alt="Preview" />
     </div>
 
-    <script type="module" src="dashboard.js?v=3"></script>
+    <script type="module" src="dashboard.js?v=4"></script>
   </body>
 </html>

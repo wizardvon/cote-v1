@@ -23,6 +23,7 @@ import {
   claimAchievement,
   claimAllAchievements
 } from './achievements.js';
+import { getQuestsForUser, completeQuest, completeQuestByQuestId, isQuestPastDeadline } from './quests.js';
 
 const profileDataElement = document.getElementById('profileData');
 const profileFullNameElement = document.getElementById('profile-full-name');
@@ -76,12 +77,17 @@ const myEnrollmentsListElement = document.getElementById('my-enrollments-list');
 const myClassesFeedbackElement = document.getElementById('my-classes-feedback');
 const classRecordsDetailElement = document.getElementById('class-records-detail');
 const studentResourcesListElement = document.getElementById('student-resources-list');
+const studentQuestsListElement = document.getElementById('student-quests-list');
+const studentQuestMessageElement = document.getElementById('student-quest-message');
+const studentScanQuestButton = document.getElementById('student-scan-quest-button');
 const loadingOverlay = document.getElementById('loadingOverlay');
 let overlaySequenceJob = 0;
 let currentStudentProfile = null;
 let currentStudentUser = null;
 let enrolledClassIds = new Set();
 let currentTeacherAnnouncements = [];
+let currentStudentQuests = [];
+let pendingQuestIdFromUrl = '';
 const teacherNameCache = new Map();
 
 const pageTitles = {
@@ -452,8 +458,23 @@ function getTeacherName(classData) {
 }
 
 function formatDateTime(value) {
-  if (!value?.toDate) return '';
-  return value.toDate().toLocaleString();
+  const date = value?.toDate?.() || (value instanceof Date ? value : value ? new Date(value) : null);
+  if (!date || !Number.isFinite(date.getTime())) return '';
+  return date.toLocaleString();
+}
+
+function formatQuestDeadline(value) {
+  const formatted = formatDateTime(value);
+  return formatted || 'No deadline';
+}
+
+function setStudentQuestMessage(message, type = '') {
+  if (!studentQuestMessageElement) return;
+  studentQuestMessageElement.textContent = message;
+  studentQuestMessageElement.classList.remove('success', 'error');
+  if (type) {
+    studentQuestMessageElement.classList.add(type);
+  }
 }
 
 function isYouTubeUrl(url) {
@@ -2159,6 +2180,220 @@ function renderNoProfile(email = '') {
   }
 }
 
+function renderStudentQuests(quests = []) {
+  if (!studentQuestsListElement) return;
+
+  if (!quests.length) {
+    studentQuestsListElement.innerHTML = '<p class="empty-cell">No quests assigned yet.</p>';
+    return;
+  }
+
+  studentQuestsListElement.innerHTML = quests
+    .map((quest) => {
+      const status = String(quest.studentQuestStatus || 'assigned').trim();
+      const questStatus = String(quest.status || 'active').trim();
+      const isCompleted = status === 'completed';
+      const isExpired = isQuestPastDeadline(quest);
+      const canComplete = !isCompleted && questStatus === 'active' && !isExpired;
+      const displayStatus = isCompleted ? 'completed' : isExpired ? 'expired' : questStatus;
+
+      return `
+        <article class="app-card quest-card">
+          <div class="quest-card-header">
+            <h4>${escapeHtml(quest.title || 'Untitled Quest')}</h4>
+            <span class="status-pill ${displayStatus === 'active' ? 'status-active' : 'status-pending'}">${escapeHtml(
+              displayStatus
+            )}</span>
+          </div>
+          <p>${escapeHtml(quest.description || 'No description')}</p>
+          <div class="quest-meta-grid">
+            <p><strong>Reward:</strong> ${Number(quest.points || quest.pointsAwarded || 0)} points${
+              quest.badgeId ? ' + badge' : ''
+            }</p>
+            <p><strong>Deadline:</strong> ${escapeHtml(formatQuestDeadline(quest.deadline))}</p>
+            <p><strong>Completed:</strong> ${escapeHtml(formatDateTime(quest.completedAt) || 'Not yet')}</p>
+          </div>
+          <button type="button" data-student-quest-complete="${escapeHtml(quest.studentQuestId || '')}" ${
+            canComplete ? '' : 'disabled'
+          }>
+            ${isCompleted ? 'Completed' : isExpired ? 'Expired' : 'Complete Quest'}
+          </button>
+        </article>
+      `;
+    })
+    .join('');
+}
+
+async function loadStudentQuests() {
+  if (!currentStudentUser?.uid || !studentQuestsListElement) return;
+
+  studentQuestsListElement.innerHTML = '<p class="empty-cell">Loading quests...</p>';
+  try {
+    currentStudentQuests = await getQuestsForUser(currentStudentUser.uid);
+    const visibleQuests = currentStudentQuests.filter((quest) => String(quest.status || 'active') === 'active');
+    renderStudentQuests(visibleQuests);
+  } catch (error) {
+    console.error('Failed to load quests:', error);
+    currentStudentQuests = [];
+    studentQuestsListElement.innerHTML = '<p class="empty-cell">Unable to load quests right now.</p>';
+    setStudentQuestMessage('Unable to load quests. Please try again.', 'error');
+  }
+}
+
+async function completeStudentQuest(studentQuestId) {
+  const id = String(studentQuestId || '').trim();
+  if (!id) return;
+
+  setStudentQuestMessage('Completing quest...');
+  try {
+    const result = await completeQuest(id);
+    if (result.completed) {
+      setStudentQuestMessage(`Quest completed. Awarded ${result.pointsAwarded} point(s).`, 'success');
+      showPointsPopup(result.pointsAwarded);
+    } else {
+      setStudentQuestMessage('This quest was already completed.', 'error');
+    }
+    await loadStudentQuests();
+
+    const studentSnap = await getDoc(doc(db, 'students', currentStudentUser.uid));
+    if (studentSnap.exists()) {
+      currentStudentProfile = studentSnap.data();
+      setStudentData(currentStudentProfile, currentStudentUser.email);
+      await loadStudentSectionStanding(currentStudentProfile);
+    }
+    loadPointLogs(currentStudentUser.uid);
+    loadAchievementsDashboard(currentStudentUser.uid);
+  } catch (error) {
+    console.error('Failed to complete quest:', error);
+    setStudentQuestMessage(error?.message || 'Unable to complete quest.', 'error');
+  }
+}
+
+function extractQuestIdFromScan(rawValue) {
+  const text = String(rawValue || '').trim();
+  if (!text) return '';
+
+  if (text.startsWith('cote-quest:')) {
+    return text.replace('cote-quest:', '').trim();
+  }
+
+  try {
+    const parsed = new URL(text, window.location.origin);
+    return String(parsed.searchParams.get('questId') || '').trim();
+  } catch (_error) {
+    return text;
+  }
+}
+
+async function completeScannedQuest(rawValue) {
+  const questId = extractQuestIdFromScan(rawValue);
+  if (!questId) {
+    setStudentQuestMessage('No quest code found.', 'error');
+    return;
+  }
+
+  setStudentQuestMessage('Completing scanned quest...');
+  try {
+    const result = await completeQuestByQuestId(questId);
+    if (result.completed) {
+      setStudentQuestMessage(`Quest completed. Awarded ${result.pointsAwarded} point(s).`, 'success');
+      showPointsPopup(result.pointsAwarded);
+    } else {
+      setStudentQuestMessage('This quest was already completed.', 'error');
+    }
+    await loadStudentQuests();
+
+    const studentSnap = await getDoc(doc(db, 'students', currentStudentUser.uid));
+    if (studentSnap.exists()) {
+      currentStudentProfile = studentSnap.data();
+      setStudentData(currentStudentProfile, currentStudentUser.email);
+      await loadStudentSectionStanding(currentStudentProfile);
+    }
+    loadPointLogs(currentStudentUser.uid);
+    loadAchievementsDashboard(currentStudentUser.uid);
+  } catch (error) {
+    console.error('Failed to complete scanned quest:', error);
+    setStudentQuestMessage(error?.message || 'Unable to complete scanned quest.', 'error');
+  }
+}
+
+async function openQuestScanner() {
+  if (!currentStudentUser?.uid) {
+    setStudentQuestMessage('Log in before scanning a quest.', 'error');
+    return;
+  }
+
+  if (!('BarcodeDetector' in window) || !navigator.mediaDevices?.getUserMedia) {
+    const manualCode = window.prompt('Enter the quest code or scanned QR link:');
+    if (manualCode) {
+      await completeScannedQuest(manualCode);
+    }
+    return;
+  }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'quest-scanner-overlay';
+  overlay.innerHTML = `
+    <div class="quest-scanner-panel">
+      <div class="quest-scanner-header">
+        <h3>Scan Quest QR</h3>
+        <button type="button" aria-label="Close scanner">Close</button>
+      </div>
+      <video autoplay playsinline></video>
+      <p class="form-message">Point your camera at the quest QR code.</p>
+    </div>
+  `;
+  document.body.append(overlay);
+
+  const video = overlay.querySelector('video');
+  const closeButton = overlay.querySelector('button');
+  const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+  let stream = null;
+  let isClosed = false;
+
+  const closeScanner = () => {
+    isClosed = true;
+    stream?.getTracks?.().forEach((track) => track.stop());
+    overlay.remove();
+  };
+
+  closeButton?.addEventListener('click', closeScanner);
+
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    video.srcObject = stream;
+    await video.play();
+
+    const scanFrame = async () => {
+      if (isClosed) return;
+
+      try {
+        const codes = await detector.detect(video);
+        const rawValue = codes?.[0]?.rawValue || '';
+        if (rawValue) {
+          closeScanner();
+          await completeScannedQuest(rawValue);
+          return;
+        }
+      } catch (error) {
+        console.warn('Quest QR scan frame failed:', error);
+      }
+
+      window.requestAnimationFrame(scanFrame);
+    };
+
+    scanFrame();
+  } catch (error) {
+    console.error('Failed to open quest scanner:', error);
+    closeScanner();
+    setStudentQuestMessage('Unable to open camera scanner. Check camera permission or enter the code manually.', 'error');
+    const manualCode = window.prompt('Enter the quest code or scanned QR link:');
+    if (manualCode) {
+      await completeScannedQuest(manualCode);
+    }
+  }
+}
+
 function runPageLoaders(pageName) {
   if (pageName === 'home') {
     markAnnouncementsSeen(currentTeacherAnnouncements);
@@ -2168,6 +2403,9 @@ function runPageLoaders(pageName) {
   }
   if (pageName === 'achievements' && currentStudentUser?.uid) {
     loadAchievementsDashboard(currentStudentUser.uid);
+  }
+  if (pageName === 'quest' && currentStudentUser?.uid) {
+    loadStudentQuests();
   }
 }
 
@@ -2241,6 +2479,7 @@ profilePictureEditButton?.addEventListener('click', () => {
 });
 profilePictureCancelButton?.addEventListener('click', resetProfilePictureEditor);
 profilePictureFormElement?.addEventListener('submit', saveProfilePicture);
+studentScanQuestButton?.addEventListener('click', openQuestScanner);
 
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
@@ -2250,7 +2489,17 @@ document.addEventListener('keydown', (event) => {
 });
 
 document.addEventListener('click', async (event) => {
-  const claimButton = event.target.closest('.claim-btn');
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+
+  const questButton = target.closest('button[data-student-quest-complete]');
+  if (questButton) {
+    questButton.disabled = true;
+    await completeStudentQuest(questButton.dataset.studentQuestComplete);
+    return;
+  }
+
+  const claimButton = target.closest('.claim-btn');
   if (claimButton) {
     if (!currentStudentUser?.uid) return;
 
@@ -2269,7 +2518,7 @@ document.addEventListener('click', async (event) => {
     return;
   }
 
-  const claimAllButton = event.target.closest('#claim-all-btn');
+  const claimAllButton = target.closest('#claim-all-btn');
   if (claimAllButton) {
     if (!currentStudentUser?.uid) return;
 
@@ -2305,6 +2554,7 @@ onAuthStateChanged(auth, async () => {
 
   const uid = user.uid;
   currentStudentUser = user;
+  pendingQuestIdFromUrl = String(new URLSearchParams(window.location.search).get('questId') || '').trim();
 
   console.log('Auth UID:', uid);
 
@@ -2343,11 +2593,19 @@ onAuthStateChanged(auth, async () => {
     await seedAchievementsIfEmpty();
     loadPointLogs(uid);
     loadAchievementsDashboard(uid);
+    loadStudentQuests();
     loadMyEnrollments();
     loadAvailableClasses();
     const restoredPage = getSavedPage();
-    showPage(restoredPage, { persist: false });
-    runPageLoaders(restoredPage);
+    const initialPage = pendingQuestIdFromUrl ? 'quest' : restoredPage;
+    showPage(initialPage, { persist: false });
+    runPageLoaders(initialPage);
+    if (pendingQuestIdFromUrl) {
+      const questId = pendingQuestIdFromUrl;
+      pendingQuestIdFromUrl = '';
+      window.history.replaceState({}, document.title, window.location.pathname);
+      await completeScannedQuest(questId);
+    }
   } catch (error) {
     console.error('Failed to load profile:', error);
 

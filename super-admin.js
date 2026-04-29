@@ -17,6 +17,14 @@ import {
   writeBatch
 } from './firebase.js';
 import { seedAchievementsIfEmpty } from './achievements.js';
+import {
+  createQuest,
+  getQuestsForUser,
+  updateQuest,
+  deleteQuest,
+  getQuestAssignmentCounts,
+  isQuestPastDeadline
+} from './quests.js';
 const superAdminEmailElement = document.getElementById('super-admin-email');
 const sidebarSuperAdminNameElement = document.getElementById('sidebar-super-admin-name');
 const logoutButton = document.getElementById('logout-button');
@@ -74,13 +82,29 @@ const awardBadgeMessageElement = document.getElementById('award-badge-message');
 const achievementBadgesPreviewListElement = document.getElementById('achievement-badges-preview-list');
 const announcementModerationListElement = document.getElementById('announcement-moderation-list');
 const announcementModerationMessageElement = document.getElementById('announcement-moderation-message');
+const superAdminQuestTitleElement = document.getElementById('super-admin-quest-title');
+const superAdminQuestDescriptionElement = document.getElementById('super-admin-quest-description');
+const superAdminQuestPointsElement = document.getElementById('super-admin-quest-points');
+const superAdminQuestBadgeElement = document.getElementById('super-admin-quest-badge');
+const superAdminQuestTargetTypeElement = document.getElementById('super-admin-quest-target-type');
+const superAdminQuestDeadlineElement = document.getElementById('super-admin-quest-deadline');
+const superAdminQuestStatusElement = document.getElementById('super-admin-quest-status');
+const superAdminQuestTargetsElement = document.getElementById('super-admin-quest-targets');
+const superAdminSaveQuestButton = document.getElementById('super-admin-save-quest-btn');
+const superAdminCancelQuestEditButton = document.getElementById('super-admin-cancel-quest-edit-btn');
+const superAdminQuestMessageElement = document.getElementById('super-admin-quest-message');
+const superAdminQuestsListElement = document.getElementById('super-admin-quests-list');
+const superAdminQuestFormTitleElement = document.getElementById('super-admin-quest-form-title');
 
 let overlaySequenceJob = 0;
 let schoolYearOptionsCache = [];
 let specialBadgeOptionsCache = [];
 let studentOptionsCache = [];
+let sectionOptionsCache = [];
+let superAdminQuests = [];
 let teacherAnnouncementModerationCache = [];
 let currentSuperAdminUser = null;
+let editingSuperAdminQuestId = '';
 
 function getTierFromRank(rank) {
   if (rank === 1) return 'Class A';
@@ -126,6 +150,7 @@ const pageTitles = {
   subjects: 'Subjects',
   sections: 'Sections',
   'special-badges': 'Special Badges',
+  quests: 'Quests',
   'announcement-moderation': 'Announcements'
 };
 const LAST_PAGE_STORAGE_KEY = 'cote.superAdmin.lastPage';
@@ -281,10 +306,35 @@ function sortAchievementsForPreview(records = []) {
 }
 
 function formatTimestampDate(value) {
-  const date = value?.toDate?.();
+  const date = value?.toDate?.() || (value instanceof Date ? value : value ? new Date(value) : null);
   if (!date || !Number.isFinite(date.getTime())) return 'No date';
 
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function timestampToDateTimeInputValue(value) {
+  const date = value?.toDate?.() || (value instanceof Date ? value : value ? new Date(value) : null);
+  if (!date || !Number.isFinite(date.getTime())) return '';
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+function formatQuestDeadline(value) {
+  const date = value?.toDate?.() || (value instanceof Date ? value : value ? new Date(value) : null);
+  if (!date || !Number.isFinite(date.getTime())) return 'No deadline';
+
+  return date.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  });
 }
 
 function getTimestampMillis(value) {
@@ -532,6 +582,85 @@ function renderSpecialBadges(records) {
     `;
     })
     .join('');
+}
+
+function getSelectedQuestTargetIds() {
+  if (!superAdminQuestTargetsElement) return [];
+  return Array.from(superAdminQuestTargetsElement.selectedOptions)
+    .map((option) => safeText(option.value, '').trim())
+    .filter(Boolean);
+}
+
+function populateQuestTargetOptions(selectedIds = []) {
+  if (!superAdminQuestTargetsElement || !superAdminQuestTargetTypeElement) return;
+
+  const targetType = safeText(superAdminQuestTargetTypeElement.value, 'all');
+  const selectedSet = new Set(selectedIds);
+
+  if (targetType === 'all') {
+    superAdminQuestTargetsElement.innerHTML = '<option value="">All active students</option>';
+    superAdminQuestTargetsElement.disabled = true;
+    return;
+  }
+
+  superAdminQuestTargetsElement.disabled = false;
+  const sourceRecords = targetType === 'students' ? studentOptionsCache : sectionOptionsCache;
+  superAdminQuestTargetsElement.innerHTML = '';
+
+  sourceRecords.forEach((record) => {
+    const option = document.createElement('option');
+    option.value = record.id;
+    option.textContent =
+      targetType === 'students'
+        ? record.displayName || makeStudentName(record)
+        : [record.name, record.gradeLevel, record.schoolYearName].map((item) => safeText(item, '')).filter(Boolean).join(' - ');
+    option.selected = selectedSet.has(record.id);
+    superAdminQuestTargetsElement.append(option);
+  });
+
+  if (!sourceRecords.length) {
+    superAdminQuestTargetsElement.innerHTML = '<option value="">No targets available</option>';
+  }
+}
+
+function populateSuperAdminQuestBadges() {
+  if (!superAdminQuestBadgeElement) return;
+
+  const previousValue = superAdminQuestBadgeElement.value;
+  superAdminQuestBadgeElement.innerHTML = '<option value="">No badge</option>';
+  specialBadgeOptionsCache
+    .filter((badge) => safeText(badge.status, 'active') === 'active')
+    .forEach((badge) => {
+      const option = document.createElement('option');
+      option.value = badge.id;
+      option.textContent = badge.name || 'Untitled Badge';
+      superAdminQuestBadgeElement.append(option);
+    });
+
+  if (previousValue && specialBadgeOptionsCache.some((badge) => badge.id === previousValue)) {
+    superAdminQuestBadgeElement.value = previousValue;
+  }
+}
+
+function setSuperAdminQuestEditMode(quest = null) {
+  editingSuperAdminQuestId = quest?.id || '';
+  if (superAdminQuestFormTitleElement) {
+    superAdminQuestFormTitleElement.textContent = editingSuperAdminQuestId ? 'Edit Quest' : 'Create Quest';
+  }
+  if (superAdminQuestTitleElement) superAdminQuestTitleElement.value = quest?.title || '';
+  if (superAdminQuestDescriptionElement) superAdminQuestDescriptionElement.value = quest?.description || '';
+  if (superAdminQuestPointsElement) superAdminQuestPointsElement.value = quest?.points || '';
+  if (superAdminQuestBadgeElement) superAdminQuestBadgeElement.value = quest?.badgeId || '';
+  if (superAdminQuestTargetTypeElement) superAdminQuestTargetTypeElement.value = quest?.targetType || 'all';
+  if (superAdminQuestDeadlineElement) superAdminQuestDeadlineElement.value = timestampToDateTimeInputValue(quest?.deadline);
+  if (superAdminQuestStatusElement) superAdminQuestStatusElement.value = quest?.status || 'active';
+  populateQuestTargetOptions(Array.isArray(quest?.targetIds) ? quest.targetIds : []);
+  if (superAdminSaveQuestButton) superAdminSaveQuestButton.textContent = editingSuperAdminQuestId ? 'Update Quest' : 'Create Quest';
+  if (superAdminCancelQuestEditButton) superAdminCancelQuestEditButton.hidden = !editingSuperAdminQuestId;
+}
+
+function clearSuperAdminQuestForm() {
+  setSuperAdminQuestEditMode(null);
 }
 
 function renderAchievementBadgePreviews(records) {
@@ -1285,7 +1414,9 @@ async function loadSections() {
       ...item.data()
     }));
 
+    sectionOptionsCache = records;
     renderSections(records);
+    populateQuestTargetOptions(getSelectedQuestTargetIds());
   } catch (error) {
     console.error('Failed to load sections:', error);
     setMessageOnElement(sectionMessageElement, 'Unable to load sections right now.', 'error');
@@ -1353,6 +1484,7 @@ async function loadSpecialBadges() {
     specialBadgeOptionsCache = records;
     renderSpecialBadges(records);
     populateAwardBadgeSelect(records);
+    populateSuperAdminQuestBadges();
   } catch (error) {
     console.error('Failed to load special badges:', error);
     setMessageOnElement(specialBadgeMessageElement, 'Unable to load special badges right now.', 'error');
@@ -1442,6 +1574,142 @@ async function deleteAnnouncement(announcementId) {
   }
 }
 
+function getSuperAdminQuestPayload() {
+  const targetType = safeText(superAdminQuestTargetTypeElement?.value, 'all');
+  return {
+    title: safeText(superAdminQuestTitleElement?.value, '').trim(),
+    description: safeText(superAdminQuestDescriptionElement?.value, '').trim(),
+    points: Number(superAdminQuestPointsElement?.value || 0),
+    badgeId: safeText(superAdminQuestBadgeElement?.value, '').trim(),
+    targetType,
+    targetIds: targetType === 'all' ? [] : getSelectedQuestTargetIds(),
+    deadline: safeText(superAdminQuestDeadlineElement?.value, '').trim(),
+    status: safeText(superAdminQuestStatusElement?.value, 'active').trim()
+  };
+}
+
+async function saveSuperAdminQuest() {
+  if (!currentSuperAdminUser?.uid) {
+    setMessageOnElement(superAdminQuestMessageElement, 'You must be logged in to save quests.', 'error');
+    return;
+  }
+
+  const payload = getSuperAdminQuestPayload();
+  if (payload.targetType !== 'all' && !payload.targetIds.length) {
+    setMessageOnElement(superAdminQuestMessageElement, 'Select at least one target.', 'error');
+    return;
+  }
+
+  if (superAdminSaveQuestButton) {
+    superAdminSaveQuestButton.disabled = true;
+    superAdminSaveQuestButton.textContent = editingSuperAdminQuestId ? 'Updating...' : 'Creating...';
+  }
+
+  try {
+    if (editingSuperAdminQuestId) {
+      await updateQuest(editingSuperAdminQuestId, payload);
+      setMessageOnElement(superAdminQuestMessageElement, 'Quest updated successfully.', 'success');
+    } else {
+      const result = await createQuest(payload);
+      setMessageOnElement(
+        superAdminQuestMessageElement,
+        `Quest created and assigned to ${result.assignedCount} student(s).`,
+        'success'
+      );
+    }
+
+    clearSuperAdminQuestForm();
+    await loadSuperAdminQuests();
+  } catch (error) {
+    console.error('Failed to save quest:', error);
+    setMessageOnElement(superAdminQuestMessageElement, error?.message || 'Unable to save quest.', 'error');
+  } finally {
+    if (superAdminSaveQuestButton) {
+      superAdminSaveQuestButton.disabled = false;
+      superAdminSaveQuestButton.textContent = editingSuperAdminQuestId ? 'Update Quest' : 'Create Quest';
+    }
+  }
+}
+
+function describeQuestTarget(quest = {}) {
+  const targetType = safeText(quest.targetType, 'all');
+  const targetIds = Array.isArray(quest.targetIds) ? quest.targetIds : [];
+
+  if (targetType === 'all') return 'All active students';
+  if (targetType === 'students') {
+    return `${targetIds.length} selected student(s)`;
+  }
+  return `${targetIds.length} selected section/class target(s)`;
+}
+
+function renderSuperAdminQuests(quests = [], counts = new Map()) {
+  if (!superAdminQuestsListElement) return;
+
+  if (!quests.length) {
+    superAdminQuestsListElement.innerHTML = '<p class="empty-cell">No quests created yet.</p>';
+    return;
+  }
+
+  superAdminQuestsListElement.innerHTML = quests
+    .map((quest) => {
+      const count = counts.get(quest.id) || { assigned: 0, completed: 0 };
+      const status = safeText(quest.status, 'active');
+      const isExpired = isQuestPastDeadline(quest);
+      return `
+        <article class="app-card quest-card">
+          <div class="quest-card-header">
+            <h4>${escapeHtml(quest.title || 'Untitled Quest')}</h4>
+            <span class="status-pill ${status === 'active' && !isExpired ? 'status-active' : 'status-pending'}">${
+              isExpired && status === 'active' ? 'expired' : escapeHtml(status)
+            }</span>
+          </div>
+          <p>${escapeHtml(quest.description || 'No description')}</p>
+          <div class="quest-meta-grid">
+            <p><strong>Reward:</strong> ${Number(quest.points || 0)} points${quest.badgeId ? ' + badge' : ''}</p>
+            <p><strong>Audience:</strong> ${escapeHtml(describeQuestTarget(quest))}</p>
+            <p><strong>Deadline:</strong> ${escapeHtml(formatQuestDeadline(quest.deadline))}</p>
+            <p><strong>Completed:</strong> ${count.completed} of ${count.assigned}</p>
+          </div>
+          <div class="admin-actions">
+            <button type="button" data-super-quest-edit="${escapeHtml(quest.id)}">Edit</button>
+            <button type="button" class="danger-button" data-super-quest-delete="${escapeHtml(quest.id)}">Delete</button>
+          </div>
+        </article>
+      `;
+    })
+    .join('');
+}
+
+async function loadSuperAdminQuests() {
+  if (!currentSuperAdminUser?.uid || !superAdminQuestsListElement) return;
+
+  superAdminQuestsListElement.innerHTML = '<p class="empty-cell">Loading quests...</p>';
+  try {
+    superAdminQuests = await getQuestsForUser(currentSuperAdminUser.uid);
+    const counts = await getQuestAssignmentCounts(superAdminQuests.map((quest) => quest.id));
+    renderSuperAdminQuests(superAdminQuests, counts);
+  } catch (error) {
+    console.error('Failed to load quests:', error);
+    superAdminQuests = [];
+    superAdminQuestsListElement.innerHTML = '<p class="empty-cell">Unable to load quests right now.</p>';
+    setMessageOnElement(superAdminQuestMessageElement, 'Unable to load quests.', 'error');
+  }
+}
+
+async function deleteSuperAdminQuest(questId) {
+  const id = safeText(questId, '').trim();
+  if (!id) return;
+
+  try {
+    await deleteQuest(id);
+    setMessageOnElement(superAdminQuestMessageElement, 'Quest deleted.', 'success');
+    await loadSuperAdminQuests();
+  } catch (error) {
+    console.error('Failed to delete quest:', error);
+    setMessageOnElement(superAdminQuestMessageElement, 'Unable to delete quest.', 'error');
+  }
+}
+
 async function loadStudentOptions() {
   try {
     const snapshot = await getDocs(collection(db, 'students'));
@@ -1459,6 +1727,7 @@ async function loadStudentOptions() {
     studentOptionsCache = records;
     populateAwardSectionFilter(records);
     renderAwardStudentCheckboxes(records);
+    populateQuestTargetOptions(getSelectedQuestTargetIds());
   } catch (error) {
     console.error('Failed to load students for badge awards:', error);
     setMessageOnElement(awardBadgeMessageElement, 'Unable to load students right now.', 'error');
@@ -1691,6 +1960,43 @@ announcementModerationListElement?.addEventListener('click', async (event) => {
   }
 });
 
+superAdminQuestTargetTypeElement?.addEventListener('change', () => {
+  populateQuestTargetOptions();
+});
+
+superAdminSaveQuestButton?.addEventListener('click', saveSuperAdminQuest);
+
+superAdminCancelQuestEditButton?.addEventListener('click', () => {
+  clearSuperAdminQuestForm();
+  setMessageOnElement(superAdminQuestMessageElement, 'Edit cancelled.', '');
+});
+
+superAdminQuestsListElement?.addEventListener('click', async (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+
+  const editButton = target.closest('button[data-super-quest-edit]');
+  if (editButton instanceof HTMLButtonElement) {
+    const questId = safeText(editButton.dataset.superQuestEdit, '').trim();
+    const quest = superAdminQuests.find((item) => item.id === questId);
+    if (!quest) {
+      setMessageOnElement(superAdminQuestMessageElement, 'Quest is no longer available.', 'error');
+      return;
+    }
+    setSuperAdminQuestEditMode(quest);
+    setMessageOnElement(superAdminQuestMessageElement, 'Editing quest. Update the form and save when ready.', '');
+    superAdminQuestTitleElement?.focus();
+    return;
+  }
+
+  const deleteButton = target.closest('button[data-super-quest-delete]');
+  if (deleteButton instanceof HTMLButtonElement) {
+    deleteButton.disabled = true;
+    await deleteSuperAdminQuest(deleteButton.dataset.superQuestDelete);
+    deleteButton.disabled = false;
+  }
+});
+
 addSchoolYearButton?.addEventListener('click', addSchoolYear);
 addTermButton?.addEventListener('click', addTerm);
 addSubjectButton?.addEventListener('click', addSubject);
@@ -1707,6 +2013,9 @@ menuButtons.forEach((button) => {
     const targetPage = button.dataset.target;
     if (!targetPage) return;
     showPage(targetPage);
+    if (targetPage === 'quests') {
+      loadSuperAdminQuests();
+    }
   });
 });
 
@@ -1766,7 +2075,8 @@ await Promise.all([
   loadAchievementBadgePreviews(),
   loadAnnouncementModeration(),
   loadSpecialBadges(),
-  loadStudentOptions()
+  loadStudentOptions(),
+  loadSuperAdminQuests()
 ]);
 showPage(getSavedPage(), { persist: false });
   } catch (error) {

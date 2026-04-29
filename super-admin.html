@@ -62,6 +62,10 @@
             <span aria-hidden="true">SB</span>
             <span>Special Badges</span>
           </button>
+          <button type="button" class="menu-btn" data-target="quests">
+            <span aria-hidden="true">Q</span>
+            <span>Quests</span>
+          </button>
           <button type="button" class="menu-btn" data-target="announcement-moderation">
             <span aria-hidden="true">AM</span>
             <span>Announcements</span>
@@ -266,6 +270,72 @@
       </section>
 
       <section
+        id="page-quests"
+        class="page"
+        data-page="quests"
+        aria-label="Quest management"
+      >
+        <article class="app-card">
+          <h2 id="super-admin-quest-form-title">Create Quest</h2>
+          <div class="admin-toolbar quest-form-grid">
+            <div class="field field-full">
+              <label for="super-admin-quest-title">Title</label>
+              <input id="super-admin-quest-title" type="text" maxlength="140" placeholder="Quest title" />
+            </div>
+            <div class="field field-full">
+              <label for="super-admin-quest-description">Description</label>
+              <textarea id="super-admin-quest-description" class="admin-reason" rows="3" placeholder="Quest instructions"></textarea>
+            </div>
+            <div class="field">
+              <label for="super-admin-quest-points">Points</label>
+              <input id="super-admin-quest-points" type="number" min="1" step="1" inputmode="numeric" placeholder="10" />
+            </div>
+            <div class="field">
+              <label for="super-admin-quest-badge">Badge Reward</label>
+              <select id="super-admin-quest-badge">
+                <option value="">No badge</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="super-admin-quest-target-type">Audience</label>
+              <select id="super-admin-quest-target-type">
+                <option value="all">All active students</option>
+                <option value="class">Selected sections/classes</option>
+                <option value="students">Selected students</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="super-admin-quest-deadline">Deadline</label>
+              <input id="super-admin-quest-deadline" type="datetime-local" />
+            </div>
+            <div class="field">
+              <label for="super-admin-quest-status">Status</label>
+              <select id="super-admin-quest-status">
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
+            <div class="field field-full">
+              <label for="super-admin-quest-targets">Targets</label>
+              <select id="super-admin-quest-targets" multiple size="6"></select>
+            </div>
+          </div>
+          <div class="admin-actions">
+            <button id="super-admin-save-quest-btn" type="button">Create Quest</button>
+            <button id="super-admin-cancel-quest-edit-btn" type="button" class="danger-button" hidden>Cancel Edit</button>
+          </div>
+          <p id="super-admin-quest-message" class="form-message" role="status" aria-live="polite"></p>
+        </article>
+
+        <article class="app-card">
+          <h2>All Quests</h2>
+          <div id="super-admin-quests-list" class="quest-list" aria-live="polite">
+            <p class="empty-cell">Loading quests...</p>
+          </div>
+        </article>
+      </section>
+
+      <section
         id="page-announcement-moderation"
         class="page"
         data-page="announcement-moderation"
@@ -282,6 +352,6 @@
       </section>
     </main>
 
-    <script type="module" src="super-admin.js"></script>
+    <script type="module" src="super-admin.js?v=2"></script>
   </body>
 </html>

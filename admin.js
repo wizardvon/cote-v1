@@ -17,6 +17,16 @@ import {
   runTransaction
 } from './firebase.js';
 import { checkAchievements, seedAchievementsIfEmpty } from './achievements.js';
+import {
+  createQuest,
+  getQuestsForUser,
+  updateQuest,
+  deleteQuest,
+  getQuestAssignmentCounts,
+  getQuestAssignments,
+  completeQuestForStudent,
+  isQuestPastDeadline
+} from './quests.js';
 
 const adminEmailElement = document.getElementById('admin-email');
 const sidebarTeacherNameElement = document.getElementById('sidebar-teacher-name');
@@ -79,6 +89,22 @@ const saveAnnouncementButton = document.getElementById('save-announcement-button
 const cancelAnnouncementEditButton = document.getElementById('cancel-announcement-edit-button');
 const announcementMessageElement = document.getElementById('announcement-message-status');
 const teacherAnnouncementsListElement = document.getElementById('teacher-announcements-list');
+const teacherQuestTitleElement = document.getElementById('teacher-quest-title');
+const teacherQuestDescriptionElement = document.getElementById('teacher-quest-description');
+const teacherQuestPointsElement = document.getElementById('teacher-quest-points');
+const teacherQuestBadgeElement = document.getElementById('teacher-quest-badge');
+const teacherQuestClassElement = document.getElementById('teacher-quest-class');
+const teacherQuestDeadlineElement = document.getElementById('teacher-quest-deadline');
+const teacherQuestStatusElement = document.getElementById('teacher-quest-status');
+const teacherSaveQuestButton = document.getElementById('teacher-save-quest-button');
+const teacherCancelQuestEditButton = document.getElementById('teacher-cancel-quest-edit-button');
+const teacherQuestMessageElement = document.getElementById('teacher-quest-message');
+const teacherQuestsListElement = document.getElementById('teacher-quests-list');
+const teacherQuestFormTitleElement = document.getElementById('teacher-quest-form-title');
+const teacherCompleteQuestSelectElement = document.getElementById('teacher-complete-quest-select');
+const teacherQuestQrPanelElement = document.getElementById('teacher-quest-qr-panel');
+const teacherQuestStudentsListElement = document.getElementById('teacher-quest-students-list');
+const teacherCompleteSelectedQuestsButton = document.getElementById('teacher-complete-selected-quests-button');
 let overlaySequenceJob = 0;
 
 const TABLE_COLUMN_COUNT = 6;
@@ -175,6 +201,10 @@ let currentEditingActivityId = '';
 let teacherResources = [];
 let teacherAnnouncements = [];
 let editingAnnouncementId = '';
+let teacherQuests = [];
+let teacherQuestBadges = [];
+let editingQuestId = '';
+let currentQuestStudentRows = [];
 
 function normalizePoints(points) {
   return typeof points === 'number' && Number.isFinite(points) ? points : 0;
@@ -283,6 +313,15 @@ function setAnnouncementMessage(message, type = '') {
   }
 }
 
+function setTeacherQuestMessage(message, type = '') {
+  if (!teacherQuestMessageElement) return;
+  teacherQuestMessageElement.textContent = message;
+  teacherQuestMessageElement.classList.remove('success', 'error');
+  if (type) {
+    teacherQuestMessageElement.classList.add(type);
+  }
+}
+
 function dateInputToEndOfDay(value) {
   const dateText = String(value || '').trim();
   if (!dateText) return null;
@@ -299,6 +338,31 @@ function timestampToDateInputValue(value) {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function timestampToDateTimeInputValue(value) {
+  const date = value?.toDate?.() || (value instanceof Date ? value : value ? new Date(value) : null);
+  if (!date || !Number.isFinite(date.getTime())) return '';
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+function formatQuestDeadline(value) {
+  const date = value?.toDate?.() || (value instanceof Date ? value : value ? new Date(value) : null);
+  if (!date || !Number.isFinite(date.getTime())) return 'No deadline';
+
+  return date.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  });
 }
 
 function formatTimestampDate(value) {
@@ -466,6 +530,20 @@ function compareClassRecordStudents(a, b) {
   });
 }
 
+function compareQuestStudents(a, b) {
+  const sexCompare = getSexSortRank(a.sex) - getSexSortRank(b.sex);
+  if (sexCompare !== 0) return sexCompare;
+
+  const lastNameCompare = safeText(a.lastName, '').localeCompare(safeText(b.lastName, ''), undefined, {
+    sensitivity: 'base'
+  });
+  if (lastNameCompare !== 0) return lastNameCompare;
+
+  return safeText(a.firstName, '').localeCompare(safeText(b.firstName, ''), undefined, {
+    sensitivity: 'base'
+  });
+}
+
 function toggleSidebar() {
   if (!sidebar || !sidebarOverlay) return;
 
@@ -526,6 +604,10 @@ function runPageLoaders(pageName) {
   if (pageName === 'announcements' && auth.currentUser?.uid) {
     loadTeacherAnnouncements();
   }
+
+  if (pageName === 'quest' && auth.currentUser?.uid) {
+    loadTeacherQuests();
+  }
 }
 
 function formatClassLabel(classItem) {
@@ -541,7 +623,8 @@ function populateTeacherClassSelectors(classes = []) {
   const selectors = [
     teacherClassFilterElement,
     classRecordFilterElement,
-    teacherRankPreviewClassFilterElement
+    teacherRankPreviewClassFilterElement,
+    teacherQuestClassElement
   ].filter(Boolean);
 
   selectors.forEach((selectElement) => {
@@ -1406,6 +1489,356 @@ async function deleteAnnouncement(announcementId) {
   } catch (error) {
     console.error('Failed to delete announcement:', error);
     setAnnouncementMessage('Unable to delete announcement. Please try again.', 'error');
+  }
+}
+
+function populateTeacherQuestBadges() {
+  if (!teacherQuestBadgeElement) return;
+
+  const previousValue = teacherQuestBadgeElement.value;
+  teacherQuestBadgeElement.innerHTML = '<option value="">No badge</option>';
+  teacherQuestBadges
+    .filter((badge) => safeText(badge.status, 'active') === 'active')
+    .forEach((badge) => {
+      const option = document.createElement('option');
+      option.value = badge.id;
+      option.textContent = badge.name || 'Untitled Badge';
+      teacherQuestBadgeElement.append(option);
+    });
+
+  if (previousValue && teacherQuestBadges.some((badge) => badge.id === previousValue)) {
+    teacherQuestBadgeElement.value = previousValue;
+  }
+}
+
+async function loadTeacherQuestBadges() {
+  try {
+    const snapshot = await getDocs(query(collection(db, 'specialBadges'), orderBy('createdAt', 'desc')));
+    teacherQuestBadges = snapshot.docs.map((badgeDoc) => ({ id: badgeDoc.id, ...badgeDoc.data() }));
+    populateTeacherQuestBadges();
+  } catch (error) {
+    console.error('Failed to load quest badges:', error);
+    teacherQuestBadges = [];
+    populateTeacherQuestBadges();
+  }
+}
+
+function setTeacherQuestEditMode(quest = null) {
+  editingQuestId = quest?.id || '';
+  if (teacherQuestFormTitleElement) {
+    teacherQuestFormTitleElement.textContent = editingQuestId ? 'Edit Quest' : 'Create Quest';
+  }
+  if (teacherQuestTitleElement) teacherQuestTitleElement.value = quest?.title || '';
+  if (teacherQuestDescriptionElement) teacherQuestDescriptionElement.value = quest?.description || '';
+  if (teacherQuestPointsElement) teacherQuestPointsElement.value = quest?.points || '';
+  if (teacherQuestBadgeElement) teacherQuestBadgeElement.value = quest?.badgeId || '';
+  if (teacherQuestClassElement) teacherQuestClassElement.value = Array.isArray(quest?.targetIds) ? quest.targetIds[0] || '' : '';
+  if (teacherQuestDeadlineElement) teacherQuestDeadlineElement.value = timestampToDateTimeInputValue(quest?.deadline);
+  if (teacherQuestStatusElement) teacherQuestStatusElement.value = quest?.status || 'active';
+  if (teacherSaveQuestButton) teacherSaveQuestButton.textContent = editingQuestId ? 'Update Quest' : 'Create Quest';
+  if (teacherCancelQuestEditButton) teacherCancelQuestEditButton.hidden = !editingQuestId;
+}
+
+function clearTeacherQuestForm() {
+  setTeacherQuestEditMode(null);
+}
+
+function getTeacherQuestFormPayload() {
+  const classId = safeText(teacherQuestClassElement?.value, '');
+  return {
+    title: safeText(teacherQuestTitleElement?.value, ''),
+    description: safeText(teacherQuestDescriptionElement?.value, ''),
+    points: Number(teacherQuestPointsElement?.value || 0),
+    badgeId: safeText(teacherQuestBadgeElement?.value, ''),
+    targetType: 'class',
+    targetIds: classId ? [classId] : [],
+    deadline: safeText(teacherQuestDeadlineElement?.value, ''),
+    status: safeText(teacherQuestStatusElement?.value, 'active')
+  };
+}
+
+async function saveTeacherQuest() {
+  if (!auth.currentUser?.uid) {
+    setTeacherQuestMessage('You must be logged in to save quests.', 'error');
+    return;
+  }
+
+  const payload = getTeacherQuestFormPayload();
+  if (!payload.targetIds.length) {
+    setTeacherQuestMessage('Select a class for this quest.', 'error');
+    return;
+  }
+
+  const selectedClass = teacherClasses.find((classItem) => classItem.id === payload.targetIds[0]);
+  if (!selectedClass) {
+    setTeacherQuestMessage('Select one of your classes.', 'error');
+    return;
+  }
+
+  if (teacherSaveQuestButton) {
+    teacherSaveQuestButton.disabled = true;
+    teacherSaveQuestButton.textContent = editingQuestId ? 'Updating...' : 'Creating...';
+  }
+
+  try {
+    if (editingQuestId) {
+      const matched = teacherQuests.find((quest) => quest.id === editingQuestId);
+      if (!matched || safeText(matched.createdBy) !== auth.currentUser.uid) {
+        setTeacherQuestMessage('You can only edit your own quests.', 'error');
+        return;
+      }
+      await updateQuest(editingQuestId, payload);
+      setTeacherQuestMessage('Quest updated successfully.', 'success');
+    } else {
+      const result = await createQuest(payload);
+      setTeacherQuestMessage(`Quest created and assigned to ${result.assignedCount} student(s).`, 'success');
+    }
+
+    clearTeacherQuestForm();
+    await loadTeacherQuests();
+  } catch (error) {
+    console.error('Failed to save quest:', error);
+    setTeacherQuestMessage(error?.message || 'Unable to save quest. Please try again.', 'error');
+  } finally {
+    if (teacherSaveQuestButton) {
+      teacherSaveQuestButton.disabled = false;
+      teacherSaveQuestButton.textContent = editingQuestId ? 'Update Quest' : 'Create Quest';
+    }
+  }
+}
+
+function renderTeacherQuests(quests = [], counts = new Map()) {
+  if (!teacherQuestsListElement) return;
+
+  if (!quests.length) {
+    teacherQuestsListElement.innerHTML = '<p class="empty-cell">No quests created yet.</p>';
+    return;
+  }
+
+  teacherQuestsListElement.innerHTML = quests
+    .map((quest) => {
+      const count = counts.get(quest.id) || { assigned: 0, completed: 0 };
+      const classLabel = teacherClasses.find((classItem) => classItem.id === quest.targetIds?.[0]);
+      const status = safeText(quest.status, 'active');
+      const isExpired = isQuestPastDeadline(quest);
+      return `
+        <article class="app-card quest-card">
+          <div class="quest-card-header">
+            <h4>${escapeHtml(quest.title || 'Untitled Quest')}</h4>
+            <span class="status-pill ${status === 'active' && !isExpired ? 'status-active' : 'status-pending'}">${
+              isExpired && status === 'active' ? 'expired' : escapeHtml(status)
+            }</span>
+          </div>
+          <p>${escapeHtml(quest.description || 'No description')}</p>
+          <div class="quest-meta-grid">
+            <p><strong>Reward:</strong> ${Number(quest.points || 0)} points${quest.badgeId ? ' + badge' : ''}</p>
+            <p><strong>Class:</strong> ${escapeHtml(classLabel ? formatClassLabel(classLabel) : 'Selected class')}</p>
+            <p><strong>Deadline:</strong> ${escapeHtml(formatQuestDeadline(quest.deadline))}</p>
+            <p><strong>Completed:</strong> ${count.completed} of ${count.assigned}</p>
+          </div>
+          <div class="admin-actions">
+            <button type="button" data-quest-edit="${escapeHtml(quest.id)}">Edit</button>
+            <button type="button" data-quest-manage="${escapeHtml(quest.id)}">Manage Students</button>
+            <button type="button" class="danger-button" data-quest-delete="${escapeHtml(quest.id)}">Delete</button>
+          </div>
+        </article>
+      `;
+    })
+    .join('');
+}
+
+function populateTeacherCompleteQuestSelect() {
+  if (!teacherCompleteQuestSelectElement) return;
+
+  const previousValue = teacherCompleteQuestSelectElement.value;
+  teacherCompleteQuestSelectElement.innerHTML = '<option value="">Select a quest first</option>';
+
+  teacherQuests.forEach((quest) => {
+    const option = document.createElement('option');
+    option.value = quest.id;
+    option.textContent = quest.title || 'Untitled Quest';
+    teacherCompleteQuestSelectElement.append(option);
+  });
+
+  if (previousValue && teacherQuests.some((quest) => quest.id === previousValue)) {
+    teacherCompleteQuestSelectElement.value = previousValue;
+  }
+}
+
+function getStudentQuestQrPayload(questId) {
+  const dashboardPath = `${window.location.origin}${window.location.pathname.replace(/admin\.html.*$/i, 'dashboard.html')}`;
+  return `${dashboardPath}?questId=${encodeURIComponent(questId)}`;
+}
+
+function renderQuestQrPanel(quest = null) {
+  if (!teacherQuestQrPanelElement) return;
+
+  if (!quest?.id) {
+    teacherQuestQrPanelElement.hidden = true;
+    teacherQuestQrPanelElement.innerHTML = '';
+    return;
+  }
+
+  const payload = getStudentQuestQrPayload(quest.id);
+  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(payload)}`;
+  teacherQuestQrPanelElement.hidden = false;
+  teacherQuestQrPanelElement.innerHTML = `
+    <div>
+      <h4>Quest QR Code</h4>
+      <p>Students can scan this with the Quest scanner to complete the selected quest.</p>
+      <p class="quest-qr-code-text">${escapeHtml(payload)}</p>
+    </div>
+    <img src="${escapeHtml(qrImageUrl)}" alt="QR code for ${escapeHtml(quest.title || 'quest')}" />
+  `;
+}
+
+function renderTeacherQuestStudents(rows = []) {
+  if (!teacherQuestStudentsListElement) return;
+
+  if (!rows.length) {
+    teacherQuestStudentsListElement.innerHTML = '<p class="empty-cell">No assigned students found for this quest.</p>';
+    return;
+  }
+
+  teacherQuestStudentsListElement.innerHTML = rows
+    .map((row) => {
+      const isCompleted = row.assignment?.status === 'completed';
+      return `
+        <label class="quest-student-row">
+          <input type="checkbox" data-quest-student-id="${escapeHtml(row.id)}" ${isCompleted ? 'disabled' : ''} />
+          <span>
+            <strong>${escapeHtml(formatFullName(row))}</strong>
+            <small>${escapeHtml(safeText(row.sex, 'Unspecified'))} • ${escapeHtml(
+              isCompleted ? `Completed ${formatTimestamp(row.assignment?.completedAt)}` : 'Assigned'
+            )}</small>
+          </span>
+        </label>
+      `;
+    })
+    .join('');
+}
+
+async function loadTeacherQuestStudents(questId) {
+  const quest = teacherQuests.find((item) => item.id === questId);
+  if (!quest) {
+    currentQuestStudentRows = [];
+    renderQuestQrPanel(null);
+    renderTeacherQuestStudents([]);
+    return;
+  }
+
+  renderQuestQrPanel(quest);
+  if (teacherQuestStudentsListElement) {
+    teacherQuestStudentsListElement.innerHTML = '<p class="empty-cell">Loading assigned students...</p>';
+  }
+
+  try {
+    const classId = safeText(quest.targetIds?.[0], '');
+    const students = await loadStudentsFromApprovedEnrollments(classId);
+    const assignments = await getQuestAssignments(quest.id);
+    const assignmentMap = new Map(assignments.map((assignment) => [safeText(assignment.studentId), assignment]));
+
+    currentQuestStudentRows = students
+      .filter((student) => assignmentMap.has(student.id))
+      .map((student) => ({
+        ...student,
+        assignment: assignmentMap.get(student.id)
+      }))
+      .sort(compareQuestStudents);
+
+    renderTeacherQuestStudents(currentQuestStudentRows);
+  } catch (error) {
+    console.error('Failed to load quest students:', error);
+    currentQuestStudentRows = [];
+    renderTeacherQuestStudents([]);
+    setTeacherQuestMessage('Unable to load quest students.', 'error');
+  }
+}
+
+async function loadTeacherQuests() {
+  if (!auth.currentUser?.uid || !teacherQuestsListElement) return;
+
+  teacherQuestsListElement.innerHTML = '<p class="empty-cell">Loading quests...</p>';
+  try {
+    teacherQuests = await getQuestsForUser(auth.currentUser.uid);
+    const counts = await getQuestAssignmentCounts(teacherQuests.map((quest) => quest.id));
+    renderTeacherQuests(teacherQuests, counts);
+    populateTeacherCompleteQuestSelect();
+  } catch (error) {
+    console.error('Failed to load teacher quests:', error);
+    teacherQuests = [];
+    populateTeacherCompleteQuestSelect();
+    teacherQuestsListElement.innerHTML = '<p class="empty-cell">Unable to load quests right now.</p>';
+    setTeacherQuestMessage('Unable to load quests. Please try again.', 'error');
+  }
+}
+
+function getCheckedQuestStudentIds() {
+  if (!teacherQuestStudentsListElement) return [];
+  return Array.from(teacherQuestStudentsListElement.querySelectorAll('input[data-quest-student-id]:checked'))
+    .map((input) => input.dataset.questStudentId || '')
+    .filter(Boolean);
+}
+
+async function completeCheckedQuestStudents() {
+  const questId = safeText(teacherCompleteQuestSelectElement?.value, '');
+  const selectedStudentIds = getCheckedQuestStudentIds();
+
+  if (!questId) {
+    setTeacherQuestMessage('Select a quest first.', 'error');
+    return;
+  }
+
+  if (!selectedStudentIds.length) {
+    setTeacherQuestMessage('Check at least one assigned student.', 'error');
+    return;
+  }
+
+  if (teacherCompleteSelectedQuestsButton) {
+    teacherCompleteSelectedQuestsButton.disabled = true;
+    teacherCompleteSelectedQuestsButton.textContent = 'Completing...';
+  }
+
+  try {
+    const results = await Promise.all(
+      selectedStudentIds.map((studentId) =>
+        completeQuestForStudent(questId, studentId, {
+          completedByName: safeText(currentTeacherProfile?.displayName, 'Teacher')
+        })
+      )
+    );
+    const completedCount = results.filter((result) => result.completed).length;
+    setTeacherQuestMessage(`Completed quest for ${completedCount} student(s).`, 'success');
+    await loadTeacherQuestStudents(questId);
+    await loadTeacherQuests();
+  } catch (error) {
+    console.error('Failed to complete selected quest students:', error);
+    setTeacherQuestMessage(error?.message || 'Unable to complete selected students.', 'error');
+  } finally {
+    if (teacherCompleteSelectedQuestsButton) {
+      teacherCompleteSelectedQuestsButton.disabled = false;
+      teacherCompleteSelectedQuestsButton.textContent = 'Complete Checked Students';
+    }
+  }
+}
+
+async function deleteTeacherQuest(questId) {
+  const id = safeText(questId, '');
+  if (!id || !auth.currentUser?.uid) return;
+
+  const matched = teacherQuests.find((quest) => quest.id === id);
+  if (!matched || safeText(matched.createdBy) !== auth.currentUser.uid) {
+    setTeacherQuestMessage('You can only delete your own quests.', 'error');
+    return;
+  }
+
+  try {
+    await deleteQuest(id);
+    setTeacherQuestMessage('Quest deleted.', 'success');
+    await loadTeacherQuests();
+  } catch (error) {
+    console.error('Failed to delete quest:', error);
+    setTeacherQuestMessage('Unable to delete quest. Please try again.', 'error');
   }
 }
 
@@ -2983,6 +3416,21 @@ cancelAnnouncementEditButton?.addEventListener('click', () => {
   setAnnouncementMessage('Edit cancelled.', '');
 });
 
+teacherSaveQuestButton?.addEventListener('click', () => {
+  saveTeacherQuest();
+});
+
+teacherCancelQuestEditButton?.addEventListener('click', () => {
+  clearTeacherQuestForm();
+  setTeacherQuestMessage('Edit cancelled.', '');
+});
+
+teacherCompleteQuestSelectElement?.addEventListener('change', () => {
+  loadTeacherQuestStudents(safeText(teacherCompleteQuestSelectElement.value, ''));
+});
+
+teacherCompleteSelectedQuestsButton?.addEventListener('click', completeCheckedQuestStudents);
+
 resourceUrlElement?.addEventListener('input', () => {
   if (!resourceYoutubeHintElement) return;
 
@@ -3077,6 +3525,44 @@ teacherAnnouncementsListElement?.addEventListener('click', (event) => {
   }
 });
 
+teacherQuestsListElement?.addEventListener('click', (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+
+  const editButton = target.closest('button[data-quest-edit]');
+  if (editButton instanceof HTMLButtonElement) {
+    const questId = String(editButton.dataset.questEdit || '').trim();
+    const quest = teacherQuests.find((item) => item.id === questId);
+    if (!quest) {
+      setTeacherQuestMessage('Quest is no longer available.', 'error');
+      return;
+    }
+    setTeacherQuestEditMode(quest);
+    setTeacherQuestMessage('Editing quest. Update the form and save when ready.', '');
+    teacherQuestTitleElement?.focus();
+    return;
+  }
+
+  const manageButton = target.closest('button[data-quest-manage]');
+  if (manageButton instanceof HTMLButtonElement) {
+    const questId = safeText(manageButton.dataset.questManage, '');
+    if (teacherCompleteQuestSelectElement) {
+      teacherCompleteQuestSelectElement.value = questId;
+    }
+    loadTeacherQuestStudents(questId);
+    teacherQuestStudentsListElement?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
+  }
+
+  const deleteButton = target.closest('button[data-quest-delete]');
+  if (deleteButton instanceof HTMLButtonElement) {
+    deleteButton.disabled = true;
+    deleteTeacherQuest(deleteButton.dataset.questDelete).finally(() => {
+      deleteButton.disabled = false;
+    });
+  }
+});
+
 logoutButton?.addEventListener('click', async () => {
   try {
     await signOut(auth);
@@ -3150,6 +3636,7 @@ onAuthStateChanged(auth, async (user) => {
     setEnrollmentMessage('Review pending enrollment requests for your classes.', '');
     setResourceMessage('Share external learning links for your classes.', '');
     setAnnouncementMessage('Post updates for students here.', '');
+    setTeacherQuestMessage('Create class quests here.', '');
     renderClassRecordTable([], [], new Map(), 'Select a class first.');
     setClassRecordMessage('Select a class first.', '');
 
@@ -3165,6 +3652,8 @@ onAuthStateChanged(auth, async (user) => {
     await loadEnrollmentRequests();
     await loadTeacherResources();
     await loadTeacherAnnouncements();
+    await loadTeacherQuestBadges();
+    await loadTeacherQuests();
     await loadTeacherSectionLeaderboardPreview();
     await loadTeacherStudentRankPreview();
     const restoredPage = getSavedPage();

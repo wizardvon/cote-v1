@@ -889,6 +889,150 @@ button:active {
   gap: 0.7rem;
 }
 
+.quest-form-grid {
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.quest-form-grid .field-full {
+  grid-column: 1 / -1;
+}
+
+.quest-form-grid select[multiple] {
+  min-height: 150px;
+}
+
+.quest-list {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 0.9rem;
+}
+
+.quest-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.quest-card-header h4 {
+  margin: 0;
+  color: #f4f8ff;
+}
+
+.quest-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.58rem;
+}
+
+.quest-meta-grid p {
+  margin: 0;
+  padding: 0.58rem 0.66rem;
+  border: 1px solid rgba(58, 190, 255, 0.18);
+  border-radius: 10px;
+  background: rgba(6, 18, 34, 0.6);
+}
+
+.quest-qr-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
+  margin-top: 1rem;
+  padding: 0.85rem;
+  border: 1px solid rgba(58, 190, 255, 0.24);
+  border-radius: 12px;
+  background: rgba(6, 18, 34, 0.72);
+}
+
+.quest-qr-panel img {
+  width: 160px;
+  height: 160px;
+  border-radius: 8px;
+  background: #fff;
+  padding: 8px;
+}
+
+.quest-qr-code-text {
+  overflow-wrap: anywhere;
+  font-size: 0.78rem;
+  color: var(--text-soft);
+}
+
+.quest-student-list {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 1rem;
+}
+
+.quest-student-row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 0.72rem;
+  align-items: center;
+  padding: 0.72rem;
+  border: 1px solid rgba(58, 190, 255, 0.18);
+  border-radius: 10px;
+  background: rgba(6, 18, 34, 0.58);
+}
+
+.quest-student-row small {
+  display: block;
+  margin-top: 0.18rem;
+  color: var(--text-soft);
+}
+
+.quest-scanner-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(2, 8, 16, 0.82);
+}
+
+.quest-scanner-panel {
+  width: min(520px, 100%);
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem;
+  border: 1px solid rgba(58, 190, 255, 0.35);
+  border-radius: 14px;
+  background: rgba(6, 18, 34, 0.96);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+}
+
+.quest-scanner-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+}
+
+.quest-scanner-header h3 {
+  margin: 0;
+}
+
+.quest-scanner-panel video {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 10px;
+  background: #000;
+  object-fit: cover;
+}
+
+@media (max-width: 620px) {
+  .quest-qr-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .quest-qr-panel img {
+    width: 148px;
+    height: 148px;
+  }
+}
+
 .my-classes-summary-grid {
   margin-top: 0.9rem;
   display: grid;

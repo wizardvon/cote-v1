@@ -148,7 +148,7 @@
           <ul class="list-stack">
             <li><strong>Home:</strong> Teacher dashboard overview and reminders.</li>
             <li><strong>Give Points:</strong> Main working area for merit/demerit updates.</li>
-            <li><strong>Quest:</strong> Placeholder cards for future quest management.</li>
+            <li><strong>Quest:</strong> Create class missions and track completion rewards.</li>
             <li><strong>Resources:</strong> Placeholder cards for learning materials.</li>
             <li><strong>Class Record:</strong> Manage class activities and student scores.</li>
           </ul>
@@ -246,22 +246,78 @@
       </section>
 
       <section id="page-quest" class="page" data-page="quest" aria-label="Quest">
-        <article class="app-card quest-card">
-          <h3>Create Quest</h3>
-          <p>Draft section missions, challenge mechanics, and point rewards.</p>
-          <button type="button">Coming Soon</button>
+        <article class="app-card">
+          <h3 id="teacher-quest-form-title">Create Quest</h3>
+          <p>Create missions for your approved classes and reward completion with points or an optional badge.</p>
+          <div class="admin-toolbar quest-form-grid">
+            <div class="field field-full">
+              <label for="teacher-quest-title">Title</label>
+              <input id="teacher-quest-title" type="text" maxlength="140" placeholder="Quest title" />
+            </div>
+            <div class="field field-full">
+              <label for="teacher-quest-description">Description</label>
+              <textarea id="teacher-quest-description" class="admin-reason" rows="3" placeholder="Quest instructions"></textarea>
+            </div>
+            <div class="field">
+              <label for="teacher-quest-points">Points</label>
+              <input id="teacher-quest-points" type="number" min="1" step="1" inputmode="numeric" placeholder="10" />
+            </div>
+            <div class="field">
+              <label for="teacher-quest-badge">Badge Reward</label>
+              <select id="teacher-quest-badge">
+                <option value="">No badge</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="teacher-quest-class">Class</label>
+              <select id="teacher-quest-class">
+                <option value="">Select a class first</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="teacher-quest-deadline">Deadline</label>
+              <input id="teacher-quest-deadline" type="datetime-local" />
+            </div>
+            <div class="field">
+              <label for="teacher-quest-status">Status</label>
+              <select id="teacher-quest-status">
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
+          </div>
+          <div class="admin-actions">
+            <button id="teacher-save-quest-button" type="button">Create Quest</button>
+            <button id="teacher-cancel-quest-edit-button" type="button" class="danger-button" hidden>Cancel Edit</button>
+          </div>
+          <p id="teacher-quest-message" class="form-message" role="status" aria-live="polite"></p>
         </article>
 
-        <article class="app-card quest-card">
-          <h3>Active Quests</h3>
-          <p>View currently assigned quest drafts and mission windows.</p>
-          <button type="button">Coming Soon</button>
+        <article class="app-card">
+          <h3>My Quests</h3>
+          <div id="teacher-quests-list" class="quest-list" aria-live="polite">
+            <p class="empty-cell">Loading quests...</p>
+          </div>
         </article>
 
-        <article class="app-card quest-card">
-          <h3>Quest Instructions / Reward Notes</h3>
-          <p>Reference notes for quest rules, reward tiers, and teacher guidance.</p>
-          <button type="button">Coming Soon</button>
+        <article class="app-card">
+          <h3>Complete Student Quests</h3>
+          <p>Select a quest to review assigned students, mark completions, or display the scan code.</p>
+          <div class="admin-toolbar quest-form-grid">
+            <div class="field">
+              <label for="teacher-complete-quest-select">Quest</label>
+              <select id="teacher-complete-quest-select">
+                <option value="">Select a quest first</option>
+              </select>
+            </div>
+          </div>
+          <div id="teacher-quest-qr-panel" class="quest-qr-panel" hidden></div>
+          <div id="teacher-quest-students-list" class="quest-student-list" aria-live="polite">
+            <p class="empty-cell">Select a quest to load students.</p>
+          </div>
+          <div class="admin-actions">
+            <button id="teacher-complete-selected-quests-button" type="button">Complete Checked Students</button>
+          </div>
         </article>
       </section>
 
@@ -556,6 +612,6 @@
       <img id="modalImage" src="" alt="Preview" />
     </div>
 
-    <script type="module" src="admin.js?v=9"></script>
+    <script type="module" src="admin.js?v=10"></script>
   </body>
 </html>
