@@ -41,6 +41,7 @@ const pointsTotalElement = document.getElementById('points-total');
 const logoutButton = document.getElementById('logout-button');
 const pageTitleElement = document.getElementById('page-title');
 const notificationsButton = document.getElementById('notifications-button');
+const announcementNotificationBadgeElement = document.getElementById('announcement-notification-badge');
 const messagesButton = document.getElementById('messages-button');
 
 const homeStudentNameElement = document.getElementById('home-student-name');
@@ -80,6 +81,7 @@ let overlaySequenceJob = 0;
 let currentStudentProfile = null;
 let currentStudentUser = null;
 let enrolledClassIds = new Set();
+let currentTeacherAnnouncements = [];
 const teacherNameCache = new Map();
 
 const pageTitles = {
@@ -92,6 +94,7 @@ const pageTitles = {
   quest: 'Quest',
 };
 const LAST_PAGE_STORAGE_KEY = 'cote.student.lastPage';
+const ANNOUNCEMENT_LAST_SEEN_PREFIX = 'cote.student.announcements.lastSeen';
 
 function isKnownPage(pageName) {
   return pages.some((page) => page.dataset.page === pageName);
@@ -298,6 +301,50 @@ function getTimestampMillis(value) {
   return value?.toMillis?.() || 0;
 }
 
+function getAnnouncementLastSeenKey() {
+  return `${ANNOUNCEMENT_LAST_SEEN_PREFIX}.${currentStudentUser?.uid || 'guest'}`;
+}
+
+function getAnnouncementLastSeenMillis() {
+  return Number(localStorage.getItem(getAnnouncementLastSeenKey()) || 0) || 0;
+}
+
+function setAnnouncementNotificationBadge(count) {
+  if (!announcementNotificationBadgeElement) return;
+
+  const normalizedCount = Math.max(0, Number(count) || 0);
+  announcementNotificationBadgeElement.hidden = normalizedCount === 0;
+  announcementNotificationBadgeElement.textContent = normalizedCount > 9 ? '9+' : String(normalizedCount);
+  notificationsButton?.setAttribute(
+    'aria-label',
+    normalizedCount ? `${normalizedCount} new announcement${normalizedCount === 1 ? '' : 's'}` : 'Notifications'
+  );
+}
+
+function markAnnouncementsSeen(records = []) {
+  const latestTimestamp = records.reduce((latest, announcement) => {
+    return Math.max(latest, getTimestampMillis(announcement.createdAt));
+  }, Date.now());
+
+  localStorage.setItem(getAnnouncementLastSeenKey(), String(latestTimestamp));
+  setAnnouncementNotificationBadge(0);
+}
+
+function updateAnnouncementNotificationBadge(records = []) {
+  const lastSeen = getAnnouncementLastSeenMillis();
+  const unreadCount = records.filter((announcement) => getTimestampMillis(announcement.createdAt) > lastSeen).length;
+  setAnnouncementNotificationBadge(unreadCount);
+}
+
+function getActivePageName() {
+  return pages.find((page) => page.classList.contains('active'))?.dataset.page || 'home';
+}
+
+function isAnnouncementExpired(announcement = {}) {
+  const expiryDate = announcement.expiresAt?.toDate?.();
+  return Boolean(expiryDate && expiryDate.getTime() < Date.now());
+}
+
 function renderTeacherAnnouncements(records = []) {
   if (!teacherAnnouncementsListElement) return;
 
@@ -313,6 +360,10 @@ function renderTeacherAnnouncements(records = []) {
       const teacherName = announcement.teacherName || announcement.authorName || 'Teacher';
       const date = announcement.createdAt?.toDate?.();
       const dateText = date ? date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+      const expiryDate = announcement.expiresAt?.toDate?.();
+      const expiryText = expiryDate
+        ? expiryDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+        : '';
 
       return `
         <article class="teacher-announcement-item">
@@ -321,6 +372,7 @@ function renderTeacherAnnouncements(records = []) {
             ${dateText ? `<span>${escapeHtml(dateText)}</span>` : ''}
           </div>
           <h4>${escapeHtml(title)}</h4>
+          ${expiryText ? `<p><strong>Until:</strong> ${escapeHtml(expiryText)}</p>` : ''}
           ${message ? `<p>${escapeHtml(message)}</p>` : ''}
         </article>
       `;
@@ -329,6 +381,8 @@ function renderTeacherAnnouncements(records = []) {
 }
 
 function announcementMatchesStudent(announcement = {}) {
+  if (isAnnouncementExpired(announcement)) return false;
+
   const target = String(announcement.target || announcement.audience || 'all').trim().toLowerCase();
   if (!target || target === 'all' || target === 'students') return true;
 
@@ -367,9 +421,17 @@ async function loadTeacherAnnouncements() {
       .sort((a, b) => getTimestampMillis(b.createdAt) - getTimestampMillis(a.createdAt))
       .slice(0, 5);
 
+    currentTeacherAnnouncements = records;
     renderTeacherAnnouncements(records);
+    if (getActivePageName() === 'home') {
+      markAnnouncementsSeen(records);
+    } else {
+      updateAnnouncementNotificationBadge(records);
+    }
   } catch (error) {
     console.warn('Teacher announcements unavailable:', error);
+    currentTeacherAnnouncements = [];
+    setAnnouncementNotificationBadge(0);
     renderTeacherAnnouncements([]);
   }
 }
@@ -2098,6 +2160,9 @@ function renderNoProfile(email = '') {
 }
 
 function runPageLoaders(pageName) {
+  if (pageName === 'home') {
+    markAnnouncementsSeen(currentTeacherAnnouncements);
+  }
   if (pageName === 'resources') {
     loadStudentResources();
   }
@@ -2221,7 +2286,9 @@ document.addEventListener('click', async (event) => {
 });
 
 notificationsButton?.addEventListener('click', () => {
-  alert('Notifications feature will be added here.');
+  showPage('home');
+  markAnnouncementsSeen(currentTeacherAnnouncements);
+  teacherAnnouncementsListElement?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
 
 messagesButton?.addEventListener('click', () => {

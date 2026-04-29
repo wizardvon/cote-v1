@@ -6,6 +6,7 @@ import {
   doc,
   getDoc,
   updateDoc,
+  deleteDoc,
   collection,
   addDoc,
   getDocs,
@@ -71,11 +72,14 @@ const awardStudentsListElement = document.getElementById('award-students-list');
 const awardSpecialBadgeButton = document.getElementById('award-special-badge-btn');
 const awardBadgeMessageElement = document.getElementById('award-badge-message');
 const achievementBadgesPreviewListElement = document.getElementById('achievement-badges-preview-list');
+const announcementModerationListElement = document.getElementById('announcement-moderation-list');
+const announcementModerationMessageElement = document.getElementById('announcement-moderation-message');
 
 let overlaySequenceJob = 0;
 let schoolYearOptionsCache = [];
 let specialBadgeOptionsCache = [];
 let studentOptionsCache = [];
+let teacherAnnouncementModerationCache = [];
 let currentSuperAdminUser = null;
 
 function getTierFromRank(rank) {
@@ -121,7 +125,8 @@ const pageTitles = {
   'academic-setup': 'Academic Setup',
   subjects: 'Subjects',
   sections: 'Sections',
-  'special-badges': 'Special Badges'
+  'special-badges': 'Special Badges',
+  'announcement-moderation': 'Announcements'
 };
 const LAST_PAGE_STORAGE_KEY = 'cote.superAdmin.lastPage';
 
@@ -273,6 +278,22 @@ function sortAchievementsForPreview(records = []) {
 
     return Number(a.chainOrder || 0) - Number(b.chainOrder || 0);
   });
+}
+
+function formatTimestampDate(value) {
+  const date = value?.toDate?.();
+  if (!date || !Number.isFinite(date.getTime())) return 'No date';
+
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function getTimestampMillis(value) {
+  return value?.toMillis?.() || 0;
+}
+
+function isAnnouncementExpired(announcement = {}) {
+  const expiryDate = announcement.expiresAt?.toDate?.();
+  return Boolean(expiryDate && expiryDate.getTime() < Date.now());
 }
 
 function makeFullName(teacher, user) {
@@ -528,6 +549,50 @@ function renderAchievementBadgePreviews(records) {
 
   achievementBadgesPreviewListElement.innerHTML = visibleRecords
     .map((record) => renderBadgePreviewCard(record, safeText(record.category, 'Achievement')))
+    .join('');
+}
+
+function renderAnnouncementModeration(records = []) {
+  if (!announcementModerationListElement) return;
+
+  if (!records.length) {
+    announcementModerationListElement.innerHTML = '<p class="empty-cell">No teacher announcements found.</p>';
+    return;
+  }
+
+  announcementModerationListElement.innerHTML = records
+    .map((announcement) => {
+      const status = safeText(announcement.status, 'active');
+      const isExpired = isAnnouncementExpired(announcement);
+      const displayStatus = status === 'active' && isExpired ? 'expired' : status;
+      const target = safeText(announcement.target, 'all');
+      const audience = target === 'class' ? safeText(announcement.classLabel, 'Selected class') : 'All students';
+      const isInactive = status !== 'active';
+
+      return `
+        <article class="app-card super-admin-item">
+          <p><strong>Title:</strong> ${escapeHtml(announcement.title || 'Untitled Announcement')}</p>
+          <p><strong>Teacher:</strong> ${escapeHtml(announcement.teacherName || 'Teacher')}</p>
+          <p><strong>Audience:</strong> ${escapeHtml(audience)}</p>
+          <p><strong>Status:</strong> <span class="status-pill ${
+            displayStatus === 'active' ? 'status-active' : 'status-pending'
+          }">${escapeHtml(displayStatus)}</span></p>
+          <p><strong>Created:</strong> ${escapeHtml(formatTimestampDate(announcement.createdAt))}</p>
+          <p><strong>Expires:</strong> ${escapeHtml(formatTimestampDate(announcement.expiresAt))}</p>
+          <p><strong>Message:</strong> ${escapeHtml(announcement.message || 'No message')}</p>
+          <div class="admin-actions">
+            <button type="button" class="danger-button" data-announcement-deactivate="${escapeHtml(
+              announcement.id
+            )}" ${isInactive ? 'disabled' : ''}>
+              Deactivate
+            </button>
+            <button type="button" class="danger-button" data-announcement-delete="${escapeHtml(announcement.id)}">
+              Delete
+            </button>
+          </div>
+        </article>
+      `;
+    })
     .join('');
 }
 
@@ -1312,6 +1377,71 @@ async function loadAchievementBadgePreviews() {
   }
 }
 
+async function loadAnnouncementModeration() {
+  if (!announcementModerationListElement) return;
+
+  announcementModerationListElement.innerHTML = '<p class="empty-cell">Loading announcements...</p>';
+
+  try {
+    let snapshot;
+    try {
+      snapshot = await getDocs(query(collection(db, 'teacherAnnouncements'), orderBy('createdAt', 'desc')));
+    } catch (error) {
+      const fallbackSnapshot = await getDocs(collection(db, 'teacherAnnouncements'));
+      const docs = [...fallbackSnapshot.docs].sort((a, b) => {
+        return getTimestampMillis(b.data()?.createdAt) - getTimestampMillis(a.data()?.createdAt);
+      });
+      snapshot = { docs };
+      console.error('Failed to query announcements with orderBy:', error);
+    }
+
+    teacherAnnouncementModerationCache = snapshot.docs.map((announcementDoc) => ({
+      id: announcementDoc.id,
+      ...announcementDoc.data()
+    }));
+    renderAnnouncementModeration(teacherAnnouncementModerationCache);
+  } catch (error) {
+    console.error('Failed to load announcement moderation:', error);
+    teacherAnnouncementModerationCache = [];
+    announcementModerationListElement.innerHTML =
+      '<p class="empty-cell">Unable to load announcements right now.</p>';
+    setMessageOnElement(announcementModerationMessageElement, 'Unable to load announcements.', 'error');
+  }
+}
+
+async function deactivateAnnouncement(announcementId) {
+  const id = safeText(announcementId, '').trim();
+  if (!id) return;
+
+  try {
+    await updateDoc(doc(db, 'teacherAnnouncements', id), {
+      status: 'inactive',
+      moderatedBy: currentSuperAdminUser?.uid || '',
+      moderatedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    setMessageOnElement(announcementModerationMessageElement, 'Announcement deactivated.', 'success');
+    await loadAnnouncementModeration();
+  } catch (error) {
+    console.error('Failed to deactivate announcement:', error);
+    setMessageOnElement(announcementModerationMessageElement, 'Failed to deactivate announcement.', 'error');
+  }
+}
+
+async function deleteAnnouncement(announcementId) {
+  const id = safeText(announcementId, '').trim();
+  if (!id) return;
+
+  try {
+    await deleteDoc(doc(db, 'teacherAnnouncements', id));
+    setMessageOnElement(announcementModerationMessageElement, 'Announcement deleted.', 'success');
+    await loadAnnouncementModeration();
+  } catch (error) {
+    console.error('Failed to delete announcement:', error);
+    setMessageOnElement(announcementModerationMessageElement, 'Failed to delete announcement.', 'error');
+  }
+}
+
 async function loadStudentOptions() {
   try {
     const snapshot = await getDocs(collection(db, 'students'));
@@ -1541,6 +1671,26 @@ specialBadgesListElement?.addEventListener('click', async (event) => {
   await toggleSpecialBadgeStatus(target.dataset.specialBadgeId, target.dataset.currentStatus || 'inactive');
 });
 
+announcementModerationListElement?.addEventListener('click', async (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+
+  const deactivateButton = target.closest('button[data-announcement-deactivate]');
+  if (deactivateButton instanceof HTMLButtonElement) {
+    deactivateButton.disabled = true;
+    await deactivateAnnouncement(deactivateButton.dataset.announcementDeactivate);
+    deactivateButton.disabled = false;
+    return;
+  }
+
+  const deleteButton = target.closest('button[data-announcement-delete]');
+  if (deleteButton instanceof HTMLButtonElement) {
+    deleteButton.disabled = true;
+    await deleteAnnouncement(deleteButton.dataset.announcementDelete);
+    deleteButton.disabled = false;
+  }
+});
+
 addSchoolYearButton?.addEventListener('click', addSchoolYear);
 addTermButton?.addEventListener('click', addTerm);
 addSubjectButton?.addEventListener('click', addSubject);
@@ -1614,6 +1764,7 @@ await Promise.all([
   loadSubjects(),
   loadSections(),
   loadAchievementBadgePreviews(),
+  loadAnnouncementModeration(),
   loadSpecialBadges(),
   loadStudentOptions()
 ]);

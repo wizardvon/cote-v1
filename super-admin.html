@@ -62,6 +62,10 @@
             <span aria-hidden="true">SB</span>
             <span>Special Badges</span>
           </button>
+          <button type="button" class="menu-btn" data-target="announcement-moderation">
+            <span aria-hidden="true">AM</span>
+            <span>Announcements</span>
+          </button>
         </nav>
       </div>
 
@@ -258,6 +262,22 @@
           </div>
           <button id="award-special-badge-btn" type="button">Award Checked Students</button>
           <p id="award-badge-message" class="form-message" role="status" aria-live="polite"></p>
+        </article>
+      </section>
+
+      <section
+        id="page-announcement-moderation"
+        class="page"
+        data-page="announcement-moderation"
+        aria-label="Announcement moderation"
+      >
+        <article class="app-card">
+          <h2>Announcement Moderation</h2>
+          <p>Review teacher announcements and remove posts that should no longer appear to students.</p>
+          <p id="announcement-moderation-message" class="form-message" role="status" aria-live="polite"></p>
+          <div id="announcement-moderation-list" class="super-admin-list" aria-live="polite">
+            <p class="empty-cell">Loading announcements...</p>
+          </div>
         </article>
       </section>
     </main>

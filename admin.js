@@ -73,8 +73,10 @@ const teacherResourcesListElement = document.getElementById('teacher-resources-l
 const announcementTargetElement = document.getElementById('announcement-target');
 const announcementClassIdElement = document.getElementById('announcement-class-id');
 const announcementTitleElement = document.getElementById('announcement-title');
+const announcementExpiryElement = document.getElementById('announcement-expiry');
 const announcementMessageInputElement = document.getElementById('announcement-message');
 const saveAnnouncementButton = document.getElementById('save-announcement-button');
+const cancelAnnouncementEditButton = document.getElementById('cancel-announcement-edit-button');
 const announcementMessageElement = document.getElementById('announcement-message-status');
 const teacherAnnouncementsListElement = document.getElementById('teacher-announcements-list');
 let overlaySequenceJob = 0;
@@ -172,6 +174,7 @@ let currentClassRecordScores = new Map();
 let currentEditingActivityId = '';
 let teacherResources = [];
 let teacherAnnouncements = [];
+let editingAnnouncementId = '';
 
 function normalizePoints(points) {
   return typeof points === 'number' && Number.isFinite(points) ? points : 0;
@@ -278,6 +281,66 @@ function setAnnouncementMessage(message, type = '') {
   if (type) {
     announcementMessageElement.classList.add(type);
   }
+}
+
+function dateInputToEndOfDay(value) {
+  const dateText = String(value || '').trim();
+  if (!dateText) return null;
+
+  const date = new Date(`${dateText}T23:59:59`);
+  return Number.isFinite(date.getTime()) ? date : null;
+}
+
+function timestampToDateInputValue(value) {
+  const date = value?.toDate?.() || (value instanceof Date ? value : null);
+  if (!date || !Number.isFinite(date.getTime())) return '';
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function formatTimestampDate(value) {
+  const date = value?.toDate?.() || (value instanceof Date ? value : null);
+  if (!date || !Number.isFinite(date.getTime())) return 'No expiry';
+
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function isAnnouncementExpired(announcement = {}) {
+  const expiryDate = announcement.expiresAt?.toDate?.();
+  return Boolean(expiryDate && expiryDate.getTime() < Date.now());
+}
+
+function setAnnouncementEditMode(announcement = null) {
+  editingAnnouncementId = announcement?.id || '';
+
+  if (announcementTargetElement) {
+    announcementTargetElement.value = announcement?.target || 'all';
+  }
+  if (announcementClassIdElement) {
+    announcementClassIdElement.value = announcement?.target === 'class' ? announcement.classId || '' : '';
+  }
+  if (announcementTitleElement) {
+    announcementTitleElement.value = announcement?.title || '';
+  }
+  if (announcementExpiryElement) {
+    announcementExpiryElement.value = timestampToDateInputValue(announcement?.expiresAt);
+  }
+  if (announcementMessageInputElement) {
+    announcementMessageInputElement.value = announcement?.message || '';
+  }
+  if (saveAnnouncementButton) {
+    saveAnnouncementButton.textContent = editingAnnouncementId ? 'Update Announcement' : 'Post Announcement';
+  }
+  if (cancelAnnouncementEditButton) {
+    cancelAnnouncementEditButton.hidden = !editingAnnouncementId;
+  }
+}
+
+function clearAnnouncementForm() {
+  setAnnouncementEditMode(null);
 }
 
 function renderTeacherSectionLeaderboardPreview(records) {
@@ -1142,17 +1205,23 @@ function renderTeacherAnnouncements(announcements = []) {
       const target = safeText(announcement.target, 'all');
       const targetLabel = target === 'class' ? safeText(announcement.classLabel, 'Selected class') : 'All students';
       const status = safeText(announcement.status, 'active');
-      const isInactive = status !== 'active';
+      const isExpired = isAnnouncementExpired(announcement);
+      const displayStatus = isExpired && status === 'active' ? 'expired' : status;
+      const isInactive = status !== 'active' || isExpired;
 
       return `
         <article class="app-card">
           <h4>${escapeHtml(announcement.title || 'Untitled Announcement')}</h4>
           <p><strong>Audience:</strong> ${escapeHtml(targetLabel)}</p>
           <p><strong>Status:</strong> <span class="status-pill ${
-            status === 'active' ? 'status-active' : 'status-pending'
-          }">${escapeHtml(status)}</span></p>
+            displayStatus === 'active' ? 'status-active' : 'status-pending'
+          }">${escapeHtml(displayStatus)}</span></p>
+          <p><strong>Expires:</strong> ${escapeHtml(formatTimestampDate(announcement.expiresAt))}</p>
           <p>${escapeHtml(announcement.message || 'No message')}</p>
           <div class="admin-actions">
+            <button type="button" data-announcement-edit="${escapeHtml(announcement.id)}">
+              Edit
+            </button>
             <button type="button" class="danger-button" data-announcement-deactivate="${escapeHtml(
               announcement.id
             )}" ${isInactive ? 'disabled' : ''}>
@@ -1218,6 +1287,7 @@ async function saveAnnouncement() {
   const target = String(announcementTargetElement?.value || 'all').trim();
   const classId = String(announcementClassIdElement?.value || '').trim();
   const title = String(announcementTitleElement?.value || '').trim();
+  const expiryDate = dateInputToEndOfDay(announcementExpiryElement?.value);
   const message = String(announcementMessageInputElement?.value || '').trim();
   const selectedClass = teacherClasses.find((classItem) => classItem.id === classId);
 
@@ -1236,40 +1306,62 @@ async function saveAnnouncement() {
     return;
   }
 
-  if (saveAnnouncementButton) {
-    saveAnnouncementButton.disabled = true;
-    saveAnnouncementButton.textContent = 'Posting...';
+  if (!expiryDate) {
+    setAnnouncementMessage('Expiry date is required.', 'error');
+    return;
   }
 
   try {
-    await addDoc(collection(db, 'teacherAnnouncements'), {
+    const payload = {
       title,
       message,
       target,
       classId: target === 'class' ? classId : '',
       classIds: target === 'class' ? [classId] : [],
       classLabel: target === 'class' ? formatClassLabel(selectedClass) : '',
+      expiresAt: expiryDate,
       teacherId: auth.currentUser.uid,
       teacherName: currentTeacherProfile?.displayName || 'Teacher',
-      status: 'active',
-      createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
-    });
+    };
 
-    if (announcementTitleElement) announcementTitleElement.value = '';
-    if (announcementMessageInputElement) announcementMessageInputElement.value = '';
-    if (announcementTargetElement) announcementTargetElement.value = 'all';
-    if (announcementClassIdElement) announcementClassIdElement.value = '';
+    if (editingAnnouncementId) {
+      const matched = teacherAnnouncements.find((item) => item.id === editingAnnouncementId);
+      if (!matched || String(matched.teacherId || '').trim() !== auth.currentUser.uid) {
+        setAnnouncementMessage('You can only edit your own announcements.', 'error');
+        return;
+      }
 
-    setAnnouncementMessage('Announcement posted successfully.', 'success');
+      if (saveAnnouncementButton) {
+        saveAnnouncementButton.disabled = true;
+        saveAnnouncementButton.textContent = 'Updating...';
+      }
+
+      await updateDoc(doc(db, 'teacherAnnouncements', editingAnnouncementId), payload);
+      setAnnouncementMessage('Announcement updated successfully.', 'success');
+    } else {
+      if (saveAnnouncementButton) {
+        saveAnnouncementButton.disabled = true;
+        saveAnnouncementButton.textContent = 'Posting...';
+      }
+
+      await addDoc(collection(db, 'teacherAnnouncements'), {
+        ...payload,
+        status: 'active',
+        createdAt: serverTimestamp()
+      });
+      setAnnouncementMessage('Announcement posted successfully.', 'success');
+    }
+
+    clearAnnouncementForm();
     await loadTeacherAnnouncements();
   } catch (error) {
     console.error('Failed to save announcement:', error);
-    setAnnouncementMessage('Unable to post announcement. Please try again.', 'error');
+    setAnnouncementMessage('Unable to save announcement. Please try again.', 'error');
   } finally {
     if (saveAnnouncementButton) {
       saveAnnouncementButton.disabled = false;
-      saveAnnouncementButton.textContent = 'Post Announcement';
+      saveAnnouncementButton.textContent = editingAnnouncementId ? 'Update Announcement' : 'Post Announcement';
     }
   }
 }
@@ -2886,6 +2978,11 @@ saveAnnouncementButton?.addEventListener('click', () => {
   saveAnnouncement();
 });
 
+cancelAnnouncementEditButton?.addEventListener('click', () => {
+  clearAnnouncementForm();
+  setAnnouncementMessage('Edit cancelled.', '');
+});
+
 resourceUrlElement?.addEventListener('input', () => {
   if (!resourceYoutubeHintElement) return;
 
@@ -2946,6 +3043,21 @@ teacherResourcesListElement?.addEventListener('click', (event) => {
 teacherAnnouncementsListElement?.addEventListener('click', (event) => {
   const target = event.target;
   if (!(target instanceof HTMLElement)) return;
+
+  const editButton = target.closest('button[data-announcement-edit]');
+  if (editButton instanceof HTMLButtonElement) {
+    const announcementId = String(editButton.dataset.announcementEdit || '').trim();
+    const announcement = teacherAnnouncements.find((item) => item.id === announcementId);
+    if (!announcement) {
+      setAnnouncementMessage('Announcement is no longer available.', 'error');
+      return;
+    }
+
+    setAnnouncementEditMode(announcement);
+    setAnnouncementMessage('Editing announcement. Update the form and save when ready.', '');
+    announcementTitleElement?.focus();
+    return;
+  }
 
   const deactivateButton = target.closest('button[data-announcement-deactivate]');
   if (deactivateButton instanceof HTMLButtonElement) {

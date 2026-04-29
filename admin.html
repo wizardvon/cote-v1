@@ -341,6 +341,11 @@
               <input id="announcement-title" type="text" placeholder="e.g. Quiz reminder" maxlength="150" />
             </div>
 
+            <div class="field">
+              <label for="announcement-expiry">Expiry Date</label>
+              <input id="announcement-expiry" type="date" />
+            </div>
+
             <div class="field field-full">
               <label for="announcement-message">Message</label>
               <textarea
@@ -354,6 +359,7 @@
 
           <div class="admin-actions">
             <button id="save-announcement-button" type="button">Post Announcement</button>
+            <button id="cancel-announcement-edit-button" type="button" class="danger-button" hidden>Cancel Edit</button>
           </div>
           <p id="announcement-message-status" class="form-message" role="status" aria-live="polite"></p>
         </article>

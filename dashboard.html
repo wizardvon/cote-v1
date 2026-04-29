@@ -78,7 +78,10 @@
 
       <div class="app-bar-side app-bar-right" aria-label="Notifications and messages">
         <img src="icons/cote-logo.png" alt="C.O.T.E" class="top-brand-logo" />
-        <button id="notifications-button" class="icon-button" type="button" aria-label="Notifications">🔔</button>
+        <button id="notifications-button" class="icon-button notification-button" type="button" aria-label="Notifications">
+          🔔
+          <span id="announcement-notification-badge" class="notification-badge" hidden>0</span>
+        </button>
         <button id="messages-button" class="icon-button" type="button" aria-label="Messages">💬</button>
       </div>
     </header>
