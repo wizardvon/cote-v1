@@ -1,6 +1,7 @@
 import {
   getMessagingIdentity,
   getMessageContacts,
+  getMessageContactFilters,
   getOrCreateConversation,
   getConversations,
   getConversationMessages,
@@ -35,13 +36,14 @@ function getInitials(value) {
 
 let identity = null;
 let contacts = [];
+let contactFilters = [];
+let activeFilter = '';
 let conversations = [];
 let activeConversation = null;
 let refreshTimer = 0;
 
 const elements = {
-  contactSelect: null,
-  startButton: null,
+  contactFilter: null,
   threadList: null,
   messageList: null,
   messageForm: null,
@@ -51,8 +53,7 @@ const elements = {
 };
 
 function collectElements() {
-  elements.contactSelect = document.getElementById('message-contact-select');
-  elements.startButton = document.getElementById('message-start-button');
+  elements.contactFilter = document.getElementById('message-contact-filter');
   elements.threadList = document.getElementById('message-thread-list');
   elements.messageList = document.getElementById('message-list');
   elements.messageForm = document.getElementById('message-form');
@@ -75,37 +76,66 @@ function roleLabel(role) {
   return 'User';
 }
 
-function renderContacts() {
-  if (!elements.contactSelect) return;
+function renderContactFilter() {
+  if (!elements.contactFilter) return;
 
-  elements.contactSelect.innerHTML = '<option value="">Select contact</option>';
-  contacts.forEach((contact) => {
+  if (identity?.role !== 'teacher') {
+    elements.contactFilter.closest('.field')?.setAttribute('hidden', '');
+    return;
+  }
+
+  elements.contactFilter.innerHTML = '';
+  contactFilters.forEach((filter) => {
     const option = document.createElement('option');
-    option.value = contact.id;
-    option.textContent = `${contact.displayName || contact.email || 'Contact'} (${roleLabel(contact.role)})`;
-    elements.contactSelect.append(option);
+    option.value = filter.id;
+    option.textContent = filter.label;
+    elements.contactFilter.append(option);
   });
+
+  if (contactFilters.length) {
+    activeFilter = activeFilter || contactFilters[0].id;
+    elements.contactFilter.value = activeFilter;
+  }
+}
+
+function getVisibleContacts() {
+  if (!activeFilter) return contacts;
+  if (activeFilter === 'teachers') return contacts.filter((contact) => contact.role === 'teacher');
+  return contacts.filter((contact) => Array.isArray(contact.filterKeys) && contact.filterKeys.includes(activeFilter));
 }
 
 function renderThreads() {
   if (!elements.threadList) return;
 
-  if (!conversations.length) {
-    elements.threadList.innerHTML = '<p class="empty-cell">No messages yet.</p>';
+  const visibleContacts = getVisibleContacts();
+  if (!visibleContacts.length) {
+    const message =
+      identity?.role === 'superAdmin'
+        ? 'Messaging is available for students and teachers.'
+        : identity?.role === 'teacher'
+          ? 'No contacts found for this filter.'
+          : 'No teachers available yet.';
+    elements.threadList.innerHTML = `<p class="empty-cell">${escapeHtml(message)}</p>`;
     return;
   }
 
-  elements.threadList.innerHTML = conversations
-    .map((thread) => {
-      const isActive = activeConversation?.id === thread.id;
+  elements.threadList.innerHTML = visibleContacts
+    .map((contact) => {
+      const thread = conversations.find((item) => item.contactId === contact.id);
+      const isActive = activeConversation?.contactId === contact.id;
+      const detail =
+        thread?.lastMessage ||
+        (contact.role === 'student' && Array.isArray(contact.classLabels) && contact.classLabels.length
+          ? contact.classLabels.join(', ')
+          : roleLabel(contact.role));
       return `
-        <button type="button" class="message-thread-item ${isActive ? 'active' : ''}" data-conversation-id="${escapeHtml(
-          thread.id
-        )}">
-          <span class="message-avatar" aria-hidden="true">${escapeHtml(getInitials(thread.contactName))}</span>
+        <button type="button" class="message-thread-item ${isActive ? 'active' : ''}" data-contact-id="${escapeHtml(
+          contact.id
+        )}" data-conversation-id="${escapeHtml(thread?.id || '')}">
+          <span class="message-avatar" aria-hidden="true">${escapeHtml(getInitials(contact.displayName))}</span>
           <span class="message-thread-copy">
-            <strong>${escapeHtml(thread.contactName || 'Contact')}</strong>
-            <span>${escapeHtml(thread.lastMessage || 'No messages yet.')}</span>
+            <strong>${escapeHtml(contact.displayName || contact.email || 'Contact')}</strong>
+            <span>${escapeHtml(detail || 'No messages yet.')}</span>
           </span>
         </button>
       `;
@@ -117,7 +147,7 @@ async function renderMessages() {
   if (!elements.messageList) return;
 
   if (!activeConversation?.id) {
-    elements.messageList.innerHTML = '<p class="empty-cell">Select or start a conversation.</p>';
+    elements.messageList.innerHTML = '<p class="empty-cell">Select a name to open a conversation.</p>';
     if (elements.heading) elements.heading.textContent = 'Conversation';
     return;
   }
@@ -162,8 +192,19 @@ export async function initMessagingUI() {
 
   try {
     identity = await getMessagingIdentity();
+    if (identity.role === 'superAdmin') {
+      contacts = [];
+      contactFilters = [];
+      renderThreads();
+      await renderMessages();
+      setStatus('Messaging is available for students and teachers.', '');
+      return;
+    }
+
+    contactFilters = await getMessageContactFilters(identity);
+    activeFilter = contactFilters[0]?.id || '';
     contacts = await getMessageContacts(identity);
-    renderContacts();
+    renderContactFilter();
     await refreshConversations();
     setStatus('Messaging ready.', 'success');
   } catch (error) {
@@ -171,13 +212,13 @@ export async function initMessagingUI() {
     setStatus(error?.message || 'Unable to load messaging.', 'error');
   }
 
-  elements.startButton?.addEventListener('click', startSelectedConversation);
+  elements.contactFilter?.addEventListener('change', changeContactFilter);
   elements.threadList?.addEventListener('click', selectThreadFromClick);
   elements.messageForm?.addEventListener('submit', submitMessage);
 }
 
 export async function refreshConversations() {
-  if (!identity?.uid) return;
+  if (!identity?.uid || identity.role === 'superAdmin') return;
   conversations = await getConversations(identity);
   renderThreads();
   if (activeConversation?.id) {
@@ -194,11 +235,15 @@ export function startMessagingAutoRefresh() {
   }, 15000);
 }
 
-async function startSelectedConversation() {
-  const contactId = elements.contactSelect?.value || '';
+function changeContactFilter() {
+  activeFilter = elements.contactFilter?.value || '';
+  renderThreads();
+}
+
+async function openContactConversation(contactId) {
   const contact = contacts.find((item) => item.id === contactId);
   if (!contact) {
-    setStatus('Select a contact first.', 'error');
+    setStatus('Select a contact from the list.', 'error');
     return;
   }
 
@@ -217,10 +262,18 @@ async function selectThreadFromClick(event) {
   const target = event.target;
   if (!(target instanceof Element)) return;
 
-  const button = target.closest('button[data-conversation-id]');
+  const button = target.closest('button[data-contact-id], button[data-conversation-id]');
   if (!(button instanceof HTMLButtonElement)) return;
 
-  activeConversation = conversations.find((thread) => thread.id === button.dataset.conversationId) || null;
+  const conversationId = button.dataset.conversationId || '';
+  const contactId = button.dataset.contactId || '';
+  activeConversation = conversations.find((thread) => thread.id === conversationId) || null;
+
+  if (!activeConversation && contactId) {
+    await openContactConversation(contactId);
+    return;
+  }
+
   renderThreads();
   await renderMessages();
 }

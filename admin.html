@@ -436,17 +436,13 @@
       <section id="page-messages" class="page" data-page="messages" aria-label="Messages">
         <article class="app-card">
           <h3>Messages</h3>
-          <p>Message students in your classes or the super admin.</p>
+          <p>Message students in your classes or other teachers.</p>
           <div class="admin-toolbar message-contact-bar">
             <div class="field">
-              <label for="message-contact-select">Contact</label>
-              <select id="message-contact-select">
-                <option value="">Loading contacts...</option>
+              <label for="message-contact-filter">Contacts</label>
+              <select id="message-contact-filter">
+                <option value="teachers">Teachers</option>
               </select>
-            </div>
-            <div class="field admin-load-field">
-              <label for="message-start-button">Open</label>
-              <button id="message-start-button" type="button">Open Conversation</button>
             </div>
           </div>
           <p id="message-status" class="form-message" role="status" aria-live="polite"></p>
@@ -459,7 +455,7 @@
           <div class="message-panel">
             <h3 id="message-thread-heading">Conversation</h3>
             <div id="message-list" class="message-list" aria-live="polite">
-              <p class="empty-cell">Select or start a conversation.</p>
+              <p class="empty-cell">Select a name to open a conversation.</p>
             </div>
             <form id="message-form" class="message-form">
               <textarea id="message-input" rows="3" maxlength="1200" placeholder="Write a message"></textarea>

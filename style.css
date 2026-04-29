@@ -1023,7 +1023,7 @@ button:active {
 }
 
 .message-contact-bar {
-  grid-template-columns: minmax(220px, 1fr) auto;
+  grid-template-columns: minmax(220px, 360px);
 }
 
 .message-app {
@@ -1056,7 +1056,7 @@ button:active {
   align-items: center;
   text-align: left;
   padding: 0.58rem;
-  border-radius: 14px;
+  border-radius: 8px;
   border: 0;
   background: transparent;
   color: #e8f4ff;

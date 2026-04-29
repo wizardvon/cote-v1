@@ -32,7 +32,7 @@ function makeConversationId(uidA, uidB) {
 
 function isAllowedPair(roleA, roleB) {
   const pair = [normalizeRole(roleA), normalizeRole(roleB)].sort().join(':');
-  return pair === 'student:teacher' || pair === 'superAdmin:teacher';
+  return pair === 'student:teacher' || pair === 'teacher:teacher';
 }
 
 function makeStudentName(data = {}) {
@@ -104,52 +104,91 @@ export async function getMessageContacts(identity) {
       .sort((a, b) => a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' }));
   }
 
-  if (identity.role === 'superAdmin') {
-    const snapshot = await getDocs(query(collection(db, 'teachers'), where('status', '==', 'active')));
-    return snapshot.docs
-      .map((item) => ({ id: item.id, role: 'teacher', ...item.data(), displayName: makeTeacherName(item.data()) }))
-      .sort((a, b) => a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' }));
-  }
-
   if (identity.role === 'teacher') {
-    const [students, admins] = await Promise.all([getApprovedTeacherStudents(identity.uid), getSuperAdminContacts()]);
-    return [...admins, ...students];
+    const [students, teachers] = await Promise.all([getApprovedTeacherStudents(identity.uid), getTeacherContacts(identity.uid)]);
+    return [...teachers, ...students].sort((a, b) =>
+      (a.displayName || '').localeCompare(b.displayName || '', undefined, { sensitivity: 'base' })
+    );
   }
 
   return [];
 }
 
-async function getSuperAdminContacts() {
-  const snapshot = await getDocs(query(collection(db, 'users'), where('role', '==', 'superAdmin')));
+async function getTeacherContacts(currentTeacherId) {
+  const snapshot = await getDocs(query(collection(db, 'teachers'), where('status', '==', 'active')));
   return snapshot.docs
-    .filter((item) => cleanText(item.data()?.status || 'active') === 'active')
-    .map((item) => ({ id: item.id, role: 'superAdmin', email: item.data()?.email || '', displayName: 'Super Admin' }))
+    .filter((item) => item.id !== currentTeacherId)
+    .map((item) => ({
+      id: item.id,
+      role: 'teacher',
+      filterKey: 'teachers',
+      ...item.data(),
+      displayName: makeTeacherName(item.data())
+    }))
     .sort((a, b) => a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' }));
 }
 
 async function getApprovedTeacherStudents(teacherId) {
   const classSnapshot = await getDocs(query(collection(db, 'classes'), where('teacherId', '==', teacherId)));
-  const classIds = classSnapshot.docs.map((item) => item.id);
+  const classes = classSnapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+  const classIds = classes.map((item) => item.id);
   if (!classIds.length) return [];
+
+  const classLabelById = new Map(classes.map((item) => [item.id, makeClassLabel(item)]));
 
   const enrollmentSnapshots = await Promise.all(
     classIds.map((classId) =>
       getDocs(query(collection(db, 'classEnrollments'), where('classId', '==', classId), where('status', '==', 'approved')))
     )
   );
-  const studentIds = [
-    ...new Set(
-      enrollmentSnapshots
-        .flatMap((snapshot) => snapshot.docs.map((item) => cleanText(item.data()?.studentId)))
-        .filter(Boolean)
-    )
-  ];
+  const studentClassMap = new Map();
+  enrollmentSnapshots.forEach((snapshot, index) => {
+    const classId = classIds[index];
+    snapshot.docs.forEach((item) => {
+      const studentId = cleanText(item.data()?.studentId);
+      if (!studentId) return;
+      if (!studentClassMap.has(studentId)) studentClassMap.set(studentId, new Set());
+      studentClassMap.get(studentId).add(classId);
+    });
+  });
+
+  const studentIds = [...studentClassMap.keys()];
 
   const studentSnapshots = await Promise.all(studentIds.map((studentId) => getDoc(doc(db, 'students', studentId))));
   return studentSnapshots
     .filter((snap) => snap.exists())
-    .map((snap) => ({ id: snap.id, role: 'student', ...snap.data(), displayName: makeStudentName(snap.data()) }))
+    .map((snap) => {
+      const studentClassIds = [...(studentClassMap.get(snap.id) || [])];
+      return {
+        id: snap.id,
+        role: 'student',
+        filterKeys: studentClassIds.map((classId) => `class:${classId}`),
+        classLabels: studentClassIds.map((classId) => classLabelById.get(classId)).filter(Boolean),
+        ...snap.data(),
+        displayName: makeStudentName(snap.data())
+      };
+    })
     .sort((a, b) => a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' }));
+}
+
+function makeClassLabel(classItem = {}) {
+  const subject = cleanText(classItem.subjectName) || 'Class';
+  const section = cleanText(classItem.sectionName);
+  const term = cleanText(classItem.termName);
+  const schoolYear = cleanText(classItem.schoolYearName);
+  const details = [section, term, schoolYear].filter(Boolean).join(' - ');
+  return details ? `${subject} - ${details}` : subject;
+}
+
+export async function getMessageContactFilters(identity) {
+  if (identity?.role !== 'teacher' || !identity.uid) return [];
+  const snapshot = await getDocs(query(collection(db, 'classes'), where('teacherId', '==', identity.uid)));
+  return [
+    { id: 'teachers', label: 'Teachers' },
+    ...snapshot.docs
+      .map((item) => ({ id: `class:${item.id}`, label: makeClassLabel(item.data()) }))
+      .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }))
+  ];
 }
 
 export async function getOrCreateConversation(identity, contact) {
