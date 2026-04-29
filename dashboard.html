@@ -8,6 +8,12 @@
     <link rel="manifest" href="/cote-v1/manifest.json" />
     <link rel="icon" type="image/png" sizes="192x192" href="/cote-v1/icons/icon-192.png" />
     <link rel="apple-touch-icon" href="/cote-v1/icons/icon-192.png" />
+    <script>
+      {
+        const savedTheme = localStorage.getItem('cote.student.theme') || 'dark';
+        document.documentElement.dataset.theme = savedTheme === 'light' ? 'light' : 'dark';
+      }
+    </script>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body class="dashboard-body">
@@ -57,10 +63,6 @@
             <span aria-hidden="true">🏆</span>
             <span>Achievements</span>
           </button>
-          <button type="button" class="menu-btn" data-target="messages">
-            <span aria-hidden="true">MSG</span>
-            <span>Messages</span>
-          </button>
           <button type="button" class="menu-btn" data-target="quest">
             <span aria-hidden="true">🎯</span>
             <span>Quest</span>
@@ -68,7 +70,13 @@
         </nav>
       </div>
 
-      <button id="logout-button" type="button" class="logout-button menu-logout">Logout</button>
+      <div class="sidebar-footer">
+        <button type="button" class="menu-btn sidebar-settings-btn" data-target="settings">
+          <span aria-hidden="true">⚙</span>
+          <span>Settings</span>
+        </button>
+        <button id="logout-button" type="button" class="logout-button menu-logout">Logout</button>
+      </div>
     </aside>
 
     <button id="sidebar-overlay" class="sidebar-overlay" hidden aria-label="Close sidebar"></button>
@@ -359,7 +367,57 @@
           </div>
         </article>
       </section>
+
+      <section id="page-settings" class="page" data-page="settings" aria-label="Settings">
+        <article class="app-card settings-card">
+          <div class="section-heading-row">
+            <h3>Settings</h3>
+          </div>
+
+          <div class="settings-group" aria-labelledby="theme-setting-heading">
+            <div>
+              <h4 id="theme-setting-heading">Appearance</h4>
+              <p>Choose the dashboard theme that feels best for your screen.</p>
+            </div>
+
+            <div class="theme-choice-grid theme-choice-grid-compact" role="radiogroup" aria-label="Theme">
+              <label class="theme-choice">
+                <input type="radio" name="student-theme" value="dark" />
+                <span>
+                  <strong>Dark</strong>
+                  <small>Focused, low-glare interface.</small>
+                </span>
+              </label>
+              <label class="theme-choice">
+                <input type="radio" name="student-theme" value="light" />
+                <span>
+                  <strong>Light</strong>
+                  <small>Clean, bright classroom mode.</small>
+                </span>
+              </label>
+            </div>
+          </div>
+
+          <div class="settings-group" aria-labelledby="music-setting-heading">
+            <div>
+              <h4 id="music-setting-heading">Background Music</h4>
+              <p>Use the temporary track now, then replace <strong>audio/background-music.mp3</strong> later.</p>
+            </div>
+
+            <div class="music-controls">
+              <button id="music-toggle-button" type="button">Play Music</button>
+              <label for="music-volume">
+                <span>Volume</span>
+                <input id="music-volume" type="range" min="0" max="1" step="0.05" value="0.35" />
+              </label>
+            </div>
+            <p id="music-status" class="form-message" role="status" aria-live="polite"></p>
+          </div>
+        </article>
+      </section>
     </main>
+
+    <audio id="background-music" src="audio/background-music.mp3" loop preload="auto"></audio>
 
     <div id="imageModal" class="image-modal hidden">
       <button id="closeImageModal" type="button" aria-label="Close image preview">×</button>

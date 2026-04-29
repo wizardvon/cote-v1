@@ -35,6 +35,36 @@
   --radius-lg: 22px;
 }
 
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg-main: radial-gradient(circle at 10% 12%, rgba(14, 165, 233, 0.16), transparent 28%),
+    radial-gradient(circle at 88% 10%, rgba(231, 188, 88, 0.18), transparent 24%),
+    linear-gradient(165deg, #f7fbff 0%, #edf5fb 48%, #f8fbff 100%);
+  --bg-panel: linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(241, 247, 253, 0.98));
+  --bg-panel-soft: linear-gradient(145deg, rgba(255, 255, 255, 0.94), rgba(235, 244, 252, 0.96));
+  --surface: rgba(255, 255, 255, 0.78);
+  --surface-strong: rgba(255, 255, 255, 0.95);
+  --surface-soft: rgba(235, 244, 252, 0.78);
+
+  --text-main: #102033;
+  --text-soft: #4a5f78;
+  --text-faint: #6d7f94;
+
+  --line: rgba(31, 96, 141, 0.2);
+  --line-strong: rgba(14, 116, 144, 0.38);
+
+  --primary: #0369a1;
+  --primary-strong: #075985;
+  --primary-soft: rgba(14, 165, 233, 0.12);
+  --gold: #b7791f;
+  --gold-soft: #7a4f10;
+
+  --shadow-soft: 0 10px 28px rgba(40, 72, 110, 0.12);
+  --shadow-card: 0 18px 34px rgba(40, 72, 110, 0.13);
+  --shadow-panel: 0 24px 44px rgba(40, 72, 110, 0.16);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -63,6 +93,11 @@ body::before {
   background-size: 44px 44px;
   mask-image: linear-gradient(to bottom, transparent, black 10%, black 90%, transparent);
   z-index: 0;
+}
+
+:root[data-theme="light"] body::before {
+  background-image: linear-gradient(rgba(14, 116, 144, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(14, 116, 144, 0.08) 1px, transparent 1px);
 }
 
 .container {
@@ -464,6 +499,10 @@ button:active {
   padding: 0 0.75rem;
 }
 
+:root[data-theme="light"] .app-bar {
+  background: rgba(255, 255, 255, 0.86);
+}
+
 .app-bar-side {
   min-width: 110px;
   display: inline-flex;
@@ -481,6 +520,16 @@ button:active {
   color: #f8fbff;
   letter-spacing: 0.05em;
   pointer-events: none;
+}
+
+:root[data-theme="light"] .app-bar-title {
+  color: var(--text-main);
+}
+
+:root[data-theme="light"] input,
+:root[data-theme="light"] select,
+:root[data-theme="light"] textarea {
+  background: rgba(255, 255, 255, 0.92);
 }
 
 .top-brand-logo {
@@ -504,6 +553,12 @@ button:active {
   line-height: 1;
   color: #f8fbff;
   box-shadow: none;
+}
+
+:root[data-theme="light"] .icon-button {
+  background: rgba(255, 255, 255, 0.88);
+  color: #123047;
+  border-color: rgba(14, 116, 144, 0.24);
 }
 
 .notification-button {
@@ -582,6 +637,11 @@ button:active {
   color: #f2f8ff;
 }
 
+:root[data-theme="light"] .app-card h2,
+:root[data-theme="light"] .app-card h3 {
+  color: var(--text-main);
+}
+
 .app-card p {
   margin: 0.55rem 0 0;
   color: var(--text-soft);
@@ -591,6 +651,11 @@ button:active {
 .welcome-card {
   background: linear-gradient(135deg, rgba(6, 26, 53, 0.95), rgba(10, 64, 101, 0.9));
   border-color: rgba(58, 190, 255, 0.46);
+}
+
+:root[data-theme="light"] .welcome-card {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(225, 240, 250, 0.96));
+  border-color: rgba(14, 116, 144, 0.24);
 }
 
 .badge {
@@ -627,6 +692,12 @@ button:active {
   border: 1px solid rgba(148, 163, 184, 0.22);
   border-radius: 8px;
   background: rgba(3, 11, 24, 0.34);
+}
+
+:root[data-theme="light"] .student-notification-item,
+:root[data-theme="light"] .teacher-announcement-item {
+  background: rgba(255, 255, 255, 0.7);
+  border-color: rgba(31, 96, 141, 0.16);
 }
 
 .student-notification-item.is-unread {
@@ -1413,6 +1484,11 @@ button:active {
   border-right: 1px solid var(--line);
 }
 
+:root[data-theme="light"] .sidebar {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(237, 246, 252, 0.98) 100%);
+  box-shadow: 16px 0 36px rgba(40, 72, 110, 0.16);
+}
+
 .sidebar.open {
   transform: translateX(0);
 }
@@ -1443,6 +1519,11 @@ button:active {
   letter-spacing: 0.06em;
 }
 
+:root[data-theme="light"] .brand-title,
+:root[data-theme="light"] .sidebar-header h2 {
+  color: var(--text-main);
+}
+
 .sidebar-label {
   margin: 0;
   font-size: 0.68rem;
@@ -1450,6 +1531,10 @@ button:active {
   text-transform: uppercase;
   color: rgba(252, 235, 196, 0.84);
   font-weight: 800;
+}
+
+:root[data-theme="light"] .sidebar-label {
+  color: #8a5a13;
 }
 
 .sidebar-header h2 {
@@ -1485,8 +1570,16 @@ button:active {
   border: 1px solid transparent;
 }
 
+:root[data-theme="light"] .menu-btn {
+  color: #17324b;
+}
+
 .menu-btn:hover {
   background: rgba(16, 54, 86, 0.6);
+}
+
+:root[data-theme="light"] .menu-btn:hover {
+  background: rgba(14, 116, 144, 0.08);
 }
 
 .menu-btn.active {
@@ -1497,6 +1590,110 @@ button:active {
 
 .menu-logout {
   width: 100%;
+}
+
+.sidebar-footer {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.sidebar-settings-btn {
+  width: 100%;
+}
+
+.settings-card {
+  display: grid;
+  gap: 1rem;
+}
+
+.settings-group {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.settings-group h4 {
+  margin: 0;
+  color: var(--text-main);
+  font-size: 1rem;
+}
+
+.settings-group p {
+  margin: 0.35rem 0 0;
+}
+
+.theme-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.theme-choice-grid-compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.theme-choice {
+  min-height: 104px;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-soft);
+  cursor: pointer;
+}
+
+.theme-choice input {
+  width: auto;
+  margin: 0.1rem 0 0;
+  accent-color: var(--primary);
+}
+
+.theme-choice span {
+  display: grid;
+  gap: 0.28rem;
+  min-width: 0;
+}
+
+.theme-choice strong {
+  color: var(--text-main);
+}
+
+.theme-choice small {
+  color: var(--text-soft);
+  line-height: 1.35;
+}
+
+.theme-choice:has(input:checked) {
+  border-color: var(--line-strong);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+
+.theme-choice input:checked + span strong {
+  color: var(--primary);
+}
+
+.music-controls {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.65fr) minmax(180px, 1fr);
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.music-controls label {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.music-controls label span {
+  color: var(--text-soft);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.music-controls input[type="range"] {
+  padding: 0;
+  accent-color: var(--primary);
 }
 
 .sidebar-overlay {
@@ -1871,6 +2068,15 @@ button:active {
   .icon-button {
     width: 35px;
     height: 35px;
+  }
+  .theme-choice-grid {
+    grid-template-columns: 1fr;
+  }
+  .music-controls {
+    grid-template-columns: 1fr;
+  }
+  .theme-choice {
+    min-height: 78px;
   }
 }
 

@@ -45,6 +45,11 @@ const pageTitleElement = document.getElementById('page-title');
 const notificationsButton = document.getElementById('notifications-button');
 const announcementNotificationBadgeElement = document.getElementById('announcement-notification-badge');
 const messagesButton = document.getElementById('messages-button');
+const themeColorMetaElement = document.querySelector('meta[name="theme-color"]');
+const backgroundMusicElement = document.getElementById('background-music');
+const musicToggleButton = document.getElementById('music-toggle-button');
+const musicVolumeInput = document.getElementById('music-volume');
+const musicStatusElement = document.getElementById('music-status');
 
 const homeStudentNameElement = document.getElementById('home-student-name');
 const homeStudentSectionElement = document.getElementById('home-student-section');
@@ -103,9 +108,16 @@ const pageTitles = {
   achievements: 'Achievements',
   messages: 'Messages',
   quest: 'Quest',
+  settings: 'Settings',
 };
 const LAST_PAGE_STORAGE_KEY = 'cote.student.lastPage';
 const ANNOUNCEMENT_LAST_SEEN_PREFIX = 'cote.student.announcements.lastSeen';
+const THEME_STORAGE_KEY = 'cote.student.theme';
+const MUSIC_ENABLED_STORAGE_KEY = 'cote.student.music.enabled';
+const MUSIC_VOLUME_STORAGE_KEY = 'cote.student.music.volume';
+let fallbackAudioContext = null;
+let fallbackMusicNodes = null;
+let isMusicPlaying = false;
 
 function isKnownPage(pageName) {
   return pages.some((page) => page.dataset.page === pageName);
@@ -119,6 +131,155 @@ function getSavedPage(fallback = 'home') {
 function saveCurrentPage(pageName) {
   if (!isKnownPage(pageName)) return;
   localStorage.setItem(LAST_PAGE_STORAGE_KEY, pageName);
+}
+
+function getPreferredTheme() {
+  const savedTheme = String(localStorage.getItem(THEME_STORAGE_KEY) || 'dark').trim();
+  return savedTheme === 'light' ? 'light' : 'dark';
+}
+
+function applyTheme(theme = getPreferredTheme()) {
+  const resolvedTheme = theme === 'light' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = resolvedTheme;
+  document.documentElement.dataset.themePreference = theme;
+  themeColorMetaElement?.setAttribute('content', resolvedTheme === 'light' ? '#f4f8fc' : '#061321');
+
+  document.querySelectorAll('input[name="student-theme"]').forEach((input) => {
+    input.checked = input.value === theme;
+  });
+}
+
+function saveThemePreference(theme) {
+  const normalizedTheme = theme === 'light' ? 'light' : 'dark';
+  localStorage.setItem(THEME_STORAGE_KEY, normalizedTheme);
+  applyTheme(normalizedTheme);
+}
+
+function getMusicVolume() {
+  const savedVolume = Number(localStorage.getItem(MUSIC_VOLUME_STORAGE_KEY) || musicVolumeInput?.value || 0.35);
+  return Number.isFinite(savedVolume) ? Math.min(1, Math.max(0, savedVolume)) : 0.35;
+}
+
+function setMusicStatus(message = '') {
+  if (musicStatusElement) {
+    musicStatusElement.textContent = message;
+  }
+}
+
+function updateMusicButton() {
+  if (musicToggleButton) {
+    musicToggleButton.textContent = isMusicPlaying ? 'Pause Music' : 'Play Music';
+  }
+}
+
+function stopFallbackMusic() {
+  if (!fallbackMusicNodes) return;
+
+  fallbackMusicNodes.oscillators.forEach((oscillator) => {
+    try {
+      oscillator.stop();
+    } catch (error) {
+      console.warn('Fallback music oscillator already stopped:', error);
+    }
+  });
+  fallbackMusicNodes = null;
+}
+
+async function startFallbackMusic() {
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContext) {
+    setMusicStatus('Music is not supported in this browser.');
+    return false;
+  }
+
+  fallbackAudioContext = fallbackAudioContext || new AudioContext();
+  await fallbackAudioContext.resume();
+
+  stopFallbackMusic();
+
+  const gain = fallbackAudioContext.createGain();
+  gain.gain.value = getMusicVolume() * 0.12;
+  gain.connect(fallbackAudioContext.destination);
+
+  const oscillators = [146.83, 220, 293.66].map((frequency, index) => {
+    const oscillator = fallbackAudioContext.createOscillator();
+    oscillator.type = index === 1 ? 'sine' : 'triangle';
+    oscillator.frequency.value = frequency;
+    oscillator.connect(gain);
+    oscillator.start();
+    return oscillator;
+  });
+
+  fallbackMusicNodes = { gain, oscillators };
+  setMusicStatus('Temporary music is playing. Replace audio/background-music.mp3 anytime.');
+  return true;
+}
+
+function applyMusicVolume() {
+  const volume = getMusicVolume();
+  if (musicVolumeInput) {
+    musicVolumeInput.value = String(volume);
+  }
+  if (backgroundMusicElement) {
+    backgroundMusicElement.volume = volume;
+  }
+  if (fallbackMusicNodes?.gain) {
+    fallbackMusicNodes.gain.gain.value = volume * 0.12;
+  }
+}
+
+async function startMusic() {
+  applyMusicVolume();
+
+  if (backgroundMusicElement) {
+    try {
+      await backgroundMusicElement.play();
+      stopFallbackMusic();
+      isMusicPlaying = true;
+      localStorage.setItem(MUSIC_ENABLED_STORAGE_KEY, 'true');
+      setMusicStatus('Background music is playing.');
+      updateMusicButton();
+      return;
+    } catch (error) {
+      console.warn('Background music file unavailable, using fallback:', error);
+    }
+  }
+
+  const fallbackStarted = await startFallbackMusic();
+  isMusicPlaying = fallbackStarted;
+  localStorage.setItem(MUSIC_ENABLED_STORAGE_KEY, fallbackStarted ? 'true' : 'false');
+  updateMusicButton();
+}
+
+function pauseMusic() {
+  backgroundMusicElement?.pause();
+  stopFallbackMusic();
+  isMusicPlaying = false;
+  localStorage.setItem(MUSIC_ENABLED_STORAGE_KEY, 'false');
+  setMusicStatus('Background music is paused.');
+  updateMusicButton();
+}
+
+function initMusicControls() {
+  applyMusicVolume();
+  updateMusicButton();
+
+  musicVolumeInput?.addEventListener('input', () => {
+    localStorage.setItem(MUSIC_VOLUME_STORAGE_KEY, String(getMusicVolume()));
+    applyMusicVolume();
+  });
+
+  musicToggleButton?.addEventListener('click', () => {
+    if (isMusicPlaying) {
+      pauseMusic();
+    } else {
+      startMusic();
+    }
+  });
+
+  if (localStorage.getItem(MUSIC_ENABLED_STORAGE_KEY) === 'true') {
+    setMusicStatus('Music is ready. Press Play Music to start.');
+  }
 }
 
 function showLoadingOverlay(text = 'Initializing C.O.T.E System...') {
@@ -2600,6 +2761,17 @@ messagesButton?.addEventListener('click', () => {
   showPage('messages');
   runPageLoaders('messages');
 });
+
+document.querySelectorAll('input[name="student-theme"]').forEach((input) => {
+  input.addEventListener('change', () => {
+    if (input.checked) {
+      saveThemePreference(input.value);
+    }
+  });
+});
+
+applyTheme(getPreferredTheme());
+initMusicControls();
 
 onAuthStateChanged(auth, async () => {
   const user = auth.currentUser;
