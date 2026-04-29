@@ -1,0 +1,605 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =========================
+    // BASIC FUNCTIONS
+    // =========================
+    function isLoggedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    function userExists() {
+      return isLoggedIn() && exists(userDoc());
+    }
+
+    function userRole() {
+      return userExists()
+        ? get(userDoc()).data.role
+        : null;
+    }
+
+    function userStatus() {
+      return userExists()
+        ? get(userDoc()).data.status
+        : null;
+    }
+
+    function isStudent() {
+      return isLoggedIn() && userRole() == "student";
+    }
+
+    function isTeacher() {
+      return isLoggedIn() && userRole() == "teacher";
+    }
+
+    function isAdmin() {
+      return isLoggedIn() && userRole() == "superAdmin";
+    }
+
+    function isActiveTeacher() {
+      return isTeacher() && userStatus() == "active";
+    }
+
+    function isActiveAdmin() {
+      return isAdmin() && userStatus() == "active";
+    }
+
+    function isStaff() {
+      return isActiveTeacher() || isActiveAdmin();
+    }
+
+    function onlyChangedKeysAre(keys) {
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly(keys);
+    }
+
+    // =========================
+    // USERS
+    // =========================
+    match /users/{userId} {
+      allow read: if isLoggedIn() && request.auth.uid == userId;
+
+      allow create: if isLoggedIn()
+        && request.auth.uid == userId
+        && request.resource.data.role in ["student", "teacher"]
+        && request.resource.data.status in ["active", "pending"];
+
+      allow update, delete: if isActiveAdmin();
+    }
+
+    // =========================
+    // STUDENTS
+    // =========================
+    match /students/{studentId} {
+      allow read: if isLoggedIn();
+
+      allow create: if isLoggedIn()
+        && request.auth.uid == studentId;
+
+      allow update: if isActiveAdmin()
+        || (
+          isLoggedIn()
+          && request.auth.uid == studentId
+          && onlyChangedKeysAre([
+            "originalProfileImageUrl",
+            "profileImageUrl",
+            "profilePictureUrl",
+            "updatedAt"
+          ])
+        )
+        || (
+          isLoggedIn()
+          && request.auth.uid == studentId
+          && onlyChangedKeysAre(['points', 'updatedAt'])
+          && request.resource.data.points is number
+          && request.resource.data.points >= resource.data.points
+          && request.resource.data.updatedAt is timestamp
+        )
+        || (
+          isActiveTeacher()
+          && onlyChangedKeysAre(["points"])
+          && request.resource.data.points is number
+        );
+
+      allow delete: if isActiveAdmin();
+    }
+
+    // =========================
+    // TEACHERS
+    // =========================
+    match /teachers/{teacherId} {
+      allow read: if isLoggedIn();
+
+      allow create: if isLoggedIn()
+        && request.auth.uid == teacherId;
+
+      allow update, delete: if isActiveAdmin();
+    }
+
+    // =========================
+    // POINT LOGS
+    // =========================
+    match /pointLogs/{logId} {
+      allow read: if isLoggedIn()
+        && (isActiveAdmin() || isActiveTeacher() || resource.data.studentId == request.auth.uid);
+
+      allow create, update: if isActiveAdmin()
+        || (
+          isActiveTeacher()
+          && request.resource.data.studentId is string
+          && request.resource.data.teacherId == request.auth.uid
+          && (
+            (
+              request.resource.data.source in ["academic", "merit", "demerit"]
+              && request.resource.data.awardedPoints is number
+              && request.resource.data.pointDifference is number
+            )
+            || (
+              request.resource.data.type in ["merit", "demerit"]
+              && request.resource.data.points is number
+            )
+          )
+        )
+        || (
+          isStudent()
+          && request.resource.data.source == 'quest'
+          && request.resource.data.studentId == request.auth.uid
+          && request.resource.data.studentName is string
+          && request.resource.data.questId is string
+          && request.resource.data.questTitle is string
+          && request.resource.data.awardedPoints is number
+          && request.resource.data.pointDifference is number
+          && request.resource.data.previousAwardedPoints is number
+          && request.resource.data.reason is string
+          && request.resource.data.teacherId is string
+          && request.resource.data.teacherName is string
+          && request.resource.data.sectionId is string
+          && request.resource.data.sectionName is string
+          && request.resource.data.createdAt is timestamp
+          && request.resource.data.updatedAt is timestamp
+          && request.resource.data.keys().hasOnly([
+            'studentId',
+            'studentName',
+            'questId',
+            'questTitle',
+            'source',
+            'awardedPoints',
+            'pointDifference',
+            'previousAwardedPoints',
+            'reason',
+            'teacherId',
+            'teacherName',
+            'sectionId',
+            'sectionName',
+            'createdAt',
+            'updatedAt'
+          ])
+        );
+
+      allow create, update: if isLoggedIn()
+        && request.resource.data.source == "achievement"
+        && request.resource.data.studentId is string
+        && request.resource.data.achievementId is string
+        && request.resource.data.awardedPoints is number
+        && request.resource.data.pointDifference is number
+        && request.resource.data.teacherName == "System";
+
+      allow delete: if isActiveAdmin();
+    }
+
+    // =========================
+    // SCORES
+    // =========================
+    match /scores/{scoreId} {
+      allow read: if isLoggedIn();
+
+      allow create, update: if isActiveAdmin()
+        || (
+          isActiveTeacher()
+          && request.resource.data.teacherId == request.auth.uid
+          && request.resource.data.classId is string
+          && request.resource.data.studentId is string
+          && request.resource.data.activityId is string
+          && request.resource.data.score is number
+          && request.resource.data.maxScore is number
+          && request.resource.data.score >= 0
+          && request.resource.data.maxScore > 0
+          && request.resource.data.score <= request.resource.data.maxScore
+        );
+
+      allow delete: if isActiveAdmin()
+        || (isActiveTeacher() && resource.data.teacherId == request.auth.uid);
+    }
+
+    // =========================
+    // ACTIVITIES
+    // =========================
+    match /activities/{activityId} {
+      allow read: if isLoggedIn();
+
+      allow create: if isActiveAdmin()
+        || (isActiveTeacher() && request.resource.data.teacherId == request.auth.uid);
+
+      allow update, delete: if isActiveAdmin()
+        || (isActiveTeacher() && resource.data.teacherId == request.auth.uid);
+    }
+
+    // =========================
+    // CLASSES
+    // =========================
+    match /classes/{classId} {
+      allow read: if isLoggedIn();
+
+      allow create: if isActiveAdmin()
+        || (isActiveTeacher() && request.resource.data.teacherId == request.auth.uid);
+
+      allow update: if isActiveAdmin()
+        || (isActiveTeacher() && resource.data.teacherId == request.auth.uid);
+
+      allow delete: if isActiveAdmin();
+    }
+
+    // =========================
+    // ENROLLMENTS
+    // =========================
+    match /classEnrollments/{id} {
+      allow read: if isLoggedIn();
+
+      allow create: if isStudent()
+        && request.resource.data.studentId == request.auth.uid;
+
+      allow update: if isActiveAdmin() || isActiveTeacher();
+
+      allow delete: if isActiveAdmin();
+    }
+
+    // =========================
+    // RESOURCES
+    // =========================
+    match /resources/{id} {
+      allow read: if isLoggedIn();
+
+      allow create: if isStaff()
+        && request.resource.data.teacherId == request.auth.uid;
+
+      allow update, delete: if isActiveAdmin()
+        || (isActiveTeacher() && resource.data.teacherId == request.auth.uid);
+    }
+
+    // =========================
+    // TEACHER ANNOUNCEMENTS
+    // =========================
+    match /teacherAnnouncements/{id} {
+      allow read: if isLoggedIn();
+
+      allow create: if isActiveTeacher()
+        && request.resource.data.teacherId == request.auth.uid
+        && request.resource.data.teacherName is string
+        && request.resource.data.title is string
+        && request.resource.data.message is string
+        && request.resource.data.target in ["all", "class"]
+        && request.resource.data.status == "active";
+
+      allow update: if isActiveAdmin()
+        || (
+          isActiveTeacher()
+          && resource.data.teacherId == request.auth.uid
+          && request.resource.data.teacherId == resource.data.teacherId
+        );
+
+      allow delete: if isActiveAdmin()
+        || (
+          isActiveTeacher()
+          && resource.data.teacherId == request.auth.uid
+        );
+    }
+
+    // =========================
+    // ACHIEVEMENTS
+    // =========================
+    match /achievements/{id} {
+      allow read: if isLoggedIn();
+      allow create, update, delete: if isActiveAdmin();
+    }
+
+    // =========================
+    // STUDENT ACHIEVEMENTS
+    // =========================
+    match /studentAchievements/{id} {
+      allow read: if isLoggedIn();
+
+      allow create: if isActiveAdmin()
+        || isActiveTeacher()
+        || (isStudent() && request.resource.data.studentId == request.auth.uid);
+
+      allow update: if isActiveAdmin()
+        || (isLoggedIn() && resource.data.studentId == request.auth.uid);
+
+      allow delete: if isActiveAdmin();
+    }
+
+    // =========================
+    // BADGES
+    // =========================
+    match /badges/{id} {
+      allow read: if isLoggedIn();
+      allow create, update, delete: if isActiveAdmin();
+    }
+
+    match /studentBadges/{id} {
+      allow read: if isLoggedIn()
+        && (isActiveAdmin() || isActiveTeacher() || resource.data.studentId == request.auth.uid);
+
+      allow create: if isActiveAdmin()
+        || isActiveTeacher()
+        || (
+          isStudent()
+          && request.resource.data.type == 'quest'
+          && request.resource.data.studentId == request.auth.uid
+          && request.resource.data.badgeId is string
+          && request.resource.data.studentName is string
+          && request.resource.data.name is string
+          && request.resource.data.description is string
+          && request.resource.data.status == 'active'
+          && request.resource.data.questId is string
+          && request.resource.data.awardedBy is string
+          && request.resource.data.awardedAt is timestamp
+          && request.resource.data.keys().hasOnly([
+            'badgeId',
+            'studentId',
+            'studentName',
+            'name',
+            'description',
+            'type',
+            'status',
+            'questId',
+            'awardedBy',
+            'awardedAt'
+          ])
+        );
+
+      allow update: if isActiveAdmin()
+        || (
+          isStudent()
+          && resource.data.studentId == request.auth.uid
+          && request.resource.data.type == 'quest'
+          && request.resource.data.studentId == request.auth.uid
+          && request.resource.data.badgeId == resource.data.badgeId
+          && request.resource.data.questId == resource.data.questId
+          && request.resource.data.awardedBy == resource.data.awardedBy
+          && request.resource.data.status == 'active'
+          && request.resource.data.awardedAt is timestamp
+          && request.resource.data.keys().hasOnly([
+            'badgeId',
+            'studentId',
+            'studentName',
+            'name',
+            'description',
+            'type',
+            'status',
+            'questId',
+            'awardedBy',
+            'awardedAt'
+          ])
+        );
+
+      allow delete: if isActiveAdmin();
+    }
+
+    // =========================
+    // NOTIFICATIONS
+    // =========================
+    match /notifications/{id} {
+      allow read: if isLoggedIn()
+        && resource.data.recipientId == request.auth.uid;
+
+      allow create: if isLoggedIn();
+
+      allow update: if isLoggedIn()
+        && resource.data.recipientId == request.auth.uid
+        && request.resource.data.recipientId == resource.data.recipientId;
+
+      allow delete: if isActiveAdmin();
+    }
+
+    // =========================
+    // SPECIAL BADGES
+    // =========================
+    match /specialBadges/{id} {
+      allow read: if isLoggedIn();
+
+      allow create: if isActiveAdmin()
+        && request.resource.data.name is string
+        && request.resource.data.imageUrl is string
+        && request.resource.data.type == "special"
+        && request.resource.data.status in ["active", "inactive"];
+
+      allow update, delete: if isActiveAdmin();
+    }
+
+    // =========================
+    // STUDENT SPECIAL BADGES
+    // =========================
+    match /studentSpecialBadges/{id} {
+      allow read: if isLoggedIn()
+        && (
+          isActiveAdmin()
+          || resource.data.studentId == request.auth.uid
+        );
+
+      allow create: if isActiveAdmin()
+        || isActiveTeacher()
+        || (
+          isStudent()
+          && request.resource.data.type == 'quest'
+          && request.resource.data.studentId == request.auth.uid
+          && request.resource.data.badgeId is string
+          && request.resource.data.studentName is string
+          && request.resource.data.name is string
+          && request.resource.data.description is string
+          && request.resource.data.status == 'active'
+          && request.resource.data.questId is string
+          && request.resource.data.awardedBy is string
+          && request.resource.data.awardedAt is timestamp
+          && request.resource.data.keys().hasOnly([
+            'badgeId',
+            'studentId',
+            'studentName',
+            'name',
+            'description',
+            'type',
+            'status',
+            'questId',
+            'awardedBy',
+            'awardedAt'
+          ])
+        );
+
+      allow update: if isActiveAdmin()
+        || (
+          isStudent()
+          && resource.data.studentId == request.auth.uid
+          && request.resource.data.type == 'quest'
+          && request.resource.data.studentId == request.auth.uid
+          && request.resource.data.badgeId == resource.data.badgeId
+          && request.resource.data.questId == resource.data.questId
+          && request.resource.data.awardedBy == resource.data.awardedBy
+          && request.resource.data.status == 'active'
+          && request.resource.data.awardedAt is timestamp
+          && request.resource.data.keys().hasOnly([
+            'badgeId',
+            'studentId',
+            'studentName',
+            'name',
+            'description',
+            'type',
+            'status',
+            'questId',
+            'awardedBy',
+            'awardedAt'
+          ])
+        );
+
+      allow delete: if isActiveAdmin();
+    }
+
+    // =========================
+    // QUESTS
+    // =========================
+    match /quests/{questId} {
+      allow read: if isLoggedIn();
+      allow create: if isActiveAdmin() || isActiveTeacher();
+      allow update, delete: if isActiveAdmin()
+        || (isActiveTeacher() && resource.data.createdBy == request.auth.uid);
+    }
+
+    match /studentQuests/{id} {
+      allow read: if isLoggedIn()
+        && (isActiveAdmin() || isActiveTeacher() || resource.data.studentId == request.auth.uid);
+
+      allow create: if isActiveAdmin() || isActiveTeacher();
+
+      allow update: if isActiveAdmin()
+        || (
+          isActiveTeacher()
+          && resource.data.status == 'assigned'
+          && request.resource.data.status == 'completed'
+          && request.resource.data.studentId == resource.data.studentId
+          && request.resource.data.questId == resource.data.questId
+          && request.resource.data.completedBy == request.auth.uid
+          && request.resource.data.completedByRole == 'teacher'
+          && request.resource.data.completedAt is timestamp
+          && request.resource.data.pointsAwarded is number
+          && request.resource.data.keys().hasOnly([
+            'questId',
+            'studentId',
+            'status',
+            'assignedAt',
+            'completedAt',
+            'pointsAwarded',
+            'completedBy',
+            'completedByRole'
+          ])
+        )
+        || (
+          isStudent()
+          && resource.data.studentId == request.auth.uid
+          && resource.data.status == 'assigned'
+          && request.resource.data.status == 'completed'
+          && request.resource.data.studentId == resource.data.studentId
+          && request.resource.data.questId == resource.data.questId
+          && request.resource.data.completedBy == request.auth.uid
+          && request.resource.data.completedByRole == 'student'
+          && request.resource.data.completedAt is timestamp
+          && request.resource.data.pointsAwarded is number
+          && request.resource.data.keys().hasOnly([
+            'questId',
+            'studentId',
+            'status',
+            'assignedAt',
+            'completedAt',
+            'pointsAwarded',
+            'completedBy',
+            'completedByRole'
+          ])
+        );
+
+      allow delete: if isActiveAdmin();
+    }
+
+    // =========================
+    // ATTENDANCE
+    // =========================
+    match /attendanceLogs/{id} {
+      allow read: if isLoggedIn();
+
+      allow create: if isLoggedIn()
+        && request.resource.data.studentId == request.auth.uid;
+
+      allow update, delete: if isActiveAdmin();
+    }
+
+    // =========================
+    // PUBLIC DATA
+    // =========================
+    match /schoolYears/{id} {
+      allow read: if true;
+      allow write: if isActiveAdmin();
+    }
+
+    match /terms/{id} {
+      allow read: if isLoggedIn();
+      allow write: if isActiveAdmin();
+    }
+
+    match /subjects/{id} {
+      allow read: if isLoggedIn();
+      allow write: if isActiveAdmin();
+    }
+
+    match /sections/{id} {
+      allow read: if isLoggedIn();
+
+      allow create, delete: if isActiveAdmin();
+
+      allow update: if isActiveAdmin()
+        || (
+          isActiveTeacher()
+          && onlyChangedKeysAre(["totalPoints"])
+          && request.resource.data.totalPoints is number
+          && request.resource.data.totalPoints >= resource.data.totalPoints
+        )
+        || (
+          isLoggedIn()
+          && onlyChangedKeysAre(['totalPoints', 'updatedAt'])
+          && request.resource.data.totalPoints is number
+          && request.resource.data.totalPoints >= resource.data.totalPoints
+          && request.resource.data.updatedAt is timestamp
+        );
+    }
+  }
+}

@@ -23,7 +23,7 @@ import {
   claimAchievement,
   claimAllAchievements
 } from './achievements.js';
-import { getQuestsForUser, completeQuest, completeQuestByQuestId, isQuestPastDeadline } from './quests.js';
+import { getQuestsForUser, completeQuestByQuestId, isQuestPastDeadline } from './quests.js';
 
 const profileDataElement = document.getElementById('profileData');
 const profileFullNameElement = document.getElementById('profile-full-name');
@@ -2194,7 +2194,6 @@ function renderStudentQuests(quests = []) {
       const questStatus = String(quest.status || 'active').trim();
       const isCompleted = status === 'completed';
       const isExpired = isQuestPastDeadline(quest);
-      const canComplete = !isCompleted && questStatus === 'active' && !isExpired;
       const displayStatus = isCompleted ? 'completed' : isExpired ? 'expired' : questStatus;
 
       return `
@@ -2207,17 +2206,13 @@ function renderStudentQuests(quests = []) {
           </div>
           <p>${escapeHtml(quest.description || 'No description')}</p>
           <div class="quest-meta-grid">
+            <p><strong>Teacher:</strong> ${escapeHtml(quest.createdByName || 'Teacher')}</p>
             <p><strong>Reward:</strong> ${Number(quest.points || quest.pointsAwarded || 0)} points${
               quest.badgeId ? ' + badge' : ''
             }</p>
             <p><strong>Deadline:</strong> ${escapeHtml(formatQuestDeadline(quest.deadline))}</p>
             <p><strong>Completed:</strong> ${escapeHtml(formatDateTime(quest.completedAt) || 'Not yet')}</p>
           </div>
-          <button type="button" data-student-quest-complete="${escapeHtml(quest.studentQuestId || '')}" ${
-            canComplete ? '' : 'disabled'
-          }>
-            ${isCompleted ? 'Completed' : isExpired ? 'Expired' : 'Complete Quest'}
-          </button>
         </article>
       `;
     })
@@ -2230,42 +2225,20 @@ async function loadStudentQuests() {
   studentQuestsListElement.innerHTML = '<p class="empty-cell">Loading quests...</p>';
   try {
     currentStudentQuests = await getQuestsForUser(currentStudentUser.uid);
-    const visibleQuests = currentStudentQuests.filter((quest) => String(quest.status || 'active') === 'active');
+    const visibleQuests = await Promise.all(
+      currentStudentQuests
+        .filter((quest) => String(quest.status || 'active') === 'active')
+        .map(async (quest) => ({
+          ...quest,
+          createdByName: await resolveTeacherName({ teacherId: quest.createdBy, teacherName: quest.createdByName })
+        }))
+    );
     renderStudentQuests(visibleQuests);
   } catch (error) {
     console.error('Failed to load quests:', error);
     currentStudentQuests = [];
     studentQuestsListElement.innerHTML = '<p class="empty-cell">Unable to load quests right now.</p>';
     setStudentQuestMessage('Unable to load quests. Please try again.', 'error');
-  }
-}
-
-async function completeStudentQuest(studentQuestId) {
-  const id = String(studentQuestId || '').trim();
-  if (!id) return;
-
-  setStudentQuestMessage('Completing quest...');
-  try {
-    const result = await completeQuest(id);
-    if (result.completed) {
-      setStudentQuestMessage(`Quest completed. Awarded ${result.pointsAwarded} point(s).`, 'success');
-      showPointsPopup(result.pointsAwarded);
-    } else {
-      setStudentQuestMessage('This quest was already completed.', 'error');
-    }
-    await loadStudentQuests();
-
-    const studentSnap = await getDoc(doc(db, 'students', currentStudentUser.uid));
-    if (studentSnap.exists()) {
-      currentStudentProfile = studentSnap.data();
-      setStudentData(currentStudentProfile, currentStudentUser.email);
-      await loadStudentSectionStanding(currentStudentProfile);
-    }
-    loadPointLogs(currentStudentUser.uid);
-    loadAchievementsDashboard(currentStudentUser.uid);
-  } catch (error) {
-    console.error('Failed to complete quest:', error);
-    setStudentQuestMessage(error?.message || 'Unable to complete quest.', 'error');
   }
 }
 
@@ -2491,13 +2464,6 @@ document.addEventListener('keydown', (event) => {
 document.addEventListener('click', async (event) => {
   const target = event.target;
   if (!(target instanceof Element)) return;
-
-  const questButton = target.closest('button[data-student-quest-complete]');
-  if (questButton) {
-    questButton.disabled = true;
-    await completeStudentQuest(questButton.dataset.studentQuestComplete);
-    return;
-  }
 
   const claimButton = target.closest('.claim-btn');
   if (claimButton) {
