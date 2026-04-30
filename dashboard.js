@@ -1769,78 +1769,44 @@ async function loadPointLogs(studentId) {
   listElement.innerHTML = '<li>Loading point logs...</li>';
 
   try {
-    let logsSnapshot;
+    const logsQuery = query(
+      collection(db, 'pointLogs'),
+      where('studentId', '==', studentId)
+    );
 
-    try {
-      const logsQuery = query(
-        collection(db, 'pointLogs'),
-        where('studentId', '==', studentId),
-        orderBy('createdAt', 'desc')
-      );
-      logsSnapshot = await getDocs(logsQuery);
-    } catch (error) {
-      console.error('Failed to query point logs with index:', error);
-      const message = String(error?.message || error).toLowerCase();
-
-      if (message.includes('index')) {
-        console.info('Create Firestore index for pointLogs query');
-      }
-
-      const fallbackSnapshot = await getDocs(collection(db, 'pointLogs'));
-      const filteredDocs = fallbackSnapshot.docs
-        .filter((logDoc) => logDoc.data().studentId === studentId)
-        .sort((a, b) => {
-          const aTime = a.data().createdAt?.toMillis?.() || 0;
-          const bTime = b.data().createdAt?.toMillis?.() || 0;
-          return bTime - aTime;
-        });
-
-      logsSnapshot = { empty: filteredDocs.length === 0, docs: filteredDocs };
-    }
+    const logsSnapshot = await getDocs(logsQuery);
 
     if (logsSnapshot.empty) {
       listElement.innerHTML = '<li>No point logs available yet.</li>';
       return;
     }
 
+    const sortedDocs = logsSnapshot.docs.sort((a, b) => {
+      const aTime = a.data().createdAt?.toMillis?.() || 0;
+      const bTime = b.data().createdAt?.toMillis?.() || 0;
+      return bTime - aTime;
+    });
+
     const renderedLogs = await Promise.all(
-      logsSnapshot.docs.map(async (logDoc) => {
+      sortedDocs.map(async (logDoc) => {
         const log = logDoc.data() || {};
         const source = String(log.source || '').trim().toLowerCase();
         const logType = String(log.type || '').trim().toLowerCase();
 
         if (source === 'academic') {
-          const pointDifference = normalizeNumericValue(log.pointDifference, 0);
-          if (pointDifference === 0) {
-            return '';
-          }
-
           const displayPoints = normalizeNumericValue(log.pointDifference ?? log.awardedPoints, 0);
           const sign = displayPoints > 0 ? '+' : '';
-          const title = String(log.activityTitle || log.title || 'Academic score record').trim() || 'Academic score record';
-          const teacherName = await resolveTeacherName(log);
-          const details = [
-            String(log.componentType || '').trim(),
-            Number.isFinite(Number(log.score)) && Number.isFinite(Number(log.maxScore))
-              ? `${normalizeNumericValue(log.score)}/${normalizeNumericValue(log.maxScore)}`
-              : '',
-            formatPercentage(log.percentage) ? `${formatPercentage(log.percentage)}%` : ''
-          ]
-            .filter(Boolean)
-            .join(' • ');
+          const title = String(log.activityTitle || log.title || 'Academic score record').trim();
 
-          return `<li>${sign}${escapeHtml(String(displayPoints))} Academic — ${escapeHtml(title)}${
-            details ? `<br>${escapeHtml(details)}` : ''
-          }<br><strong>Teacher:</strong> ${escapeHtml(teacherName)}</li>`;
+          return `<li>${sign}${escapeHtml(String(displayPoints))} Academic — ${escapeHtml(title)}</li>`;
         }
 
         if (source === 'achievement') {
           const achievementPoints = normalizeNumericValue(log.pointDifference ?? log.awardedPoints, 0);
           const sign = achievementPoints > 0 ? '+' : '';
-          const achievementLabel = String(log.achievementTitle || log.reason || 'Achievement reward').trim() || 'Achievement reward';
-          return `<li>${sign}${escapeHtml(String(achievementPoints))} Achievement — ${escapeHtml(
-            achievementLabel
-          )}<br>System</li>`;
+          const achievementLabel = String(log.achievementTitle || log.reason || 'Achievement reward').trim();
+
+          return `<li>${sign}${escapeHtml(String(achievementPoints))} Achievement — ${escapeHtml(achievementLabel)}<br>System</li>`;
         }
 
         if (source === 'merit' || source === 'demerit' || logType === 'merit' || logType === 'demerit') {
@@ -1848,32 +1814,26 @@ async function loadPointLogs(studentId) {
           const isDemerit = source === 'demerit' || logType === 'demerit';
           const sign = isDemerit ? '-' : '+';
           const label = isDemerit ? 'Demerit' : 'Merit';
-          const reason = String(log.reason || 'No reason provided').trim() || 'No reason provided';
-          const teacherName = await resolveTeacherName(log);
+          const reason = String(log.reason || 'No reason provided').trim();
 
-          return `<li>${sign}${points} ${label} — ${escapeHtml(reason)}<br><strong>Teacher:</strong> ${escapeHtml(
-            teacherName
-          )}</li>`;
+          return `<li>${sign}${points} ${label} — ${escapeHtml(reason)}</li>`;
         }
 
         const displayPoints = normalizeNumericValue(log.pointDifference ?? log.awardedPoints ?? log.points, 0);
         const sign = displayPoints > 0 ? '+' : '';
-        const reason = String(log.reason || 'Point log update').trim() || 'Point log update';
-        const teacherName = await resolveTeacherName(log);
-        return `<li>${sign}${escapeHtml(String(displayPoints))} Points — ${escapeHtml(reason)}<br><strong>Teacher:</strong> ${escapeHtml(
-          teacherName
-        )}</li>`;
+        const reason = String(log.reason || 'Point log update').trim();
+
+        return `<li>${sign}${escapeHtml(String(displayPoints))} Points — ${escapeHtml(reason)}</li>`;
       })
     );
 
     const filteredLogs = renderedLogs.filter(Boolean);
-    listElement.innerHTML = filteredLogs.length ? filteredLogs.join('') : '<li>No point logs available yet.</li>';
+    listElement.innerHTML = filteredLogs.length
+      ? filteredLogs.join('')
+      : '<li>No point logs available yet.</li>';
+
   } catch (error) {
     console.error('Failed to load point logs:', error);
-    const message = String(error?.message || error).toLowerCase();
-    if (message.includes('index')) {
-      console.info('Create Firestore index for pointLogs query');
-    }
     listElement.innerHTML = '<li>Unable to load logs. Please try again later.</li>';
   }
 }
