@@ -97,12 +97,28 @@ export async function getMessagingIdentity(uid = auth.currentUser?.uid) {
 export async function getMessageContacts(identity) {
   if (!identity?.uid || !identity?.role) return [];
 
-  if (identity.role === 'student') {
-    const snapshot = await getDocs(query(collection(db, 'teachers'), where('status', '==', 'active')));
-    return snapshot.docs
-      .map((item) => ({ id: item.id, role: 'teacher', ...item.data(), displayName: makeTeacherName(item.data()) }))
-      .sort((a, b) => a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' }));
-  }
+if (identity.role === 'student') {
+  const snapshot = await getDocs(
+    query(collection(db, 'teachers'), where('status', '==', 'active'))
+  );
+
+  return snapshot.docs
+    .map((item) => {
+      const data = item.data() || {};
+
+      return {
+        id: item.id,
+        ...data,
+        role: 'teacher',
+        displayName: makeTeacherName(data)
+      };
+    })
+    .filter((item) => item.role === 'teacher')
+    .sort((a, b) =>
+      a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' })
+    );
+}
+  
 
   if (identity.role === 'teacher') {
     const [students, teachers] = await Promise.all([getApprovedTeacherStudents(identity.uid), getTeacherContacts(identity.uid)]);
@@ -118,13 +134,17 @@ async function getTeacherContacts(currentTeacherId) {
   const snapshot = await getDocs(query(collection(db, 'teachers'), where('status', '==', 'active')));
   return snapshot.docs
     .filter((item) => item.id !== currentTeacherId)
-    .map((item) => ({
-      id: item.id,
-      role: 'teacher',
-      filterKey: 'teachers',
-      ...item.data(),
-      displayName: makeTeacherName(item.data())
-    }))
+    .map((item) => {
+  const data = item.data() || {};
+
+  return {
+    id: item.id,
+    ...data,
+    role: 'teacher',
+    filterKey: 'teachers',
+    displayName: makeTeacherName(data)
+  };
+})
     .sort((a, b) => a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' }));
 }
 
