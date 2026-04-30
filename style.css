@@ -1696,6 +1696,82 @@ button:active {
   accent-color: var(--primary);
 }
 
+.quest-code-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.65rem;
+  margin-top: 0.8rem;
+  align-items: stretch;
+}
+
+.quest-code-entry button {
+  min-width: 130px;
+}
+
+.attendance-actions {
+  margin-top: 0.85rem;
+}
+
+.attendance-students-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.attendance-table-wrap {
+  margin-top: 0;
+}
+
+.attendance-table th,
+.attendance-table td {
+  text-align: center;
+  min-width: 76px;
+}
+
+.attendance-table .sticky-name-col {
+  text-align: left;
+}
+
+.attendance-table .sticky-name-col span,
+.attendance-table .sticky-name-col small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.attendance-table .sticky-name-col small {
+  margin-top: 0.18rem;
+  color: var(--text-soft);
+  font-size: 0.75rem;
+}
+
+.attendance-active-date {
+  color: var(--gold-soft) !important;
+  box-shadow: inset 0 -2px 0 var(--gold);
+}
+
+.attendance-status-select {
+  width: 58px;
+  min-width: 58px;
+  padding: 0.42rem 0.35rem;
+  border-radius: 8px;
+  text-align: center;
+  font-weight: 900;
+}
+
+.attendance-total {
+  font-weight: 900;
+  color: var(--gold-soft) !important;
+}
+
+.attendance-table-note {
+  margin: 0.7rem 0 0;
+  color: var(--text-soft);
+  font-size: 0.86rem;
+}
+
+.attendance-list-header {
+  margin-bottom: 0.2rem;
+}
+
 .sidebar-overlay {
   position: fixed;
   inset: 0;
@@ -1761,6 +1837,11 @@ button:active {
   font-size: 0.92rem;
 }
 
+.class-record-grid,
+.attendance-table {
+  min-width: 900px;
+}
+
 .student-table th,
 .student-table td {
   padding: 10px;
@@ -1786,6 +1867,30 @@ button:active {
 .student-table th:first-child,
 .student-table td:first-child {
   width: 46px;
+}
+
+.student-table .sticky-name-col {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  width: 190px;
+  min-width: 190px;
+  max-width: 220px;
+  background: rgba(5, 15, 30, 0.98);
+  box-shadow: 8px 0 14px rgba(0, 0, 0, 0.18);
+}
+
+.student-table thead .sticky-name-col {
+  z-index: 4;
+  background: rgba(9, 34, 56, 0.98);
+}
+
+:root[data-theme="light"] .student-table .sticky-name-col {
+  background: rgba(247, 251, 255, 0.98);
+}
+
+:root[data-theme="light"] .student-table thead .sticky-name-col {
+  background: rgba(229, 241, 250, 0.98);
 }
 
 .empty-cell {
@@ -2073,6 +2178,9 @@ button:active {
     grid-template-columns: 1fr;
   }
   .music-controls {
+    grid-template-columns: 1fr;
+  }
+  .quest-code-entry {
     grid-template-columns: 1fr;
   }
   .theme-choice {

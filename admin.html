@@ -66,6 +66,10 @@
             <span aria-hidden="true">📊</span>
             <span>Class Record</span>
           </button>
+          <button type="button" class="menu-btn" data-target="attendance">
+            <span aria-hidden="true">✓</span>
+            <span>Attendance</span>
+          </button>
           <button type="button" class="menu-btn" data-target="enrollment-requests">
             <span aria-hidden="true">📥</span>
             <span>Enrollment Requests</span>
@@ -608,6 +612,50 @@
                 </tr>
               </tbody>
             </table>
+          </div>
+        </article>
+      </section>
+
+      <section id="page-attendance" class="page" data-page="attendance" aria-label="Attendance">
+        <article class="app-card">
+          <h2>Attendance Record</h2>
+          <p>Choose a class, edit attendance by date, display a classroom QR, or scan each student's attendance QR.</p>
+
+          <div class="admin-toolbar">
+            <div class="field">
+              <label for="attendance-class-select">Class</label>
+              <select id="attendance-class-select">
+                <option value="">Select a class first</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="attendance-date">Date</label>
+              <input id="attendance-date" type="date" />
+            </div>
+            <div class="field admin-load-field">
+              <label for="load-attendance-button">Load Students</label>
+              <button id="load-attendance-button" type="button">Load Students</button>
+            </div>
+          </div>
+
+          <div class="admin-actions attendance-actions">
+            <button id="save-attendance-button" type="button">Save Attendance Date</button>
+            <button id="show-attendance-qr-button" type="button">Show Classroom QR</button>
+            <button id="scan-student-attendance-qr-button" type="button">Scan Student QR</button>
+          </div>
+
+          <p id="attendance-message" class="form-message" role="status" aria-live="polite"></p>
+        </article>
+
+        <article class="app-card">
+          <h3>Classroom Attendance QR</h3>
+          <div id="attendance-qr-panel" class="quest-qr-panel attendance-qr-panel" hidden></div>
+        </article>
+
+        <article class="app-card">
+          <h3>Attendance Table</h3>
+          <div id="attendance-students-list" class="attendance-students-list" aria-live="polite">
+            <p class="empty-cell">Select a class to load students.</p>
           </div>
         </article>
       </section>

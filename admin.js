@@ -113,6 +113,15 @@ const teacherCompleteQuestSelectElement = document.getElementById('teacher-compl
 const teacherQuestQrPanelElement = document.getElementById('teacher-quest-qr-panel');
 const teacherQuestStudentsListElement = document.getElementById('teacher-quest-students-list');
 const teacherCompleteSelectedQuestsButton = document.getElementById('teacher-complete-selected-quests-button');
+const attendanceClassSelectElement = document.getElementById('attendance-class-select');
+const attendanceDateElement = document.getElementById('attendance-date');
+const loadAttendanceButton = document.getElementById('load-attendance-button');
+const saveAttendanceButton = document.getElementById('save-attendance-button');
+const showAttendanceQrButton = document.getElementById('show-attendance-qr-button');
+const scanStudentAttendanceQrButton = document.getElementById('scan-student-attendance-qr-button');
+const attendanceMessageElement = document.getElementById('attendance-message');
+const attendanceQrPanelElement = document.getElementById('attendance-qr-panel');
+const attendanceStudentsListElement = document.getElementById('attendance-students-list');
 let overlaySequenceJob = 0;
 
 const TABLE_COLUMN_COUNT = 6;
@@ -126,6 +135,7 @@ const pageTitles = {
   messages: 'Messages',
   'my-classes': 'My Classes',
   'class-record': 'Class Record',
+  attendance: 'Attendance',
   'enrollment-requests': 'Enrollment Requests'
 };
 const LAST_PAGE_STORAGE_KEY = 'cote.teacher.lastPage';
@@ -214,6 +224,16 @@ let teacherQuests = [];
 let teacherQuestBadges = [];
 let editingQuestId = '';
 let currentQuestStudentRows = [];
+let currentAttendanceStudents = [];
+let currentAttendanceRecords = new Map();
+let currentAttendanceDates = [];
+
+const ATTENDANCE_STATUSES = [
+  { code: 'P', label: 'Present', value: 'present' },
+  { code: 'A', label: 'Absent', value: 'absent' },
+  { code: 'L', label: 'Late', value: 'late' },
+  { code: 'O', label: 'Others', value: 'others' }
+];
 
 function normalizePoints(points) {
   return typeof points === 'number' && Number.isFinite(points) ? points : 0;
@@ -618,6 +638,10 @@ function runPageLoaders(pageName) {
     loadTeacherQuests();
   }
 
+  if (pageName === 'attendance' && auth.currentUser?.uid) {
+    loadAttendancePage();
+  }
+
   if (pageName === 'messages' && auth.currentUser?.uid) {
     refreshConversations();
   }
@@ -630,6 +654,88 @@ function formatClassLabel(classItem) {
   const schoolYear = safeText(classItem.schoolYearName, '');
   const details = [section, term, schoolYear].filter(Boolean).join(' • ');
   return details ? `${subject} — ${details}` : subject;
+}
+
+function getLocalDateKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getAttendanceDate() {
+  const value = String(attendanceDateElement?.value || '').trim();
+  return value || getLocalDateKey();
+}
+
+function makeAttendanceLogId(classId, studentId, dateKey = getAttendanceDate()) {
+  return [dateKey, classId, studentId]
+    .map((part) => String(part || '').trim().replace(/[^A-Za-z0-9_-]/g, '_'))
+    .join('_');
+}
+
+function setAttendanceMessage(message, type = '') {
+  if (!attendanceMessageElement) return;
+  attendanceMessageElement.textContent = message || '';
+  attendanceMessageElement.classList.remove('success', 'error');
+  if (type) attendanceMessageElement.classList.add(type);
+}
+
+function buildClassAttendanceQrPayload(classId, dateKey = getAttendanceDate()) {
+  return `cote:attendance-class:${String(classId || '').trim()}:${dateKey}:${auth.currentUser?.uid || ''}`;
+}
+
+function normalizeAttendanceStatus(value, fallback = 'absent') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (['present', 'absent', 'late', 'others'].includes(normalized)) return normalized;
+  if (normalized === 'p') return 'present';
+  if (normalized === 'a') return 'absent';
+  if (normalized === 'l') return 'late';
+  if (normalized === 'o' || normalized === 'other') return 'others';
+  return fallback;
+}
+
+function getAttendanceRecord(studentId, dateKey) {
+  return currentAttendanceRecords.get(`${studentId}::${dateKey}`) || null;
+}
+
+function buildAttendanceStatusOptions(value) {
+  const normalized = normalizeAttendanceStatus(value);
+  return ATTENDANCE_STATUSES
+    .map((item) => `<option value="${item.value}" ${item.value === normalized ? 'selected' : ''}>${item.code}</option>`)
+    .join('');
+}
+
+function extractStudentIdFromAttendanceQr(rawValue = '') {
+  const value = String(rawValue || '').trim();
+  if (value.startsWith('cote:attendance-student:')) {
+    return value.replace('cote:attendance-student:', '').trim();
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    if (parsed?.type === 'student-attendance') {
+      return String(parsed.studentId || '').trim();
+    }
+  } catch (error) {
+    return '';
+  }
+
+  return '';
+}
+
+function populateAttendanceClassFilter(classes = []) {
+  if (!attendanceClassSelectElement) return;
+
+  const previousValue = attendanceClassSelectElement.value;
+  const options = classes
+    .map((classItem) => `<option value="${escapeHtml(classItem.id)}">${escapeHtml(formatClassLabel(classItem))}</option>`)
+    .join('');
+  attendanceClassSelectElement.innerHTML = `<option value="">Select a class first</option>${options}`;
+
+  if (previousValue && classes.some((classItem) => classItem.id === previousValue)) {
+    attendanceClassSelectElement.value = previousValue;
+  }
 }
 
 function populateTeacherClassSelectors(classes = []) {
@@ -1874,6 +1980,369 @@ async function deleteTeacherQuest(questId) {
   }
 }
 
+function getSelectedAttendanceClass() {
+  const classId = String(attendanceClassSelectElement?.value || '').trim();
+  return teacherClasses.find((classItem) => classItem.id === classId) || null;
+}
+
+function renderAttendanceStudents(students = []) {
+  if (!attendanceStudentsListElement) return;
+
+  if (!students.length) {
+    attendanceStudentsListElement.innerHTML = '<p class="empty-cell">No approved students found for this class.</p>';
+    return;
+  }
+
+  const selectedDate = getAttendanceDate();
+  const dates = currentAttendanceDates.includes(selectedDate)
+    ? currentAttendanceDates
+    : [...currentAttendanceDates, selectedDate].sort();
+  attendanceStudentsListElement.innerHTML = `
+    <div class="admin-table-wrap attendance-table-wrap" role="region" aria-label="Attendance table" tabindex="0">
+      <table class="student-table attendance-table">
+        <thead>
+          <tr>
+            <th scope="col" class="sticky-name-col">Student</th>
+            ${dates.map((dateKey) => `<th scope="col" class="${dateKey === selectedDate ? 'attendance-active-date' : ''}">${escapeHtml(dateKey)}</th>`).join('')}
+            <th scope="col">P</th>
+            <th scope="col">L</th>
+            <th scope="col">A</th>
+            <th scope="col">O</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${students
+            .map((student) => {
+              const totals = { present: 0, late: 0, absent: 0, others: 0 };
+              const cells = dates
+                .map((dateKey) => {
+                  const record = getAttendanceRecord(student.id, dateKey);
+                  const status = normalizeAttendanceStatus(record?.status, 'absent');
+                  totals[status] += 1;
+                  const isEditableDate = dateKey === selectedDate;
+                  return `
+                    <td>
+                      <select
+                        class="attendance-status-select"
+                        data-attendance-student-id="${escapeHtml(student.id)}"
+                        data-attendance-date="${escapeHtml(dateKey)}"
+                        ${isEditableDate ? '' : 'disabled'}
+                        aria-label="Attendance for ${escapeHtml(formatFullName(student))} on ${escapeHtml(dateKey)}"
+                      >
+                        ${buildAttendanceStatusOptions(status)}
+                      </select>
+                    </td>
+                  `;
+                })
+                .join('');
+
+              return `
+                <tr>
+                  <th scope="row" class="sticky-name-col">
+                    <span>${escapeHtml(formatFullName(student) || 'Unnamed Student')}</span>
+                    <small>${escapeHtml(safeText(student.sex, 'Unspecified'))}</small>
+                  </th>
+                  ${cells}
+                  <td class="attendance-total">${totals.present}</td>
+                  <td class="attendance-total">${totals.late}</td>
+                  <td class="attendance-total">${totals.absent}</td>
+                  <td class="attendance-total">${totals.others}</td>
+                </tr>
+              `;
+            })
+            .join('')}
+        </tbody>
+      </table>
+    </div>
+    <p class="attendance-table-note">Only the selected date column is editable. Totals update after saving or scanning.</p>
+  `;
+}
+
+function renderAttendanceRecords(records = []) {
+  currentAttendanceRecords = new Map();
+  currentAttendanceDates = [];
+  const dateSet = new Set();
+
+  records.forEach((record) => {
+    const studentId = safeText(record.studentId, '');
+    const dateKey = safeText(record.attendanceDate, '');
+    if (!studentId || !dateKey) return;
+    dateSet.add(dateKey);
+    currentAttendanceRecords.set(`${studentId}::${dateKey}`, record);
+  });
+
+  currentAttendanceDates = [...dateSet].sort();
+  renderAttendanceStudents(currentAttendanceStudents);
+}
+
+async function loadAttendanceRecords() {
+  const selectedClass = getSelectedAttendanceClass();
+  if (!selectedClass) {
+    renderAttendanceRecords([]);
+    return;
+  }
+
+  const snapshot = await getDocs(
+    query(
+      collection(db, 'attendanceLogs'),
+      where('classId', '==', selectedClass.id)
+    )
+  );
+
+  const records = snapshot.docs
+    .map((item) => ({ id: item.id, ...item.data() }))
+    .sort((a, b) => {
+      const dateCompare = safeText(a.attendanceDate, '').localeCompare(safeText(b.attendanceDate, ''));
+      if (dateCompare !== 0) return dateCompare;
+      return safeText(a.studentName, '').localeCompare(safeText(b.studentName, ''), undefined, { sensitivity: 'base' });
+    });
+  renderAttendanceRecords(records);
+}
+
+async function loadAttendanceStudents() {
+  const selectedClass = getSelectedAttendanceClass();
+  if (!selectedClass) {
+    setAttendanceMessage('Select a class first.', 'error');
+    currentAttendanceStudents = [];
+    renderAttendanceStudents([]);
+    return;
+  }
+
+  setAttendanceMessage('Loading attendance students...');
+  try {
+    currentAttendanceStudents = (await loadStudentsFromApprovedEnrollments(selectedClass.id)).sort(compareClassRecordStudents);
+    await loadAttendanceRecords();
+    setAttendanceMessage(`Loaded ${currentAttendanceStudents.length} student(s).`, 'success');
+  } catch (error) {
+    console.error('Failed to load attendance students:', error);
+    currentAttendanceStudents = [];
+    currentAttendanceRecords = new Map();
+    currentAttendanceDates = [];
+    renderAttendanceStudents([]);
+    setAttendanceMessage('Unable to load attendance students.', 'error');
+  }
+}
+
+async function saveManualAttendance() {
+  const selectedClass = getSelectedAttendanceClass();
+  if (!selectedClass) {
+    setAttendanceMessage('Select a class first.', 'error');
+    return;
+  }
+
+  if (!currentAttendanceStudents.length) {
+    await loadAttendanceStudents();
+  }
+
+  if (!currentAttendanceStudents.length) {
+    setAttendanceMessage('No students to save attendance for.', 'error');
+    return;
+  }
+
+  const dateKey = getAttendanceDate();
+  const statusByStudentId = new Map(
+    Array.from(
+      attendanceStudentsListElement?.querySelectorAll(
+        `select.attendance-status-select[data-attendance-date="${CSS.escape(dateKey)}"]`
+      ) || []
+    ).map((select) => [select.dataset.attendanceStudentId, normalizeAttendanceStatus(select.value)])
+  );
+
+  if (saveAttendanceButton) {
+    saveAttendanceButton.disabled = true;
+    saveAttendanceButton.textContent = 'Saving...';
+  }
+
+  try {
+    await Promise.all(
+      currentAttendanceStudents.map((student) => {
+        const status = statusByStudentId.get(student.id) || 'absent';
+        return setDoc(
+          doc(db, 'attendanceLogs', makeAttendanceLogId(selectedClass.id, student.id, dateKey)),
+          {
+            classId: selectedClass.id,
+            classLabel: formatClassLabel(selectedClass),
+            studentId: student.id,
+            studentName: formatFullName(student),
+            teacherId: auth.currentUser?.uid || '',
+            teacherName: safeText(currentTeacherProfile?.displayName, 'Teacher'),
+            attendanceDate: dateKey,
+            status,
+            method: 'manual',
+            recordedAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          },
+          { merge: true }
+        );
+      })
+    );
+
+    await loadAttendanceRecords();
+    setAttendanceMessage('Attendance saved.', 'success');
+  } catch (error) {
+    console.error('Failed to save attendance:', error);
+    setAttendanceMessage('Unable to save attendance.', 'error');
+  } finally {
+    if (saveAttendanceButton) {
+      saveAttendanceButton.disabled = false;
+      saveAttendanceButton.textContent = 'Save Attendance Date';
+    }
+  }
+}
+
+function showClassroomAttendanceQr() {
+  const selectedClass = getSelectedAttendanceClass();
+  if (!selectedClass || !attendanceQrPanelElement) {
+    setAttendanceMessage('Select a class first.', 'error');
+    return;
+  }
+
+  const dateKey = getAttendanceDate();
+  const payload = buildClassAttendanceQrPayload(selectedClass.id, dateKey);
+  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(payload)}`;
+  attendanceQrPanelElement.hidden = false;
+  attendanceQrPanelElement.innerHTML = `
+    <div>
+      <p>Students scan this QR to mark themselves present for ${escapeHtml(dateKey)}.</p>
+      <p class="quest-qr-code-text">${escapeHtml(payload)}</p>
+    </div>
+    <img src="${escapeHtml(qrImageUrl)}" alt="Attendance QR for ${escapeHtml(formatClassLabel(selectedClass))}" />
+  `;
+  setAttendanceMessage('Classroom Attendance QR is ready.', 'success');
+}
+
+async function recordScannedStudentAttendance(studentId) {
+  const selectedClass = getSelectedAttendanceClass();
+  if (!selectedClass) {
+    setAttendanceMessage('Select a class before scanning student QR codes.', 'error');
+    return;
+  }
+
+  const normalizedStudentId = safeText(studentId, '');
+  if (!normalizedStudentId) {
+    setAttendanceMessage('This is not a valid student attendance QR.', 'error');
+    return;
+  }
+
+  if (!currentAttendanceStudents.length) {
+    currentAttendanceStudents = (await loadStudentsFromApprovedEnrollments(selectedClass.id)).sort(compareClassRecordStudents);
+    renderAttendanceStudents(currentAttendanceStudents);
+  }
+
+  const student = currentAttendanceStudents.find((item) => item.id === normalizedStudentId);
+  if (!student) {
+    setAttendanceMessage('Scanned student is not approved in this class.', 'error');
+    return;
+  }
+
+  const dateKey = getAttendanceDate();
+  await setDoc(
+    doc(db, 'attendanceLogs', makeAttendanceLogId(selectedClass.id, student.id, dateKey)),
+    {
+      classId: selectedClass.id,
+      classLabel: formatClassLabel(selectedClass),
+      studentId: student.id,
+      studentName: formatFullName(student),
+      teacherId: auth.currentUser?.uid || '',
+      teacherName: safeText(currentTeacherProfile?.displayName, 'Teacher'),
+      attendanceDate: dateKey,
+      status: 'present',
+      method: 'student_qr',
+      recordedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    },
+    { merge: true }
+  );
+
+  const checkbox = Array.from(
+    attendanceStudentsListElement?.querySelectorAll(
+      `select.attendance-status-select[data-attendance-date="${CSS.escape(dateKey)}"]`
+    ) || []
+  ).find(
+    (input) => input.dataset.attendanceStudentId === student.id
+  );
+  if (checkbox) checkbox.value = 'present';
+  await loadAttendanceRecords();
+  setAttendanceMessage(`${formatFullName(student)} marked present.`, 'success');
+}
+
+async function openStudentAttendanceScanner() {
+  if (!('BarcodeDetector' in window) || !navigator.mediaDevices?.getUserMedia) {
+    setAttendanceMessage('Camera scanning is not available on this browser.', 'error');
+    return;
+  }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'quest-scanner-overlay';
+  overlay.innerHTML = `
+    <div class="quest-scanner-panel">
+      <div class="quest-scanner-header">
+        <h3>Scan Student Attendance QR</h3>
+        <button type="button" aria-label="Close scanner">Close</button>
+      </div>
+      <video autoplay playsinline></video>
+      <p class="form-message">Point your camera at the student's attendance QR code.</p>
+    </div>
+  `;
+  document.body.append(overlay);
+
+  const video = overlay.querySelector('video');
+  const closeButton = overlay.querySelector('button');
+  const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+  let stream = null;
+  let isClosed = false;
+
+  const closeScanner = () => {
+    isClosed = true;
+    stream?.getTracks?.().forEach((track) => track.stop());
+    overlay.remove();
+  };
+
+  closeButton?.addEventListener('click', closeScanner);
+
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    video.srcObject = stream;
+    await video.play();
+
+    const scanFrame = async () => {
+      if (isClosed) return;
+
+      try {
+        const codes = await detector.detect(video);
+        const rawValue = codes?.[0]?.rawValue || '';
+        if (rawValue) {
+          closeScanner();
+          await recordScannedStudentAttendance(extractStudentIdFromAttendanceQr(rawValue));
+          return;
+        }
+      } catch (error) {
+        console.warn('Student attendance scan frame failed:', error);
+      }
+
+      window.requestAnimationFrame(scanFrame);
+    };
+
+    scanFrame();
+  } catch (error) {
+    console.error('Failed to open student attendance scanner:', error);
+    closeScanner();
+    setAttendanceMessage('Unable to open camera scanner.', 'error');
+  }
+}
+
+async function loadAttendancePage() {
+  if (attendanceDateElement && !attendanceDateElement.value) {
+    attendanceDateElement.value = getLocalDateKey();
+  }
+  if (!teacherClasses.length) {
+    await loadTeacherClassesForSelection();
+  }
+  if (attendanceClassSelectElement?.value) {
+    await loadAttendanceStudents();
+  }
+}
+
 async function loadMyClasses() {
   if (!auth.currentUser?.uid) return;
 
@@ -1909,6 +2378,7 @@ async function loadTeacherClassesForSelection() {
   populateEnrollmentClassFilter(teacherClasses);
   populateResourceClassFilter(teacherClasses);
   populateAnnouncementClassFilter(teacherClasses);
+  populateAttendanceClassFilter(teacherClasses);
   return teacherClasses;
 }
 
@@ -2136,16 +2606,16 @@ function renderClassRecordTable(students = [], activities = [], scoresMap = new 
 
   if (!students.length) {
     classRecordTableElement.innerHTML = `
-      <table class="student-table">
+      <table class="student-table class-record-grid">
         <thead>
           <tr>
-            <th scope="col">Student</th>
+            <th scope="col" class="sticky-name-col">Student</th>
             ${renderGroupHeader('Written Works', grouped.WW)}
             ${renderGroupHeader('Performance Task', grouped.PT)}
             ${renderGroupHeader('Exam', grouped.Exam)}
           </tr>
           <tr>
-            <th scope="col">Activities</th>
+            <th scope="col" class="sticky-name-col">Activities</th>
             ${orderedActivities.length ? orderedActivities.map(renderActivityHeaderCell).join('') : '<th scope="col">-</th>'}
           </tr>
         </thead>
@@ -2163,16 +2633,16 @@ function renderClassRecordTable(students = [], activities = [], scoresMap = new 
   }
 
   classRecordTableElement.innerHTML = `
-    <table class="student-table">
+    <table class="student-table class-record-grid">
       <thead>
         <tr>
-          <th scope="col">Student</th>
+          <th scope="col" class="sticky-name-col">Student</th>
           ${renderGroupHeader('Written Works', grouped.WW)}
           ${renderGroupHeader('Performance Task', grouped.PT)}
           ${renderGroupHeader('Exam', grouped.Exam)}
         </tr>
         <tr>
-          <th scope="col">Activities</th>
+          <th scope="col" class="sticky-name-col">Activities</th>
           ${orderedActivities.length ? orderedActivities.map(renderActivityHeaderCell).join('') : '<th scope="col">No activities yet</th>'}
         </tr>
       </thead>
@@ -2181,7 +2651,7 @@ function renderClassRecordTable(students = [], activities = [], scoresMap = new 
           .map(
             (student) => `
               <tr>
-                <th scope="row">${escapeHtml(formatFullName(student))}</th>
+                <th scope="row" class="sticky-name-col">${escapeHtml(formatFullName(student))}</th>
                 ${
                   orderedActivities.length
                     ? orderedActivities
@@ -2543,13 +3013,6 @@ async function saveScoreWithAcademicPoints(payload) {
       ? Number(existingPointLog.awardedPoints)
       : 0;
     const pointDifference = newAwardedPoints - previousAwardedPoints;
-
-    console.log({
-      studentId,
-      previousAwardedPoints,
-      newAwardedPoints,
-      pointDifference
-    });
 
     const existingStudentPoints = normalizePoints(studentData.points);
     const nextStudentPoints = existingStudentPoints + pointDifference;
@@ -3625,6 +4088,26 @@ teacherQuestsListElement?.addEventListener('click', (event) => {
     });
   }
 });
+
+attendanceClassSelectElement?.addEventListener('change', () => {
+  currentAttendanceStudents = [];
+  if (attendanceQrPanelElement) {
+    attendanceQrPanelElement.hidden = true;
+    attendanceQrPanelElement.innerHTML = '';
+  }
+  loadAttendanceStudents();
+});
+
+attendanceDateElement?.addEventListener('change', () => {
+  if (attendanceClassSelectElement?.value) {
+    renderAttendanceStudents(currentAttendanceStudents);
+  }
+});
+
+loadAttendanceButton?.addEventListener('click', loadAttendanceStudents);
+saveAttendanceButton?.addEventListener('click', saveManualAttendance);
+showAttendanceQrButton?.addEventListener('click', showClassroomAttendanceQr);
+scanStudentAttendanceQrButton?.addEventListener('click', openStudentAttendanceScanner);
 
 logoutButton?.addEventListener('click', async () => {
   try {

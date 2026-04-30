@@ -1006,14 +1006,6 @@ async function recomputeSectionRankings() {
 
     await Promise.all(
       rankedSections.map((section) => {
-        console.log('Saving section ranking:', {
-          sectionId: section.id,
-          sectionName: section.name,
-          rank: section.rank,
-          tier: section.tier,
-          totalPoints: section.totalPoints
-        });
-
         return updateDoc(doc(db, 'sections', section.id), {
           rank: section.rank,
           tier: section.tier,

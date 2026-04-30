@@ -5,6 +5,7 @@ import {
   signOut,
   doc,
   getDoc,
+  setDoc,
   updateDoc,
   collection,
   addDoc,
@@ -87,6 +88,11 @@ const studentResourcesListElement = document.getElementById('student-resources-l
 const studentQuestsListElement = document.getElementById('student-quests-list');
 const studentQuestMessageElement = document.getElementById('student-quest-message');
 const studentScanQuestButton = document.getElementById('student-scan-quest-button');
+const studentQuestCodeInput = document.getElementById('student-quest-code-input');
+const studentSubmitQuestCodeButton = document.getElementById('student-submit-quest-code-button');
+const studentScanAttendanceButton = document.getElementById('student-scan-attendance-button');
+const studentAttendanceMessageElement = document.getElementById('student-attendance-message');
+const studentAttendanceQrPanelElement = document.getElementById('student-attendance-qr-panel');
 const loadingOverlay = document.getElementById('loadingOverlay');
 let overlaySequenceJob = 0;
 let currentStudentProfile = null;
@@ -108,6 +114,7 @@ const pageTitles = {
   achievements: 'Achievements',
   messages: 'Messages',
   quest: 'Quest',
+  'scan-qr': 'Scan QR',
   settings: 'Settings',
 };
 const LAST_PAGE_STORAGE_KEY = 'cote.student.lastPage';
@@ -721,6 +728,74 @@ function setStudentQuestMessage(message, type = '') {
   if (type) {
     studentQuestMessageElement.classList.add(type);
   }
+}
+
+function setStudentAttendanceMessage(message, type = '') {
+  if (!studentAttendanceMessageElement) return;
+  studentAttendanceMessageElement.textContent = message;
+  studentAttendanceMessageElement.classList.remove('success', 'error');
+  if (type) {
+    studentAttendanceMessageElement.classList.add(type);
+  }
+}
+
+function getLocalDateKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function makeAttendanceLogId(classId, studentId, dateKey = getLocalDateKey()) {
+  return [dateKey, classId, studentId]
+    .map((part) => String(part || '').trim().replace(/[^A-Za-z0-9_-]/g, '_'))
+    .join('_');
+}
+
+function buildStudentAttendanceQrPayload(studentId = currentStudentUser?.uid) {
+  return `cote:attendance-student:${String(studentId || '').trim()}`;
+}
+
+function parseClassAttendanceQr(rawValue = '') {
+  const value = String(rawValue || '').trim();
+  if (value.startsWith('cote:attendance-class:')) {
+    const [, , classId = '', dateKey = '', teacherId = ''] = value.split(':');
+    return {
+      classId: classId.trim(),
+      dateKey: dateKey.trim() || getLocalDateKey(),
+      teacherId: teacherId.trim()
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    if (parsed?.type === 'class-attendance') {
+      return {
+        classId: String(parsed.classId || '').trim(),
+        dateKey: String(parsed.dateKey || getLocalDateKey()).trim(),
+        teacherId: String(parsed.teacherId || '').trim()
+      };
+    }
+  } catch (error) {
+    return null;
+  }
+
+  return null;
+}
+
+function getCurrentPosition() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      resolve(null);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => resolve(position),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  });
 }
 
 function isYouTubeUrl(url) {
@@ -1708,7 +1783,7 @@ async function loadPointLogs(studentId) {
       const message = String(error?.message || error).toLowerCase();
 
       if (message.includes('index')) {
-        console.log('Create Firestore index for pointLogs query');
+        console.info('Create Firestore index for pointLogs query');
       }
 
       const fallbackSnapshot = await getDocs(collection(db, 'pointLogs'));
@@ -1797,7 +1872,7 @@ async function loadPointLogs(studentId) {
     console.error('Failed to load point logs:', error);
     const message = String(error?.message || error).toLowerCase();
     if (message.includes('index')) {
-      console.log('Create Firestore index for pointLogs query');
+      console.info('Create Firestore index for pointLogs query');
     }
     listElement.innerHTML = '<li>Unable to load logs. Please try again later.</li>';
   }
@@ -2222,11 +2297,6 @@ async function loadStudentSectionStanding(studentData = {}) {
 
     sectionData = sectionSnap.data() || {};
     resolvedSectionName = sectionData.name || sectionData.sectionName || sectionName;
-    console.log('Student section data loaded:', {
-      sectionId,
-      sectionData
-    });
-
     let tier = sectionData.tier || sectionData.sectionTier || 'Not yet ranked';
     let rank = sectionData.rank || sectionData.sectionRank || null;
     let totalPoints = sectionData.totalPoints || 0;
@@ -2537,6 +2607,165 @@ async function completeScannedQuest(rawValue) {
   }
 }
 
+async function recordStudentAttendanceFromQr(rawValue = '') {
+  if (!currentStudentUser?.uid || !currentStudentProfile) {
+    setStudentAttendanceMessage('Log in before scanning attendance.', 'error');
+    return;
+  }
+
+  const qrData = parseClassAttendanceQr(rawValue);
+  if (!qrData?.classId) {
+    setStudentAttendanceMessage('This QR code is not an attendance QR.', 'error');
+    return;
+  }
+
+  setStudentAttendanceMessage('Recording attendance and checking location...');
+
+  const position = await getCurrentPosition();
+  const location = position
+    ? {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy
+      }
+    : null;
+  const dateKey = qrData.dateKey || getLocalDateKey();
+  const attendanceRef = doc(db, 'attendanceLogs', makeAttendanceLogId(qrData.classId, currentStudentUser.uid, dateKey));
+
+  await setDoc(
+    attendanceRef,
+    {
+      classId: qrData.classId,
+      studentId: currentStudentUser.uid,
+      studentName: makeFullName(currentStudentProfile),
+      teacherId: qrData.teacherId || '',
+      attendanceDate: dateKey,
+      status: 'present',
+      method: 'class_qr',
+      location,
+      recordedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    },
+    { merge: true }
+  );
+
+  setStudentAttendanceMessage(
+    location ? 'Attendance recorded with GPS location.' : 'Attendance recorded. GPS location was unavailable.',
+    'success'
+  );
+}
+
+function renderStudentAttendanceQr() {
+  if (!studentAttendanceQrPanelElement || !currentStudentUser?.uid) return;
+
+  const payload = buildStudentAttendanceQrPayload(currentStudentUser.uid);
+  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(payload)}`;
+  studentAttendanceQrPanelElement.hidden = false;
+  studentAttendanceQrPanelElement.innerHTML = `
+    <div>
+      <p>Show this QR to your teacher for attendance scanning.</p>
+      <p class="quest-qr-code-text">${escapeHtml(payload)}</p>
+    </div>
+    <img src="${escapeHtml(qrImageUrl)}" alt="Your attendance QR code" />
+  `;
+}
+
+async function openAttendanceScanner() {
+  if (!currentStudentUser?.uid) {
+    setStudentAttendanceMessage('Log in before scanning attendance.', 'error');
+    return;
+  }
+
+  if (!('BarcodeDetector' in window) || !navigator.mediaDevices?.getUserMedia) {
+    setStudentAttendanceMessage('Camera scanning is not available on this browser.', 'error');
+    return;
+  }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'quest-scanner-overlay';
+  overlay.innerHTML = `
+    <div class="quest-scanner-panel">
+      <div class="quest-scanner-header">
+        <h3>Scan Attendance QR</h3>
+        <button type="button" aria-label="Close scanner">Close</button>
+      </div>
+      <video autoplay playsinline></video>
+      <p class="form-message">Point your camera at the classroom attendance QR code.</p>
+    </div>
+  `;
+  document.body.append(overlay);
+
+  const video = overlay.querySelector('video');
+  const closeButton = overlay.querySelector('button');
+  const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+  let stream = null;
+  let isClosed = false;
+
+  const closeScanner = () => {
+    isClosed = true;
+    stream?.getTracks?.().forEach((track) => track.stop());
+    overlay.remove();
+  };
+
+  closeButton?.addEventListener('click', closeScanner);
+
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    video.srcObject = stream;
+    await video.play();
+
+    const scanFrame = async () => {
+      if (isClosed) return;
+
+      try {
+        const codes = await detector.detect(video);
+        const rawValue = codes?.[0]?.rawValue || '';
+        if (rawValue) {
+          closeScanner();
+          await recordStudentAttendanceFromQr(rawValue);
+          return;
+        }
+      } catch (error) {
+        console.warn('Attendance QR scan frame failed:', error);
+      }
+
+      window.requestAnimationFrame(scanFrame);
+    };
+
+    scanFrame();
+  } catch (error) {
+    console.error('Failed to open attendance scanner:', error);
+    closeScanner();
+    setStudentAttendanceMessage('Unable to open camera scanner. Check camera permission and try again.', 'error');
+  }
+}
+
+async function submitManualQuestCode() {
+  const rawValue = String(studentQuestCodeInput?.value || '').trim();
+  if (!rawValue) {
+    setStudentQuestMessage('Enter a quest code or QR link first.', 'error');
+    studentQuestCodeInput?.focus();
+    return;
+  }
+
+  if (studentSubmitQuestCodeButton) {
+    studentSubmitQuestCodeButton.disabled = true;
+    studentSubmitQuestCodeButton.textContent = 'Submitting...';
+  }
+
+  try {
+    await completeScannedQuest(rawValue);
+    if (studentQuestCodeInput) {
+      studentQuestCodeInput.value = '';
+    }
+  } finally {
+    if (studentSubmitQuestCodeButton) {
+      studentSubmitQuestCodeButton.disabled = false;
+      studentSubmitQuestCodeButton.textContent = 'Submit Code';
+    }
+  }
+}
+
 async function openQuestScanner() {
   if (!currentStudentUser?.uid) {
     setStudentQuestMessage('Log in before scanning a quest.', 'error');
@@ -2544,10 +2773,8 @@ async function openQuestScanner() {
   }
 
   if (!('BarcodeDetector' in window) || !navigator.mediaDevices?.getUserMedia) {
-    const manualCode = window.prompt('Enter the quest code or scanned QR link:');
-    if (manualCode) {
-      await completeScannedQuest(manualCode);
-    }
+    setStudentQuestMessage('Camera scanning is not available here. Enter the quest code below.', 'error');
+    studentQuestCodeInput?.focus();
     return;
   }
 
@@ -2607,10 +2834,7 @@ async function openQuestScanner() {
     console.error('Failed to open quest scanner:', error);
     closeScanner();
     setStudentQuestMessage('Unable to open camera scanner. Check camera permission or enter the code manually.', 'error');
-    const manualCode = window.prompt('Enter the quest code or scanned QR link:');
-    if (manualCode) {
-      await completeScannedQuest(manualCode);
-    }
+    studentQuestCodeInput?.focus();
   }
 }
 
@@ -2626,6 +2850,9 @@ function runPageLoaders(pageName) {
   }
   if (pageName === 'quest' && currentStudentUser?.uid) {
     loadStudentQuests();
+  }
+  if (pageName === 'scan-qr' && currentStudentUser?.uid) {
+    renderStudentAttendanceQr();
   }
   if (pageName === 'messages' && currentStudentUser?.uid) {
     refreshConversations();
@@ -2703,6 +2930,14 @@ profilePictureEditButton?.addEventListener('click', () => {
 profilePictureCancelButton?.addEventListener('click', resetProfilePictureEditor);
 profilePictureFormElement?.addEventListener('submit', saveProfilePicture);
 studentScanQuestButton?.addEventListener('click', openQuestScanner);
+studentScanAttendanceButton?.addEventListener('click', openAttendanceScanner);
+studentSubmitQuestCodeButton?.addEventListener('click', submitManualQuestCode);
+studentQuestCodeInput?.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    submitManualQuestCode();
+  }
+});
 
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
@@ -2789,8 +3024,6 @@ onAuthStateChanged(auth, async () => {
   currentStudentUser = user;
   pendingQuestIdFromUrl = String(new URLSearchParams(window.location.search).get('questId') || '').trim();
 
-  console.log('Auth UID:', uid);
-
   loadLeaderboard();
 
   if (sidebarStudentEmailElement) {
@@ -2801,16 +3034,12 @@ onAuthStateChanged(auth, async () => {
     const studentRef = doc(db, 'students', uid);
     const studentSnap = await getDoc(studentRef);
 
-    console.log('Student doc:', studentSnap.exists());
-
     if (!studentSnap.exists()) {
       renderStudentProfileNotFound(user.email, uid);
       return;
     }
 
     const studentData = studentSnap.data();
-    console.log('Student data:', studentData);
-
     currentStudentProfile = studentData;
     const points = normalizePoints(studentData.points);
 
@@ -2830,6 +3059,7 @@ onAuthStateChanged(auth, async () => {
     loadMyEnrollments();
     loadAvailableClasses();
     loadStudentNotifications();
+    renderStudentAttendanceQr();
     startStudentNotificationRefresh();
     await initMessagingUI();
     startMessagingAutoRefresh();

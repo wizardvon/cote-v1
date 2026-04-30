@@ -71,6 +71,10 @@
       </div>
 
       <div class="sidebar-footer">
+        <button type="button" class="menu-btn sidebar-settings-btn" data-target="scan-qr">
+          <span aria-hidden="true">▣</span>
+          <span>SCAN QR</span>
+        </button>
         <button type="button" class="menu-btn sidebar-settings-btn" data-target="settings">
           <span aria-hidden="true">⚙</span>
           <span>Settings</span>
@@ -361,9 +365,31 @@
           <div class="admin-actions">
             <button id="student-scan-quest-button" type="button">Scan Quest QR</button>
           </div>
+          <div class="quest-code-entry">
+            <input id="student-quest-code-input" type="text" placeholder="Enter quest code or QR link" autocomplete="off" />
+            <button id="student-submit-quest-code-button" type="button">Submit Code</button>
+          </div>
           <p id="student-quest-message" class="form-message" role="status" aria-live="polite"></p>
           <div id="student-quests-list" class="quest-list" aria-live="polite">
             <p class="empty-cell">Loading quests...</p>
+          </div>
+        </article>
+      </section>
+
+      <section id="page-scan-qr" class="page" data-page="scan-qr" aria-label="Scan QR">
+        <article class="app-card">
+          <h3>Attendance QR</h3>
+          <p>Scan the classroom Attendance QR, or show your student QR to your teacher.</p>
+          <div class="admin-actions">
+            <button id="student-scan-attendance-button" type="button">Scan Attendance QR</button>
+          </div>
+          <p id="student-attendance-message" class="form-message" role="status" aria-live="polite"></p>
+        </article>
+
+        <article class="app-card">
+          <h3>My Attendance QR</h3>
+          <div id="student-attendance-qr-panel" class="quest-qr-panel attendance-qr-panel">
+            <p class="empty-cell">Loading your QR code...</p>
           </div>
         </article>
       </section>

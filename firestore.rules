@@ -666,9 +666,37 @@ service cloud.firestore {
       allow read: if isLoggedIn();
 
       allow create: if isLoggedIn()
-        && request.resource.data.studentId == request.auth.uid;
+        && (
+          (
+            isStudent()
+            && request.resource.data.studentId == request.auth.uid
+            && request.resource.data.method == "class_qr"
+            && request.resource.data.classId is string
+            && exists(/databases/$(database)/documents/classes/$(request.resource.data.classId))
+          )
+          || (
+            isActiveTeacher()
+            && request.resource.data.teacherId == request.auth.uid
+            && request.resource.data.classId is string
+            && request.resource.data.studentId is string
+            && get(/databases/$(database)/documents/classes/$(request.resource.data.classId)).data.teacherId == request.auth.uid
+          )
+        );
 
-      allow update, delete: if isActiveAdmin();
+      allow update: if isActiveAdmin()
+        || (
+          isActiveTeacher()
+          && resource.data.teacherId == request.auth.uid
+          && request.resource.data.teacherId == resource.data.teacherId
+        )
+        || (
+          isStudent()
+          && resource.data.studentId == request.auth.uid
+          && request.resource.data.studentId == resource.data.studentId
+          && request.resource.data.method == "class_qr"
+        );
+
+      allow delete: if isActiveAdmin();
     }
 
     // =========================
