@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>COTE Web App | Super Admin Dashboard</title>
+    <meta name="theme-color" content="#061321" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body class="dashboard-body">
+    <div id="loadingOverlay" class="loading-overlay loading-overlay-visible" aria-hidden="false">
+      <div class="loading-overlay-content">
+        <img src="icons/cote-logo.png" alt="C.O.T.E System Logo" class="loading-logo" />
+        <p class="loading-text">Initializing C.O.T.E System...</p>
+      </div>
+    </div>
+
+    <aside id="sidebar" class="sidebar" aria-hidden="true" aria-label="Super admin sidebar menu">
+      <div>
+        <div class="sidebar-header">
+          <div class="brand-block">
+            <img src="icons/cote-logo.png" alt="C.O.T.E Gold Shield" class="brand-logo" />
+            <div>
+              <p class="sidebar-label">Elite Academy System</p>
+              <p class="brand-title">C.O.T.E App</p>
+            </div>
+          </div>
+
+          <h2 id="sidebar-super-admin-name">Super Admin</h2>
+          <p class="sidebar-email" id="super-admin-email">Loading...</p>
+        </div>
+
+        <nav class="sidebar-nav" aria-label="Super admin navigation">
+          <button type="button" class="menu-btn active" data-target="home">
+            <span aria-hidden="true">🏠</span>
+            <span>Home</span>
+          </button>
+          <button type="button" class="menu-btn" data-target="teacher-approvals">
+            <span aria-hidden="true">✅</span>
+            <span>Teacher Approvals</span>
+          </button>
+          <button type="button" class="menu-btn" data-target="active-teachers">
+            <span aria-hidden="true">👩‍🏫</span>
+            <span>Active Teachers</span>
+          </button>
+          <button type="button" class="menu-btn" data-target="academic-setup">
+            <span aria-hidden="true">📅</span>
+            <span>Academic Setup</span>
+          </button>
+          <button type="button" class="menu-btn" data-target="subjects">
+            <span aria-hidden="true">📚</span>
+            <span>Subjects</span>
+          </button>
+          <button type="button" class="menu-btn" data-target="sections">
+            <span aria-hidden="true">🏫</span>
+            <span>Sections</span>
+          </button>
+          <button type="button" class="menu-btn" data-target="special-badges">
+            <span aria-hidden="true">SB</span>
+            <span>Special Badges</span>
+          </button>
+          <button type="button" class="menu-btn" data-target="quests">
+            <span aria-hidden="true">Q</span>
+            <span>Quests</span>
+          </button>
+          <button type="button" class="menu-btn" data-target="messages">
+            <span aria-hidden="true">MSG</span>
+            <span>Messages</span>
+          </button>
+          <button type="button" class="menu-btn" data-target="announcement-moderation">
+            <span aria-hidden="true">AM</span>
+            <span>Announcements</span>
+          </button>
+        </nav>
+      </div>
+
+      <button id="logout-button" type="button" class="logout-button menu-logout">Logout</button>
+    </aside>
+
+    <button id="sidebar-overlay" class="sidebar-overlay" hidden aria-label="Close sidebar"></button>
+
+    <header class="app-bar" aria-label="Super admin app bar">
+      <div class="app-bar-side app-bar-left">
+        <button id="burger-button" class="icon-button" type="button" aria-label="Open menu">☰</button>
+      </div>
+
+      <h1 id="page-title" class="app-bar-title">Home</h1>
+
+      <div class="app-bar-side app-bar-right">
+        <img src="icons/cote-logo.png" alt="C.O.T.E" class="top-brand-logo" />
+        <span class="teacher-chip">Super Admin</span>
+      </div>
+    </header>
+
+    <main class="student-app teacher-app" aria-labelledby="page-title">
+      <section id="page-home" class="page active" data-page="home" aria-label="Super admin home">
+        <article class="app-card welcome-card">
+          <p class="badge">System Overview</p>
+          <h2>Super Admin Control Center</h2>
+          <p>Review teacher onboarding, approve pending accounts, and monitor core platform status.</p>
+        </article>
+
+        <article class="app-card">
+          <h3>Overview Cards</h3>
+          <div class="info-grid">
+            <p><strong>System Overview:</strong> Super admin approval flow is enabled.</p>
+            <p><strong>Total Pending Teachers:</strong> <span id="pending-count">0</span></p>
+            <p><strong>Total Active Teachers:</strong> <span id="active-count">0</span></p>
+            <p><strong>Notes/Reminders:</strong> Review pending teachers daily before classes.</p>
+          </div>
+        </article>
+
+        <article class="app-card">
+          <h3>Section Leaderboard</h3>
+          <p>Top active sections by total points for the selected school year.</p>
+          <div class="admin-toolbar">
+            <select id="ranking-school-year" aria-label="School year for section leaderboard">
+              <option value="">Select school year</option>
+            </select>
+            <button id="recompute-rankings-btn" type="button">Recompute Section Rankings</button>
+            <button id="recompute-student-rankings-btn" type="button">Recompute Student Rankings</button>
+          </div>
+          <div class="admin-table-wrap" role="region" aria-label="Section leaderboard table" tabindex="0">
+            <table class="student-table">
+              <thead>
+                <tr>
+                  <th scope="col">Rank</th>
+                  <th scope="col">Tier</th>
+                  <th scope="col">Section</th>
+                  <th scope="col">Grade Level</th>
+                  <th scope="col">Total Points</th>
+                </tr>
+              </thead>
+              <tbody id="section-leaderboard-body">
+                <tr>
+                  <td colspan="5" class="empty-cell">No sections found.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section
+        id="page-teacher-approvals"
+        class="page"
+        data-page="teacher-approvals"
+        aria-label="Teacher approvals"
+      >
+        <article class="app-card">
+          <h2>Teacher Approvals</h2>
+          <p>Approve teacher accounts with pending status.</p>
+          <p id="super-admin-message" class="form-message" role="status" aria-live="polite"></p>
+          <div id="pending-teachers-list" class="super-admin-list"></div>
+        </article>
+      </section>
+
+      <section id="page-active-teachers" class="page" data-page="active-teachers" aria-label="Active teachers">
+        <article class="app-card">
+          <h2>Active Teachers</h2>
+          <p>Currently approved teacher accounts.</p>
+          <div id="active-teachers-list" class="super-admin-list"></div>
+        </article>
+      </section>
+
+      <section id="page-academic-setup" class="page" data-page="academic-setup" aria-label="Academic setup">
+        <article class="app-card">
+          <h2>School Years</h2>
+          <p>Manage school years used throughout the C.O.T.E platform.</p>
+          <div class="admin-toolbar">
+            <input id="school-year-name" type="text" placeholder="School Year Name" />
+            <button id="add-school-year-btn" type="button">Add School Year</button>
+          </div>
+          <p id="school-year-message" class="form-message" role="status" aria-live="polite"></p>
+          <div id="school-years-list" class="super-admin-list"></div>
+        </article>
+
+        <article class="app-card">
+          <h2>Terms</h2>
+          <p>Manage academic terms.</p>
+          <div class="admin-toolbar">
+            <input id="term-name" type="text" placeholder="Term Name" />
+            <button id="add-term-btn" type="button">Add Term</button>
+          </div>
+          <p id="term-message" class="form-message" role="status" aria-live="polite"></p>
+          <div id="terms-list" class="super-admin-list"></div>
+        </article>
+      </section>
+
+      <section id="page-subjects" class="page" data-page="subjects" aria-label="Subjects">
+        <article class="app-card">
+          <h2>Subjects</h2>
+          <p>Add and manage subjects with categories.</p>
+          <div class="admin-toolbar">
+            <input id="subject-name" type="text" placeholder="Subject Name" />
+            <input id="subject-code" type="text" placeholder="Subject Code" />
+            <select id="subject-category" aria-label="Subject category">
+              <option value="">Select category</option>
+              <option value="Core Subject">Core Subject</option>
+              <option value="Applied Subject">Applied Subject</option>
+              <option value="Specialized Subject">Specialized Subject</option>
+            </select>
+            <button id="add-subject-btn" type="button">Add Subject</button>
+          </div>
+          <p id="subject-message" class="form-message" role="status" aria-live="polite"></p>
+          <div id="subjects-list" class="super-admin-list"></div>
+        </article>
+      </section>
+
+      <section id="page-sections" class="page" data-page="sections" aria-label="Sections">
+        <article class="app-card">
+          <h2>Sections</h2>
+          <p>Create sections and assign each to a school year.</p>
+          <div class="admin-toolbar">
+            <select id="section-grade-level" aria-label="Grade level">
+              <option value="">Select grade level</option>
+              <option value="Grade 11">Grade 11</option>
+              <option value="Grade 12">Grade 12</option>
+            </select>
+            <select id="section-school-year" aria-label="School year">
+              <option value="">Select school year</option>
+            </select>
+            <input id="section-name" type="text" placeholder="Section Name" />
+            <button id="add-section-btn" type="button">Add Section</button>
+          </div>
+          <p id="section-message" class="form-message" role="status" aria-live="polite"></p>
+          <div id="sections-list" class="super-admin-list"></div>
+        </article>
+      </section>
+
+      <section id="page-special-badges" class="page" data-page="special-badges" aria-label="Special badges">
+        <article class="app-card">
+          <h2>Achievement Badge Preview</h2>
+          <p>Review the built-in achievement badges shown on student profiles.</p>
+          <div id="achievement-badges-preview-list" class="badge-preview-grid" aria-live="polite">
+            <p class="empty-cell">Loading achievement badges...</p>
+          </div>
+        </article>
+
+        <article class="app-card">
+          <h2>Special Badges</h2>
+          <p>Create rare badges for events, awards, or special recognition.</p>
+          <div class="admin-toolbar special-badge-toolbar">
+            <input id="special-badge-name" type="text" placeholder="Badge Name" />
+            <input id="special-badge-image-url" type="url" placeholder="Badge Image URL" />
+            <textarea id="special-badge-description" placeholder="Description"></textarea>
+            <button id="add-special-badge-btn" type="button">Create Badge</button>
+          </div>
+          <p id="special-badge-message" class="form-message" role="status" aria-live="polite"></p>
+          <h3 class="badge-preview-subtitle">Special Badge Preview</h3>
+          <div id="special-badges-list" class="super-admin-list"></div>
+        </article>
+
+        <article class="app-card">
+          <h2>Award Special Badge</h2>
+          <p>Choose a badge, filter by section, then check the students who should receive it.</p>
+          <div class="admin-toolbar">
+            <select id="award-badge-select" aria-label="Special badge">
+              <option value="">Select badge</option>
+            </select>
+            <select id="award-section-filter" aria-label="Filter students by section">
+              <option value="">All sections</option>
+            </select>
+          </div>
+          <div id="award-students-list" class="award-students-list" aria-live="polite">
+            <p class="empty-cell">Loading students...</p>
+          </div>
+          <button id="award-special-badge-btn" type="button">Award Checked Students</button>
+          <p id="award-badge-message" class="form-message" role="status" aria-live="polite"></p>
+        </article>
+      </section>
+
+      <section
+        id="page-quests"
+        class="page"
+        data-page="quests"
+        aria-label="Quest management"
+      >
+        <article class="app-card">
+          <h2 id="super-admin-quest-form-title">Create Quest</h2>
+          <div class="admin-toolbar quest-form-grid">
+            <div class="field field-full">
+              <label for="super-admin-quest-title">Title</label>
+              <input id="super-admin-quest-title" type="text" maxlength="140" placeholder="Quest title" />
+            </div>
+            <div class="field field-full">
+              <label for="super-admin-quest-description">Description</label>
+              <textarea id="super-admin-quest-description" class="admin-reason" rows="3" placeholder="Quest instructions"></textarea>
+            </div>
+            <div class="field">
+              <label for="super-admin-quest-points">Points</label>
+              <input id="super-admin-quest-points" type="number" min="1" step="1" inputmode="numeric" placeholder="10" />
+            </div>
+            <div class="field">
+              <label for="super-admin-quest-badge">Badge Reward</label>
+              <select id="super-admin-quest-badge">
+                <option value="">No badge</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="super-admin-quest-target-type">Audience</label>
+              <select id="super-admin-quest-target-type">
+                <option value="all">All active students</option>
+                <option value="class">Selected sections/classes</option>
+                <option value="students">Selected students</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="super-admin-quest-deadline">Deadline</label>
+              <input id="super-admin-quest-deadline" type="datetime-local" />
+            </div>
+            <div class="field">
+              <label for="super-admin-quest-status">Status</label>
+              <select id="super-admin-quest-status">
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
+            <div class="field field-full">
+              <label for="super-admin-quest-targets">Targets</label>
+              <select id="super-admin-quest-targets" multiple size="6"></select>
+            </div>
+          </div>
+          <div class="admin-actions">
+            <button id="super-admin-save-quest-btn" type="button">Create Quest</button>
+            <button id="super-admin-cancel-quest-edit-btn" type="button" class="danger-button" hidden>Cancel Edit</button>
+          </div>
+          <p id="super-admin-quest-message" class="form-message" role="status" aria-live="polite"></p>
+        </article>
+
+        <article class="app-card">
+          <h2>All Quests</h2>
+          <div id="super-admin-quests-list" class="quest-list" aria-live="polite">
+            <p class="empty-cell">Loading quests...</p>
+          </div>
+        </article>
+      </section>
+
+      <section id="page-messages" class="page" data-page="messages" aria-label="Messages">
+        <article class="app-card">
+          <h2>Messages</h2>
+          <p>Start a private conversation with an active teacher.</p>
+          <div class="admin-toolbar message-contact-bar">
+            <div class="field">
+              <label for="message-contact-select">Contact</label>
+              <select id="message-contact-select">
+                <option value="">Loading contacts...</option>
+              </select>
+            </div>
+            <div class="field admin-load-field">
+              <label for="message-start-button">Open</label>
+              <button id="message-start-button" type="button">Open Conversation</button>
+            </div>
+          </div>
+          <p id="message-status" class="form-message" role="status" aria-live="polite"></p>
+        </article>
+
+        <article class="app-card message-app">
+          <div class="message-thread-list" id="message-thread-list" aria-live="polite">
+            <p class="empty-cell">No messages yet.</p>
+          </div>
+          <div class="message-panel">
+            <h3 id="message-thread-heading">Conversation</h3>
+            <div id="message-list" class="message-list" aria-live="polite">
+              <p class="empty-cell">Select or start a conversation.</p>
+            </div>
+            <form id="message-form" class="message-form">
+              <textarea id="message-input" rows="3" maxlength="1200" placeholder="Write a message"></textarea>
+              <button type="submit">Send</button>
+            </form>
+          </div>
+        </article>
+      </section>
+
+      <section
+        id="page-announcement-moderation"
+        class="page"
+        data-page="announcement-moderation"
+        aria-label="Announcement moderation"
+      >
+        <article class="app-card">
+          <h2>Announcement Moderation</h2>
+          <p>Review teacher announcements and remove posts that should no longer appear to students.</p>
+          <p id="announcement-moderation-message" class="form-message" role="status" aria-live="polite"></p>
+          <div id="announcement-moderation-list" class="super-admin-list" aria-live="polite">
+            <p class="empty-cell">Loading announcements...</p>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <script type="module" src="super-admin.js?v=2"></script>
+  </body>
+</html>

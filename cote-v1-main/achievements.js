@@ -1,0 +1,989 @@
+import {
+  db,
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  collection,
+  getDocs,
+  addDoc,
+  query,
+  where,
+  orderBy,
+  limit,
+  serverTimestamp,
+  runTransaction,
+  writeBatch,
+  increment
+} from './firebase.js';
+
+const ACHIEVEMENT_STATUS_ACTIVE = 'active';
+const ACHIEVEMENT_STATUS_INACTIVE = 'inactive';
+
+const ACHIEVEMENT_BADGE_IMAGE_URLS = {
+  first_perfect_score: 'https://drive.google.com/file/d/1ir0QVZoJpUD2ASe5u8XUScmta1Z2gRuu/view?usp=sharing',
+  double_perfection: 'https://drive.google.com/file/d/1nY5Gnn73TJzJKyQkrdvLaOeG72fO1pDl/view?usp=sharing',
+  triple_perfection: 'https://drive.google.com/file/d/11siY0KSvRv5yyTpRJmHthU5BceWHtVHA/view?usp=sharing',
+  perfectionist: 'https://drive.google.com/file/d/1ShBvOJNiszZUbW9xAbyMt0KWL3HRQbMr/view?usp=sharing',
+  flawless_mind: 'https://drive.google.com/file/d/1YYiICz5D3TwmiNUoTyMZ7RGjL50npIev/view?usp=sharing',
+  sharp_mind: 'https://drive.google.com/file/d/1FtXcQrKqiP7MvF089JJAwJ_5o4ykxRvU/view?usp=sharing',
+  consistent_performer: 'https://drive.google.com/file/d/1mSDaiNA1bH8tPNnQ2tzPHlMDN_m0w-yk/view?usp=sharing',
+  academic_elite: 'https://drive.google.com/file/d/1vJlRsJ-b6spkTQa4R0sQmzjmtPyy1aRD/view?usp=sharing',
+  mastery_level: 'https://drive.google.com/file/d/17WGV-EJ3vZYkioK9Kt3vNKdsRx6LIYkW/view?usp=sharing',
+  first_step: 'https://drive.google.com/file/d/1NQlOSCvDrUAv_GLlvf3eRXCQwaJbthzm/view?usp=sharing',
+  getting_started: 'https://drive.google.com/file/d/14sLogb7A3lIuAyyWWqhxcYP-MaooiO3-/view?usp=sharing',
+  on_a_roll: 'https://drive.google.com/file/d/1IhTcVq8y7TvMsmJ-edwNyDUOZTkrAMGQ/view?usp=sharing',
+  dedicated_learner: 'https://drive.google.com/file/d/1Qorz0ZMuMDm3jf2raCKPiF7PFaKit-1c/view?usp=sharing',
+  relentless: 'https://drive.google.com/file/d/1rhv1S2w2wnxQCNYuUN_MIZXeBOzxjqb9/view?usp=sharing',
+  club_500: 'https://drive.google.com/file/d/1T88putGogNQcj3RYCEnYT6y52zGQOUv_/view?usp=sharing',
+  elite_1000: 'https://drive.google.com/file/d/1vR_XY6hIV_o-kb904q8QANBIxA_2fqQB/view?usp=sharing',
+  milestone_2500: 'https://drive.google.com/file/d/1hy87gYNM8ASl_HWCYbL9kYg-6d-ACylV/view?usp=sharing',
+  club_5000: 'https://drive.google.com/file/d/1vJ6iLiXP4gDdGqHA4yzGCoSdPso1p52U/view?usp=sharing',
+  elite_10000: 'https://drive.google.com/file/d/1bRo7DzcerI0dRv6PZSH9nbLtUB5eqyZo/view?usp=sharing',
+  first_attendance: 'https://drive.google.com/file/d/1YERfwyMbAkX4vWQsHdMs7L886I6LPuxe/view?usp=sharing',
+  showing_up: 'https://drive.google.com/file/d/1GOB9gj4pZyC2QSHYbFDiP5gB2o9aiV6l/view?usp=sharing',
+  consistent_attendee: 'https://drive.google.com/file/d/15H2Rr5kK37MjOTisH14eNi_y88Fh5K-p/view?usp=sharing',
+  reliable: 'https://drive.google.com/file/d/1BkmZW5LpnSWvfkLsAbd7CdThH0i8LT2y/view?usp=sharing',
+  ever_present: 'https://drive.google.com/file/d/1NQGk4s6rR2nyL344FLkSdubU0kYCVUNe/view?usp=sharing',
+  attendance_3_day_streak: 'https://drive.google.com/file/d/14236iK-zESjRKjeqdeZCBhba1HCx5iDt/view?usp=sharing',
+  attendance_5_day_streak: 'https://drive.google.com/file/d/1fjQKNaLL7C8dtEAdHrddoWnxg1016L0J/view?usp=sharing',
+  attendance_10_day_streak: 'https://drive.google.com/file/d/1ejroj7ROF_gn4lmIa9XIOIjlcQ_IDRu-/view?usp=sharing'
+};
+
+const REMOVED_ACHIEVEMENT_IDS = ['milestone_5700'];
+
+const ACHIEVEMENT_MASTER_DATA = [
+  {
+    id: 'first_perfect_score',
+    title: 'First Perfect Score',
+    description: 'Earn your first perfect score in class records.',
+    category: 'Academic',
+    chainKey: 'academic_perfection',
+    chainOrder: 1,
+    isVisibleByDefault: true,
+    unlocksAfterAchievementId: null,
+    nextAchievementId: 'double_perfection',
+    triggerType: 'score_update',
+    condition: { type: 'perfect_score_count', count: 1 },
+    rewardPoints: 100
+  },
+  {
+    id: 'double_perfection',
+    title: 'Double Perfection',
+    description: 'Earn 2 perfect scores.',
+    category: 'Academic',
+    chainKey: 'academic_perfection',
+    chainOrder: 2,
+    isVisibleByDefault: false,
+    unlocksAfterAchievementId: 'first_perfect_score',
+    nextAchievementId: 'triple_perfection',
+    triggerType: 'score_update',
+    condition: { type: 'perfect_score_count', count: 2 },
+    rewardPoints: 150
+  },
+  {
+    id: 'triple_perfection',
+    title: 'Triple Perfection',
+    description: 'Earn 3 perfect scores.',
+    category: 'Academic',
+    chainKey: 'academic_perfection',
+    chainOrder: 3,
+    isVisibleByDefault: false,
+    unlocksAfterAchievementId: 'double_perfection',
+    nextAchievementId: 'perfectionist',
+    triggerType: 'score_update',
+    condition: { type: 'perfect_score_count', count: 3 },
+    rewardPoints: 200
+  },
+  {
+    id: 'perfectionist',
+    title: 'Perfectionist',
+    description: 'Earn 5 perfect scores.',
+    category: 'Academic',
+    chainKey: 'academic_perfection',
+    chainOrder: 4,
+    isVisibleByDefault: false,
+    unlocksAfterAchievementId: 'triple_perfection',
+    nextAchievementId: 'flawless_mind',
+    triggerType: 'score_update',
+    condition: { type: 'perfect_score_count', count: 5 },
+    rewardPoints: 300
+  },
+  {
+    id: 'flawless_mind',
+    title: 'Flawless Mind',
+    description: 'Earn 10 perfect scores.',
+    category: 'Academic',
+    chainKey: 'academic_perfection',
+    chainOrder: 5,
+    isVisibleByDefault: false,
+    unlocksAfterAchievementId: 'perfectionist',
+    nextAchievementId: null,
+    triggerType: 'score_update',
+    condition: { type: 'perfect_score_count', count: 10 },
+    rewardPoints: 500
+  },
+  {
+    id: 'sharp_mind',
+    title: 'Sharp Mind',
+    description: 'Get one score at 90% or higher.',
+    category: 'Academic',
+    chainKey: 'high_performance',
+    chainOrder: 1,
+    isVisibleByDefault: true,
+    unlocksAfterAchievementId: null,
+    nextAchievementId: 'consistent_performer',
+    triggerType: 'score_update',
+    condition: { type: 'high_score_count', threshold: 90, count: 1 },
+    rewardPoints: 100
+  },
+  {
+    id: 'consistent_performer',
+    title: 'Consistent Performer',
+    description: 'Get 3 scores at 90% or higher.',
+    category: 'Academic',
+    chainKey: 'high_performance',
+    chainOrder: 2,
+    isVisibleByDefault: false,
+    unlocksAfterAchievementId: 'sharp_mind',
+    nextAchievementId: 'academic_elite',
+    triggerType: 'score_update',
+    condition: { type: 'high_score_count', threshold: 90, count: 3 },
+    rewardPoints: 200
+  },
+  {
+    id: 'academic_elite',
+    title: 'Academic Elite',
+    description: 'Get 5 scores at 90% or higher.',
+    category: 'Academic',
+    chainKey: 'high_performance',
+    chainOrder: 3,
+    isVisibleByDefault: false,
+    unlocksAfterAchievementId: 'consistent_performer',
+    nextAchievementId: 'mastery_level',
+    triggerType: 'score_update',
+    condition: { type: 'high_score_count', threshold: 90, count: 5 },
+    rewardPoints: 350
+  },
+  {
+    id: 'mastery_level',
+    title: 'Mastery Level',
+    description: 'Get 10 scores at 90% or higher.',
+    category: 'Academic',
+    chainKey: 'high_performance',
+    chainOrder: 4,
+    isVisibleByDefault: false,
+    unlocksAfterAchievementId: 'academic_elite',
+    nextAchievementId: null,
+    triggerType: 'score_update',
+    condition: { type: 'high_score_count', threshold: 90, count: 10 },
+    rewardPoints: 700
+  },
+  {
+    id: 'first_step',
+    title: 'First Step',
+    description: 'Complete your first activity score.',
+    category: 'Consistency',
+    chainKey: 'activity_completion',
+    chainOrder: 1,
+    isVisibleByDefault: true,
+    unlocksAfterAchievementId: null,
+    nextAchievementId: 'getting_started',
+    triggerType: 'score_update',
+    condition: { type: 'activity_count', count: 1 },
+    rewardPoints: 100
+  },
+  {
+    id: 'getting_started',
+    title: 'Getting Started',
+    description: 'Complete 3 activities.',
+    category: 'Consistency',
+    chainKey: 'activity_completion',
+    chainOrder: 2,
+    isVisibleByDefault: false,
+    unlocksAfterAchievementId: 'first_step',
+    nextAchievementId: 'on_a_roll',
+    triggerType: 'score_update',
+    condition: { type: 'activity_count', count: 3 },
+    rewardPoints: 150
+  },
+  {
+    id: 'on_a_roll',
+    title: 'On a Roll',
+    description: 'Complete 5 activities.',
+    category: 'Consistency',
+    chainKey: 'activity_completion',
+    chainOrder: 3,
+    isVisibleByDefault: false,
+    unlocksAfterAchievementId: 'getting_started',
+    nextAchievementId: 'dedicated_learner',
+    triggerType: 'score_update',
+    condition: { type: 'activity_count', count: 5 },
+    rewardPoints: 250
+  },
+  {
+    id: 'dedicated_learner',
+    title: 'Dedicated Learner',
+    description: 'Complete 10 activities.',
+    category: 'Consistency',
+    chainKey: 'activity_completion',
+    chainOrder: 4,
+    isVisibleByDefault: false,
+    unlocksAfterAchievementId: 'on_a_roll',
+    nextAchievementId: 'relentless',
+    triggerType: 'score_update',
+    condition: { type: 'activity_count', count: 10 },
+    rewardPoints: 400
+  },
+  {
+    id: 'relentless',
+    title: 'Relentless',
+    description: 'Complete 20 activities.',
+    category: 'Consistency',
+    chainKey: 'activity_completion',
+    chainOrder: 5,
+    isVisibleByDefault: false,
+    unlocksAfterAchievementId: 'dedicated_learner',
+    nextAchievementId: null,
+    triggerType: 'score_update',
+    condition: { type: 'activity_count', count: 20 },
+    rewardPoints: 700
+  },
+  {
+    id: 'club_500',
+    title: '500 Club',
+    description: 'Reach 500 total points.',
+    category: 'Points',
+    chainKey: 'points_milestone',
+    chainOrder: 1,
+    isVisibleByDefault: true,
+    unlocksAfterAchievementId: null,
+    nextAchievementId: 'elite_1000',
+    triggerType: 'points_update',
+    condition: { type: 'total_points', points: 500 },
+    rewardPoints: 350
+  },
+  {
+    id: 'elite_1000',
+    title: '1000 Elite',
+    description: 'Reach 1000 total points.',
+    category: 'Points',
+    chainKey: 'points_milestone',
+    chainOrder: 2,
+    isVisibleByDefault: false,
+    unlocksAfterAchievementId: 'club_500',
+    nextAchievementId: 'milestone_2500',
+    triggerType: 'points_update',
+    condition: { type: 'total_points', points: 1000 },
+    rewardPoints: 700
+  },
+  {
+    id: 'milestone_2500',
+    title: '2500 Milestone',
+    description: 'Reach 2500 total points.',
+    category: 'Points',
+    chainKey: 'points_milestone',
+    chainOrder: 3,
+    isVisibleByDefault: false,
+    unlocksAfterAchievementId: 'elite_1000',
+    nextAchievementId: 'club_5000',
+    triggerType: 'points_update',
+    condition: { type: 'total_points', points: 2500 },
+    rewardPoints: 900
+  },
+  {
+    id: 'club_5000',
+    title: '5000 Club',
+    description: 'Reach 5000 total points.',
+    category: 'Points',
+    chainKey: 'points_milestone',
+    chainOrder: 4,
+    isVisibleByDefault: false,
+    unlocksAfterAchievementId: 'milestone_2500',
+    nextAchievementId: 'elite_10000',
+    triggerType: 'points_update',
+    condition: { type: 'total_points', points: 5000 },
+    rewardPoints: 1200
+  },
+  {
+    id: 'elite_10000',
+    title: '10000 Elite',
+    description: 'Reach 10000 total points.',
+    category: 'Points',
+    chainKey: 'points_milestone',
+    chainOrder: 5,
+    isVisibleByDefault: false,
+    unlocksAfterAchievementId: 'club_5000',
+    nextAchievementId: null,
+    triggerType: 'points_update',
+    condition: { type: 'total_points', points: 10000 },
+    rewardPoints: 2500
+  },
+  {
+    id: 'first_attendance',
+    title: 'First Attendance',
+    description: 'Record your first attendance entry.',
+    category: 'Attendance',
+    chainKey: 'attendance_count',
+    chainOrder: 1,
+    isVisibleByDefault: true,
+    unlocksAfterAchievementId: null,
+    nextAchievementId: 'showing_up',
+    triggerType: 'attendance_update',
+    condition: { type: 'attendance_count', count: 1 },
+    rewardPoints: 100
+  },
+  {
+    id: 'showing_up',
+    title: 'Showing Up',
+    description: 'Record 3 attendance entries.',
+    category: 'Attendance',
+    chainKey: 'attendance_count',
+    chainOrder: 2,
+    isVisibleByDefault: false,
+    unlocksAfterAchievementId: 'first_attendance',
+    nextAchievementId: 'consistent_attendee',
+    triggerType: 'attendance_update',
+    condition: { type: 'attendance_count', count: 3 },
+    rewardPoints: 150
+  },
+  {
+    id: 'consistent_attendee',
+    title: 'Consistent Attendee',
+    description: 'Record 5 attendance entries.',
+    category: 'Attendance',
+    chainKey: 'attendance_count',
+    chainOrder: 3,
+    isVisibleByDefault: false,
+    unlocksAfterAchievementId: 'showing_up',
+    nextAchievementId: 'reliable',
+    triggerType: 'attendance_update',
+    condition: { type: 'attendance_count', count: 5 },
+    rewardPoints: 250
+  },
+  {
+    id: 'reliable',
+    title: 'Reliable',
+    description: 'Record 10 attendance entries.',
+    category: 'Attendance',
+    chainKey: 'attendance_count',
+    chainOrder: 4,
+    isVisibleByDefault: false,
+    unlocksAfterAchievementId: 'consistent_attendee',
+    nextAchievementId: 'ever_present',
+    triggerType: 'attendance_update',
+    condition: { type: 'attendance_count', count: 10 },
+    rewardPoints: 400
+  },
+  {
+    id: 'ever_present',
+    title: 'Ever Present',
+    description: 'Record 20 attendance entries.',
+    category: 'Attendance',
+    chainKey: 'attendance_count',
+    chainOrder: 5,
+    isVisibleByDefault: false,
+    unlocksAfterAchievementId: 'reliable',
+    nextAchievementId: null,
+    triggerType: 'attendance_update',
+    condition: { type: 'attendance_count', count: 20 },
+    rewardPoints: 700
+  },
+  {
+    id: 'attendance_3_day_streak',
+    title: '3-Day Streak',
+    description: 'Reach a 3-day attendance streak.',
+    category: 'Attendance',
+    chainKey: 'attendance_streak',
+    chainOrder: 1,
+    isVisibleByDefault: true,
+    unlocksAfterAchievementId: null,
+    nextAchievementId: 'attendance_5_day_streak',
+    triggerType: 'attendance_update',
+    condition: { type: 'attendance_streak', days: 3 },
+    rewardPoints: 200
+  },
+  {
+    id: 'attendance_5_day_streak',
+    title: '5-Day Streak',
+    description: 'Reach a 5-day attendance streak.',
+    category: 'Attendance',
+    chainKey: 'attendance_streak',
+    chainOrder: 2,
+    isVisibleByDefault: false,
+    unlocksAfterAchievementId: 'attendance_3_day_streak',
+    nextAchievementId: 'attendance_10_day_streak',
+    triggerType: 'attendance_update',
+    condition: { type: 'attendance_streak', days: 5 },
+    rewardPoints: 350
+  },
+  {
+    id: 'attendance_10_day_streak',
+    title: '10-Day Streak',
+    description: 'Reach a 10-day attendance streak.',
+    category: 'Attendance',
+    chainKey: 'attendance_streak',
+    chainOrder: 3,
+    isVisibleByDefault: false,
+    unlocksAfterAchievementId: 'attendance_5_day_streak',
+    nextAchievementId: null,
+    triggerType: 'attendance_update',
+    condition: { type: 'attendance_streak', days: 10 },
+    rewardPoints: 700
+  }
+];
+
+function normalizeAchievement(item = {}) {
+  const id = String(item.id || '').trim();
+  const badgeImageUrl = safeText(item.badgeImageUrl || ACHIEVEMENT_BADGE_IMAGE_URLS[id]);
+
+  return {
+    ...item,
+    id,
+    status: String(item.status || ACHIEVEMENT_STATUS_ACTIVE).trim() || ACHIEVEMENT_STATUS_ACTIVE,
+    isHidden: Boolean(item.isHidden),
+    isVisibleByDefault: Boolean(item.isVisibleByDefault),
+    chainKey: String(item.chainKey || '').trim() || 'default_chain',
+    chainOrder: Number(item.chainOrder) || 0,
+    unlocksAfterAchievementId: item.unlocksAfterAchievementId ? String(item.unlocksAfterAchievementId).trim() : null,
+    triggerType: String(item.triggerType || '').trim(),
+    rewardPoints: Math.max(100, Number(item.rewardPoints) || 100),
+    badgeImageUrl
+  };
+}
+
+function sortByChain(a, b) {
+  const categoryCompare = String(a.category || '').localeCompare(String(b.category || ''));
+  if (categoryCompare !== 0) return categoryCompare;
+  const chainCompare = String(a.chainKey || '').localeCompare(String(b.chainKey || ''));
+  if (chainCompare !== 0) return chainCompare;
+  return Number(a.chainOrder || 0) - Number(b.chainOrder || 0);
+}
+
+function buildStudentAchievementDocId(studentId, achievementId) {
+  return `${studentId}_${achievementId}`;
+}
+
+function buildAchievementPointLogDocId(studentId, achievementId) {
+  return `achievement_${achievementId}_${studentId}`;
+}
+
+function safeText(value, fallback = '') {
+  const output = String(value || '').trim();
+  return output || fallback;
+}
+
+function formatStudentName(studentData = {}) {
+  return [studentData.firstName, studentData.middleName, studentData.lastName]
+    .map((part) => String(part || '').trim())
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+}
+
+async function queryAllStudentScores(studentId) {
+  const normalizedStudentId = safeText(studentId);
+  if (!normalizedStudentId) return [];
+
+  try {
+    const snap = await getDocs(query(collection(db, 'scores'), where('studentId', '==', normalizedStudentId)));
+    return snap.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() }));
+  } catch (error) {
+    console.warn('Failed to query scores for achievement checks:', error);
+    return [];
+  }
+}
+
+export async function seedAchievementsIfEmpty() {
+  try {
+    const existingSnapshot = await getDocs(query(collection(db, 'achievements'), limit(1)));
+    const batch = writeBatch(db);
+    const now = serverTimestamp();
+
+    ACHIEVEMENT_MASTER_DATA.forEach((rawAchievement) => {
+      const achievement = normalizeAchievement(rawAchievement);
+      const achievementRef = doc(db, 'achievements', achievement.id);
+      batch.set(achievementRef, {
+        ...achievement,
+        badgeRewardId: null,
+        unlockItemIds: [],
+        isHidden: false,
+        status: ACHIEVEMENT_STATUS_ACTIVE,
+        updatedAt: now
+      }, { merge: true });
+    });
+
+    REMOVED_ACHIEVEMENT_IDS.forEach((achievementId) => {
+      const achievementRef = doc(db, 'achievements', achievementId);
+      batch.set(achievementRef, {
+        isHidden: true,
+        status: ACHIEVEMENT_STATUS_INACTIVE,
+        nextAchievementId: null,
+        updatedAt: now
+      }, { merge: true });
+    });
+
+    await batch.commit();
+    return existingSnapshot.empty;
+  } catch (error) {
+    console.warn('Achievement sync skipped:', error);
+    return false;
+  }
+}
+
+async function getStudentAchievementRecords(studentId) {
+  const normalizedStudentId = safeText(studentId);
+  if (!normalizedStudentId) return [];
+
+  try {
+    const snapshot = await getDocs(query(collection(db, 'studentAchievements'), where('studentId', '==', normalizedStudentId)));
+    return snapshot.docs.map((docItem) => ({ id: docItem.id, ...(docItem.data() || {}) }));
+  } catch (error) {
+    console.warn('Failed loading student achievements:', error);
+    return [];
+  }
+}
+
+export async function getStudentUnlockedAchievementIds(studentId) {
+  const achievementRecords = await getStudentAchievementRecords(studentId);
+  return new Set(achievementRecords.map((item) => safeText(item.achievementId)).filter(Boolean));
+}
+
+export async function getStudentAchievementStatusMap(studentId) {
+  const achievementRecords = await getStudentAchievementRecords(studentId);
+  const statusMap = new Map();
+
+  achievementRecords.forEach((item) => {
+    const achievementId = safeText(item.achievementId);
+    if (!achievementId) return;
+
+    statusMap.set(achievementId, {
+      isUnlocked: true,
+      isClaimed: Boolean(item.isClaimed),
+      achievedAt: item.achievedAt || null,
+      claimedAt: item.claimedAt || null
+    });
+  });
+
+  return statusMap;
+}
+
+async function getActiveAchievements(triggerType = '') {
+  const normalizedTriggerType = safeText(triggerType);
+  const source = [];
+
+  try {
+    const achievementsSnap = normalizedTriggerType
+      ? await getDocs(
+          query(
+            collection(db, 'achievements'),
+            where('status', '==', ACHIEVEMENT_STATUS_ACTIVE),
+            where('triggerType', '==', normalizedTriggerType)
+          )
+        )
+      : await getDocs(query(collection(db, 'achievements'), where('status', '==', ACHIEVEMENT_STATUS_ACTIVE)));
+
+    achievementsSnap.docs.forEach((item) => source.push(normalizeAchievement(item.data() || {})));
+  } catch (error) {
+    console.warn('Failed loading active achievements with filter. Using fallback:', error);
+    try {
+      const allAchievementsSnapshot = await getDocs(collection(db, 'achievements'));
+      allAchievementsSnapshot.docs.forEach((item) => {
+        const normalized = normalizeAchievement(item.data() || {});
+        if (normalized.status !== ACHIEVEMENT_STATUS_ACTIVE) return;
+        if (normalizedTriggerType && normalized.triggerType !== normalizedTriggerType) return;
+        source.push(normalized);
+      });
+    } catch (fallbackError) {
+      console.warn('Failed loading achievements fallback:', fallbackError);
+    }
+  }
+
+  return source.filter((item) => item.id && !item.isHidden).sort(sortByChain);
+}
+
+export async function getVisibleAchievementsForStudent(studentId) {
+  await seedAchievementsIfEmpty();
+  const [achievements, achievementRecords] = await Promise.all([
+    getActiveAchievements(''),
+    getStudentAchievementRecords(studentId)
+  ]);
+  const unlockedIds = new Set(achievementRecords.map((item) => safeText(item.achievementId)).filter(Boolean));
+  const achievedAtByAchievementId = new Map(
+    achievementRecords.map((item) => [safeText(item.achievementId), item.achievedAt]).filter(([id]) => Boolean(id))
+  );
+
+  return achievements
+    .filter((achievement) => {
+      if (achievement.isVisibleByDefault) return true;
+      if (unlockedIds.has(achievement.id)) return true;
+      return achievement.unlocksAfterAchievementId && unlockedIds.has(achievement.unlocksAfterAchievementId);
+    })
+    .map((achievement) => ({
+      ...achievement,
+      achievedAt: achievedAtByAchievementId.get(achievement.id) || null
+    }))
+    .sort(sortByChain);
+}
+
+export async function evaluateAchievementCondition(studentId, achievement) {
+  const condition = achievement?.condition || {};
+  const conditionType = safeText(condition.type);
+
+  if (!conditionType) return false;
+
+  if (conditionType === 'total_points') {
+    const studentSnap = await getDoc(doc(db, 'students', studentId));
+    if (!studentSnap.exists()) return false;
+    const studentData = studentSnap.data() || {};
+    return Number(studentData.points || 0) >= Number(condition.points || 0);
+  }
+
+  if (conditionType === 'attendance_streak') {
+    try {
+      const attendanceSnap = await getDocs(query(collection(db, 'attendanceLogs'), where('studentId', '==', studentId), limit(1)));
+      if (attendanceSnap.empty) return false;
+    } catch (error) {
+      console.warn('Attendance logs not available for streak condition:', error);
+      return false;
+    }
+
+    const studentSnap = await getDoc(doc(db, 'students', studentId));
+    if (!studentSnap.exists()) return false;
+    const attendanceStreak = Number(studentSnap.data()?.attendanceStreak || 0);
+    return attendanceStreak >= Number(condition.days || 0);
+  }
+
+  if (conditionType === 'attendance_count') {
+    try {
+      const attendanceSnap = await getDocs(query(collection(db, 'attendanceLogs'), where('studentId', '==', studentId)));
+      return attendanceSnap.size >= Number(condition.count || 0);
+    } catch (error) {
+      console.warn('Attendance logs not available for count condition:', error);
+      return false;
+    }
+  }
+
+  const scores = await queryAllStudentScores(studentId);
+
+  if (conditionType === 'perfect_score_count') {
+    const perfectScores = scores.filter((score) => {
+      const scoreValue = Number(score.score);
+      const maxScore = Number(score.maxScore);
+      return Number.isFinite(scoreValue) && Number.isFinite(maxScore) && maxScore > 0 && scoreValue === maxScore;
+    });
+
+    return perfectScores.length >= Number(condition.count || 0);
+  }
+
+  if (conditionType === 'high_score_count') {
+    const threshold = Number(condition.threshold || 0);
+    const highScores = scores.filter((score) => {
+      const percentageRaw = Number(score.percentage);
+      const maxScore = Number(score.maxScore);
+      const scoreValue = Number(score.score);
+      const computedPercentage =
+        Number.isFinite(percentageRaw) && percentageRaw >= 0
+          ? percentageRaw
+          : Number.isFinite(maxScore) && maxScore > 0 && Number.isFinite(scoreValue)
+          ? (scoreValue / maxScore) * 100
+          : Number.NaN;
+
+      return Number.isFinite(computedPercentage) && computedPercentage >= threshold;
+    });
+
+    return highScores.length >= Number(condition.count || 0);
+  }
+
+  if (conditionType === 'activity_count') {
+    const uniqueActivityIds = new Set();
+    scores.forEach((score) => {
+      const hasScore = score.score !== null && score.score !== undefined;
+      const activityId = safeText(score.activityId);
+      if (hasScore && activityId) {
+        uniqueActivityIds.add(activityId);
+      }
+    });
+
+    return uniqueActivityIds.size >= Number(condition.count || 0);
+  }
+
+  return false;
+}
+
+export async function createAchievementNotification(studentId, achievement) {
+  try {
+    await addDoc(collection(db, 'notifications'), {
+      recipientId: studentId,
+      recipientRole: 'student',
+      title: 'Achievement Unlocked!',
+      message: `${achievement.title} unlocked! +${achievement.rewardPoints} points`,
+      type: 'achievement',
+      sourceType: 'achievement',
+      sourceId: achievement.id,
+      isRead: false,
+      createdAt: serverTimestamp()
+    });
+  } catch (error) {
+    console.warn('Achievement notification skipped:', error);
+  }
+}
+
+export async function unlockAchievement(studentId, achievement, context = {}) {
+  const normalizedStudentId = safeText(studentId);
+  if (!normalizedStudentId || !achievement?.id) return { unlocked: false };
+
+  const studentAchievementId = buildStudentAchievementDocId(normalizedStudentId, achievement.id);
+  const studentAchievementRef = doc(db, 'studentAchievements', studentAchievementId);
+  const studentRef = doc(db, 'students', normalizedStudentId);
+
+  try {
+    const transactionResult = await runTransaction(db, async (transaction) => {
+      const studentAchievementSnap = await transaction.get(studentAchievementRef);
+      if (studentAchievementSnap.exists()) {
+        return { unlocked: false, reason: 'already_unlocked' };
+      }
+
+      const studentSnap = await transaction.get(studentRef);
+      if (!studentSnap.exists()) {
+        return { unlocked: false, reason: 'student_not_found' };
+      }
+
+      transaction.set(studentAchievementRef, {
+        studentId: normalizedStudentId,
+        achievementId: achievement.id,
+        title: achievement.title,
+        category: achievement.category,
+        chainKey: achievement.chainKey,
+        badgeImageUrl: achievement.badgeImageUrl || '',
+        rewardPoints: achievement.rewardPoints,
+        isClaimed: false,
+        achievedAt: serverTimestamp(),
+        sourceType: safeText(context.triggerType, 'achievement_engine'),
+        sourceId: safeText(context.sourceId)
+      });
+
+      return { unlocked: true };
+    });
+
+    if (transactionResult.unlocked) {
+      await createAchievementNotification(normalizedStudentId, achievement);
+    }
+
+    return transactionResult;
+  } catch (error) {
+    console.warn('Achievement unlock failed:', error);
+    return { unlocked: false, reason: 'unlock_error' };
+  }
+}
+
+function showPointsPopupSafe(points) {
+  if (typeof globalThis.showPointsPopup !== 'function') return;
+  const normalizedPoints = Number(points || 0);
+  if (!Number.isFinite(normalizedPoints) || normalizedPoints <= 0) return;
+
+  try {
+    globalThis.showPointsPopup(normalizedPoints);
+  } catch (error) {
+    console.warn('Points popup render skipped:', error);
+  }
+}
+
+export async function claimAchievement(studentId, achievementId, options = {}) {
+  const normalizedStudentId = safeText(studentId);
+  const normalizedAchievementId = safeText(achievementId);
+  if (!normalizedStudentId || !normalizedAchievementId) return { claimed: false, reason: 'invalid_input' };
+  const suppressPopup = Boolean(options?.suppressPopup);
+
+  const studentAchievementRef = doc(db, 'studentAchievements', buildStudentAchievementDocId(normalizedStudentId, normalizedAchievementId));
+  const pointLogRef = doc(db, 'pointLogs', buildAchievementPointLogDocId(normalizedStudentId, normalizedAchievementId));
+  const studentRef = doc(db, 'students', normalizedStudentId);
+  const achievementRef = doc(db, 'achievements', normalizedAchievementId);
+
+  try {
+    const transactionResult = await runTransaction(db, async (transaction) => {
+      const studentAchievementSnap = await transaction.get(studentAchievementRef);
+      if (!studentAchievementSnap.exists()) {
+        return { claimed: false, reason: 'achievement_not_unlocked' };
+      }
+
+      const studentAchievementData = studentAchievementSnap.data() || {};
+      if (studentAchievementData.isClaimed) {
+        return { claimed: false, reason: 'already_claimed' };
+      }
+
+      const achievementSnap = await transaction.get(achievementRef);
+      if (!achievementSnap.exists()) {
+        return { claimed: false, reason: 'achievement_missing' };
+      }
+
+      const studentSnap = await transaction.get(studentRef);
+      if (!studentSnap.exists()) {
+        return { claimed: false, reason: 'student_not_found' };
+      }
+
+      const achievementData = normalizeAchievement(achievementSnap.data() || {});
+      const rewardPoints = Number(achievementData.rewardPoints || studentAchievementData.rewardPoints || 0);
+      const studentData = studentSnap.data() || {};
+      const studentName = formatStudentName(studentData) || safeText(studentData.displayName, 'Student');
+      const sectionId = safeText(studentData.sectionId);
+      const sectionRef = sectionId ? doc(db, 'sections', sectionId) : null;
+      const sectionSnap = sectionRef ? await transaction.get(sectionRef) : null;
+
+      transaction.update(studentRef, { points: increment(rewardPoints) });
+
+      if (sectionRef && sectionSnap?.exists()) {
+        transaction.update(sectionRef, { totalPoints: increment(rewardPoints) });
+      }
+
+      transaction.set(pointLogRef, {
+        studentId: normalizedStudentId,
+        studentName,
+        achievementId: normalizedAchievementId,
+        achievementTitle: achievementData.title || studentAchievementData.title || 'Achievement reward',
+        source: 'achievement',
+        awardedPoints: rewardPoints,
+        pointDifference: rewardPoints,
+        previousAwardedPoints: 0,
+        reason: `${achievementData.title || studentAchievementData.title || 'Achievement'} claimed`,
+        teacherName: 'System',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+
+      transaction.update(studentAchievementRef, {
+        isClaimed: true,
+        claimedAt: serverTimestamp()
+      });
+
+      return { claimed: true, rewardPoints };
+    });
+
+    if (transactionResult.claimed && !suppressPopup) {
+      showPointsPopupSafe(transactionResult.rewardPoints);
+    }
+
+    return transactionResult;
+  } catch (error) {
+    console.warn('Achievement claim failed:', error);
+    return { claimed: false, reason: 'claim_error' };
+  }
+}
+
+export async function claimAllAchievements(studentId) {
+  const normalizedStudentId = safeText(studentId);
+  if (!normalizedStudentId) return { claimedCount: 0, totalPoints: 0 };
+
+  try {
+    const unclaimedSnapshot = await getDocs(
+      query(
+        collection(db, 'studentAchievements'),
+        where('studentId', '==', normalizedStudentId),
+        where('isClaimed', '==', false)
+      )
+    );
+
+    let claimedCount = 0;
+    let totalPoints = 0;
+
+    for (const docItem of unclaimedSnapshot.docs) {
+      const data = docItem.data() || {};
+      const achievementId = safeText(data.achievementId);
+      if (!achievementId) continue;
+
+      const result = await claimAchievement(normalizedStudentId, achievementId, { suppressPopup: true });
+      if (!result.claimed) continue;
+
+      claimedCount += 1;
+      totalPoints += Number(result.rewardPoints || 0);
+    }
+
+    if (totalPoints > 0) {
+      showPointsPopupSafe(totalPoints);
+    }
+
+    return { claimedCount, totalPoints };
+  } catch (error) {
+    console.warn('Claim all achievements failed:', error);
+    return { claimedCount: 0, totalPoints: 0 };
+  }
+}
+
+export async function checkAchievements(studentId, context = {}) {
+  const normalizedStudentId = safeText(studentId);
+  const triggerType = safeText(context.triggerType);
+  if (!normalizedStudentId || !triggerType) return [];
+
+  try {
+    await seedAchievementsIfEmpty();
+    const achievements = await getActiveAchievements(triggerType);
+    if (!achievements.length) return [];
+
+    const unlockedIds = await getStudentUnlockedAchievementIds(normalizedStudentId);
+    const unlockedNow = [];
+    const achievementsByChain = new Map();
+
+    achievements.forEach((achievement) => {
+      const chainKey = achievement.chainKey || achievement.id;
+      if (!achievementsByChain.has(chainKey)) {
+        achievementsByChain.set(chainKey, []);
+      }
+      achievementsByChain.get(chainKey).push(achievement);
+    });
+
+    for (const chainAchievements of achievementsByChain.values()) {
+      const orderedChain = [...chainAchievements].sort((a, b) => Number(a.chainOrder || 0) - Number(b.chainOrder || 0));
+      const nextAchievement = orderedChain.find((achievement) => !unlockedIds.has(achievement.id));
+
+      if (!nextAchievement) continue;
+
+      const isVisible =
+        nextAchievement.isVisibleByDefault ||
+        (nextAchievement.unlocksAfterAchievementId && unlockedIds.has(nextAchievement.unlocksAfterAchievementId));
+
+      if (!isVisible) continue;
+
+      const passed = await evaluateAchievementCondition(normalizedStudentId, nextAchievement, context);
+      if (!passed) continue;
+
+      const result = await unlockAchievement(normalizedStudentId, nextAchievement, context);
+      if (!result.unlocked) continue;
+
+      unlockedIds.add(nextAchievement.id);
+      unlockedNow.push(nextAchievement);
+    }
+
+    return unlockedNow;
+  } catch (error) {
+    console.warn('Achievement check failed:', error);
+    return [];
+  }
+}
+
+export function getAchievementRequirementText(achievement = {}) {
+  const condition = achievement.condition || {};
+  const type = safeText(condition.type);
+
+  if (type === 'perfect_score_count') {
+    return `Get ${Number(condition.count || 0)} perfect score${Number(condition.count || 0) === 1 ? '' : 's'}`;
+  }
+  if (type === 'high_score_count') {
+    return `Get ${Number(condition.count || 0)} score${Number(condition.count || 0) === 1 ? '' : 's'} at ${Number(
+      condition.threshold || 0
+    )}% or higher`;
+  }
+  if (type === 'activity_count') {
+    return `Complete ${Number(condition.count || 0)} activit${Number(condition.count || 0) === 1 ? 'y' : 'ies'}`;
+  }
+  if (type === 'total_points') {
+    return `Reach ${Number(condition.points || 0)} total points`;
+  }
+  if (type === 'attendance_count') {
+    return `Attend ${Number(condition.count || 0)} class day${Number(condition.count || 0) === 1 ? '' : 's'}`;
+  }
+  if (type === 'attendance_streak') {
+    return `Maintain a ${Number(condition.days || 0)}-day attendance streak`;
+  }
+
+  return 'Complete the requirement to unlock this achievement';
+}

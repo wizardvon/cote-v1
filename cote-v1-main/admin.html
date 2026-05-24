@@ -1,0 +1,701 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>COTE Web App | Teacher Dashboard</title>
+    <meta name="theme-color" content="#061321" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body class="dashboard-body">
+    <div id="loadingOverlay" class="loading-overlay loading-overlay-visible" aria-hidden="false">
+      <div class="loading-overlay-content">
+        <img src="icons/cote-logo.png" alt="C.O.T.E System Logo" class="loading-logo" />
+        <p class="loading-text">Initializing C.O.T.E System...</p>
+      </div>
+    </div>
+
+    <aside id="sidebar" class="sidebar" aria-hidden="true" aria-label="Teacher sidebar menu">
+      <div>
+        <div class="sidebar-header">
+          <div class="brand-block">
+            <img src="icons/cote-logo.png" alt="C.O.T.E Gold Shield" class="brand-logo" />
+            <div>
+              <p class="sidebar-label">Elite Academy System</p>
+              <p class="brand-title">C.O.T.E App</p>
+            </div>
+          </div>
+          
+          <h2 id="sidebar-teacher-name">Teacher Panel</h2>
+          <p class="sidebar-email" id="admin-email">Loading...</p>
+        </div>
+
+        <nav class="sidebar-nav" aria-label="Teacher navigation">
+          <button type="button" class="menu-btn active" data-target="home">
+            <span aria-hidden="true">🏠</span>
+            <span>Home</span>
+          </button>
+          <button type="button" class="menu-btn" data-target="give-points">
+            <span aria-hidden="true">⭐</span>
+            <span>Give Points</span>
+          </button>
+          <button type="button" class="menu-btn" data-target="quest">
+            <span aria-hidden="true">🎯</span>
+            <span>Quest</span>
+          </button>
+          <button type="button" class="menu-btn" data-target="resources">
+            <span aria-hidden="true">📂</span>
+            <span>Resources</span>
+          </button>
+          <button type="button" class="menu-btn" data-target="announcements">
+            <span aria-hidden="true">📢</span>
+            <span>Announcements</span>
+          </button>
+          <button type="button" class="menu-btn" data-target="messages">
+            <span aria-hidden="true">MSG</span>
+            <span>Messages</span>
+          </button>
+          <button type="button" class="menu-btn" data-target="my-classes">
+            <span aria-hidden="true">🏫</span>
+            <span>My Classes</span>
+          </button>
+          <button type="button" class="menu-btn" data-target="class-record">
+            <span aria-hidden="true">📊</span>
+            <span>Class Record</span>
+          </button>
+          <button type="button" class="menu-btn" data-target="attendance">
+            <span aria-hidden="true">✓</span>
+            <span>Attendance</span>
+          </button>
+          <button type="button" class="menu-btn" data-target="enrollment-requests">
+            <span aria-hidden="true">📥</span>
+            <span>Enrollment Requests</span>
+          </button>
+        </nav>
+      </div>
+
+      <button id="logout-button" type="button" class="logout-button menu-logout">Logout</button>
+    </aside>
+
+    <button id="sidebar-overlay" class="sidebar-overlay" hidden aria-label="Close sidebar"></button>
+
+    <header class="app-bar" aria-label="Teacher app bar">
+      <div class="app-bar-side app-bar-left">
+        <button id="burger-button" class="icon-button" type="button" aria-label="Open menu">☰</button>
+      </div>
+
+      <h1 id="page-title" class="app-bar-title">Home</h1>
+
+      <div class="app-bar-side app-bar-right">
+        <img src="icons/cote-logo.png" alt="C.O.T.E" class="top-brand-logo" />
+        <span class="teacher-chip">Teacher</span>
+      </div>
+    </header>
+
+    <main class="student-app teacher-app" aria-labelledby="page-title">
+      <section id="page-home" class="page active" data-page="home" aria-label="Teacher home">
+        <article class="app-card welcome-card">
+          <p class="badge">Teacher Control Center</p>
+          <h2>Welcome to the Teacher Dashboard</h2>
+          <p>
+            Manage class point updates, track progress modules, and prepare upcoming classroom features from one app-style workspace.
+          </p>
+        </article>
+
+        <article class="app-card">
+          <h3>Quick Summary</h3>
+          <div class="info-grid">
+            <p><strong>Active module:</strong> Give Points</p>
+            <p><strong>Current access:</strong> Teacher/Admin</p>
+            <p><strong>Student source:</strong> Approved class enrollments</p>
+            <p><strong>Point logs:</strong> Saved in pointLogs</p>
+          </div>
+        </article>
+
+        <article class="app-card">
+          <h3>Section Leaderboard Preview</h3>
+          <p>Current section ranking snapshot for the active school year.</p>
+          <div id="teacher-leaderboard-preview" class="list-stack" aria-live="polite">
+            <p>Loading section leaderboard...</p>
+          </div>
+        </article>
+        <article class="app-card">
+          <h3>Student Rank Preview</h3>
+          <p>Approved students in a selected class with their section rank.</p>
+          <div class="admin-toolbar">
+            <div class="field">
+              <label for="teacher-rank-preview-class-filter">Select Class</label>
+              <select id="teacher-rank-preview-class-filter">
+                <option value="">Select a class first</option>
+              </select>
+            </div>
+          </div>
+          <div class="admin-table-wrap" role="region" aria-label="Student rank preview" tabindex="0">
+            <table class="student-table">
+              <thead>
+                <tr>
+                  <th scope="col">Name</th>
+                  <th scope="col">Points</th>
+                  <th scope="col">Student Rank</th>
+                </tr>
+              </thead>
+              <tbody id="teacher-student-rank-preview-body">
+                <tr>
+                  <td colspan="3" class="empty-cell">Select a class to preview student ranks.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="app-card">
+          <h3>Section Guide</h3>
+          <ul class="list-stack">
+            <li><strong>Home:</strong> Teacher dashboard overview and reminders.</li>
+            <li><strong>Give Points:</strong> Main working area for merit/demerit updates.</li>
+            <li><strong>Quest:</strong> Create class missions and track completion rewards.</li>
+            <li><strong>Resources:</strong> Placeholder cards for learning materials.</li>
+            <li><strong>Class Record:</strong> Manage class activities and student scores.</li>
+          </ul>
+        </article>
+
+        <article class="app-card">
+          <h3>Teacher Notes</h3>
+          <ul class="list-stack">
+            <li>Always include a clear reason when applying point changes.</li>
+            <li>Use filters and search before bulk updates.</li>
+            <li>Use Class Record as the single score management module.</li>
+          </ul>
+        </article>
+      </section>
+
+      <section id="page-give-points" class="page" data-page="give-points" aria-label="Give points">
+        <article class="app-card">
+          <h2>Bulk Student Point Management</h2>
+          <p>Filter, search, select, and apply merit/demerit points with required reason logging.</p>
+
+          <div class="admin-toolbar">
+            <div class="field">
+              <label for="teacher-class-filter">Select Class</label>
+              <select id="teacher-class-filter">
+                <option value="">Select a class first</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="student-search">Search by Name or LRN</label>
+              <input id="student-search" type="text" placeholder="Type name or LRN" autocomplete="off" />
+            </div>
+
+            <div class="field admin-load-field">
+              <label for="load-students-button">Load/Refresh</label>
+              <button id="load-students-button" type="button">Load Students</button>
+            </div>
+          </div>
+        </article>
+
+        <article class="app-card admin-action-panel">
+          <h3>Point Action Panel</h3>
+          <div class="admin-actions admin-bulk-actions">
+            <div class="field admin-points-field">
+              <label for="points-value">Points Value</label>
+              <input
+                id="points-value"
+                type="number"
+                min="1"
+                step="1"
+                inputmode="numeric"
+                placeholder="Enter positive points"
+              />
+            </div>
+
+            <div class="field field-full">
+              <label for="reason-input">Reason for Update</label>
+              <textarea
+                id="reason-input"
+                class="admin-reason"
+                placeholder="Enter reason for merit/demerit update"
+                rows="3"
+              ></textarea>
+            </div>
+
+            <button id="add-points-button" type="button">Add Merit Points</button>
+            <button id="deduct-points-button" type="button" class="danger-button">Add Demerit Points</button>
+          </div>
+
+          <p id="admin-message" class="form-message" role="status" aria-live="polite"></p>
+        </article>
+
+        <article class="app-card">
+          <h3>Student List</h3>
+          <div class="admin-table-wrap" role="region" aria-label="Student list" tabindex="0">
+            <table class="student-table">
+              <thead>
+                <tr>
+                  <th scope="col"><input type="checkbox" id="selectAll" aria-label="Select all students" /></th>
+                  <th scope="col">Full Name</th>
+                  <th scope="col">LRN</th>
+                  <th scope="col">Section</th>
+                  <th scope="col">Points</th>
+                  <th scope="col">Student Rank</th>
+                </tr>
+              </thead>
+              <tbody id="studentTableBody">
+                <tr>
+                  <td colspan="6" class="empty-cell">Click "Load Students" to fetch and display students.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section id="page-quest" class="page" data-page="quest" aria-label="Quest">
+        <article class="app-card">
+          <h3 id="teacher-quest-form-title">Create Quest</h3>
+          <p>Create missions for your approved classes and reward completion with points or an optional badge.</p>
+          <div class="admin-toolbar quest-form-grid">
+            <div class="field field-full">
+              <label for="teacher-quest-title">Title</label>
+              <input id="teacher-quest-title" type="text" maxlength="140" placeholder="Quest title" />
+            </div>
+            <div class="field field-full">
+              <label for="teacher-quest-description">Description</label>
+              <textarea id="teacher-quest-description" class="admin-reason" rows="3" placeholder="Quest instructions"></textarea>
+            </div>
+            <div class="field">
+              <label for="teacher-quest-points">Points</label>
+              <input id="teacher-quest-points" type="number" min="1" step="1" inputmode="numeric" placeholder="10" />
+            </div>
+            <div class="field">
+              <label for="teacher-quest-badge">Badge Reward</label>
+              <select id="teacher-quest-badge">
+                <option value="">No badge</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="teacher-quest-class">Class</label>
+              <select id="teacher-quest-class">
+                <option value="">Select a class first</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="teacher-quest-deadline">Deadline</label>
+              <input id="teacher-quest-deadline" type="datetime-local" />
+            </div>
+            <div class="field">
+              <label for="teacher-quest-status">Status</label>
+              <select id="teacher-quest-status">
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
+          </div>
+          <div class="admin-actions">
+            <button id="teacher-save-quest-button" type="button">Create Quest</button>
+            <button id="teacher-cancel-quest-edit-button" type="button" class="danger-button" hidden>Cancel Edit</button>
+          </div>
+          <p id="teacher-quest-message" class="form-message" role="status" aria-live="polite"></p>
+        </article>
+
+        <article class="app-card">
+          <h3>My Quests</h3>
+          <div id="teacher-quests-list" class="quest-list" aria-live="polite">
+            <p class="empty-cell">Loading quests...</p>
+          </div>
+        </article>
+
+        <article class="app-card">
+          <h3>Complete Student Quests</h3>
+          <p>Select a quest to review assigned students, mark completions, or display the scan code.</p>
+          <div class="admin-toolbar quest-form-grid">
+            <div class="field">
+              <label for="teacher-complete-quest-select">Quest</label>
+              <select id="teacher-complete-quest-select">
+                <option value="">Select a quest first</option>
+              </select>
+            </div>
+          </div>
+          <div id="teacher-quest-qr-panel" class="quest-qr-panel" hidden></div>
+          <div id="teacher-quest-students-list" class="quest-student-list" aria-live="polite">
+            <p class="empty-cell">Select a quest to load students.</p>
+          </div>
+          <div class="admin-actions">
+            <button id="teacher-complete-selected-quests-button" type="button">Complete Checked Students</button>
+          </div>
+        </article>
+      </section>
+
+      <section id="page-resources" class="page" data-page="resources" aria-label="Resources">
+        <article class="app-card">
+          <h3>Add Learning Resource</h3>
+          <p>Share external learning links that students can open or view inline.</p>
+
+          <div class="admin-toolbar">
+            <div class="field">
+              <label for="resource-class-id">Select Class</label>
+              <select id="resource-class-id">
+                <option value="">Select a class first</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="resource-title">Title</label>
+              <input id="resource-title" type="text" placeholder="e.g. Algebra Lesson 1" maxlength="150" />
+            </div>
+
+            <div class="field field-full">
+              <label for="resource-description">Description</label>
+              <textarea
+                id="resource-description"
+                class="admin-reason"
+                rows="3"
+                placeholder="What should students learn from this resource?"
+              ></textarea>
+            </div>
+
+            <div class="field field-full">
+              <label for="resource-url">URL</label>
+              <input id="resource-url" type="url" placeholder="https://..." />
+              <p id="resource-youtube-hint" class="form-message youtube-hint" aria-live="polite"></p>
+            </div>
+          </div>
+
+          <div class="admin-actions">
+            <button id="save-resource-button" type="button">Save Resource</button>
+          </div>
+          <p id="resource-message" class="form-message" role="status" aria-live="polite"></p>
+        </article>
+
+        <article class="app-card">
+          <h3>My Resources</h3>
+          <p>Only resources you created are shown here.</p>
+          <div id="teacher-resources-list" class="list-stack" aria-live="polite">
+            <p>No resources yet.</p>
+          </div>
+        </article>
+      </section>
+
+      <section id="page-announcements" class="page" data-page="announcements" aria-label="Announcements">
+        <article class="app-card">
+          <h3>Create Announcement</h3>
+          <p>Post updates that appear on the student Home screen.</p>
+
+          <div class="admin-toolbar">
+            <div class="field">
+              <label for="announcement-target">Audience</label>
+              <select id="announcement-target">
+                <option value="all">All students</option>
+                <option value="class">Selected class</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="announcement-class-id">Class</label>
+              <select id="announcement-class-id">
+                <option value="">Select a class first</option>
+              </select>
+            </div>
+
+            <div class="field field-full">
+              <label for="announcement-title">Title</label>
+              <input id="announcement-title" type="text" placeholder="e.g. Quiz reminder" maxlength="150" />
+            </div>
+
+            <div class="field">
+              <label for="announcement-expiry">Expiry Date</label>
+              <input id="announcement-expiry" type="date" />
+            </div>
+
+            <div class="field field-full">
+              <label for="announcement-message">Message</label>
+              <textarea
+                id="announcement-message"
+                class="admin-reason"
+                rows="4"
+                placeholder="Write the announcement students should see."
+              ></textarea>
+            </div>
+          </div>
+
+          <div class="admin-actions">
+            <button id="save-announcement-button" type="button">Post Announcement</button>
+            <button id="cancel-announcement-edit-button" type="button" class="danger-button" hidden>Cancel Edit</button>
+          </div>
+          <p id="announcement-message-status" class="form-message" role="status" aria-live="polite"></p>
+        </article>
+
+        <article class="app-card">
+          <h3>My Announcements</h3>
+          <p>Only announcements you created are shown here.</p>
+          <div id="teacher-announcements-list" class="list-stack" aria-live="polite">
+            <p>No announcements yet.</p>
+          </div>
+        </article>
+      </section>
+
+      <section id="page-messages" class="page" data-page="messages" aria-label="Messages">
+        <article class="app-card">
+          <h3>Messages</h3>
+          <p>Message students in your classes or other teachers.</p>
+          <div class="admin-toolbar message-contact-bar">
+            <div class="field">
+              <label for="message-contact-filter">Contacts</label>
+              <select id="message-contact-filter">
+                <option value="teachers">Teachers</option>
+              </select>
+            </div>
+          </div>
+          <p id="message-status" class="form-message" role="status" aria-live="polite"></p>
+        </article>
+
+        <article class="app-card message-app">
+          <div class="message-thread-list" id="message-thread-list" aria-live="polite">
+            <p class="empty-cell">No messages yet.</p>
+          </div>
+          <div class="message-panel">
+            <h3 id="message-thread-heading">Conversation</h3>
+            <div id="message-list" class="message-list" aria-live="polite">
+              <p class="empty-cell">Select a name to open a conversation.</p>
+            </div>
+            <form id="message-form" class="message-form">
+              <textarea id="message-input" rows="3" maxlength="1200" placeholder="Write a message"></textarea>
+              <button type="submit">Send</button>
+            </form>
+          </div>
+        </article>
+      </section>
+
+      <section id="page-my-classes" class="page" data-page="my-classes" aria-label="My classes">
+        <article class="app-card">
+          <h2>Create Class</h2>
+          <p>Create a class by selecting active Subject, School Year, Term, and Section.</p>
+
+          <div class="admin-toolbar">
+            <div class="field">
+              <label for="class-subject">Subject</label>
+              <select id="class-subject">
+                <option value="">Select Subject</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="class-school-year">School Year</label>
+              <select id="class-school-year">
+                <option value="">Select School Year</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="class-term">Term</label>
+              <select id="class-term">
+                <option value="">Select Term</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="class-section">Section</label>
+              <select id="class-section">
+                <option value="">Select Section</option>
+              </select>
+            </div>
+
+            <div class="field admin-load-field">
+              <label for="create-class-button">Create</label>
+              <button id="create-class-button" type="button">Create Class</button>
+            </div>
+          </div>
+
+          <p id="class-message" class="form-message" role="status" aria-live="polite"></p>
+        </article>
+
+        <article class="app-card">
+          <h3>My Classes</h3>
+          <div id="my-classes-list" class="list-stack">
+            <p class="empty-cell">No classes yet. Create your first class above.</p>
+          </div>
+        </article>
+      </section>
+
+      
+      <section id="page-class-record" class="page" data-page="class-record" aria-label="Class record">
+        <article class="app-card">
+          <h2>Class Record</h2>
+          <p>Manage activities and scores in a gradebook-style class record table.</p>
+
+          <div class="admin-toolbar score-toolbar">
+            <div class="field">
+              <label for="class-record-filter">Select Class</label>
+              <select id="class-record-filter">
+                <option value="">Select a class first</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="admin-toolbar score-toolbar">
+            <div class="field">
+              <label for="class-record-activity-title">Activity Title</label>
+              <input id="class-record-activity-title" type="text" placeholder="e.g. Quiz 1" autocomplete="off" />
+            </div>
+
+            <div class="field">
+              <label for="class-record-component-type">Component Type</label>
+              <select id="class-record-component-type">
+                <option value="">Select Component</option>
+                <option value="WW">Written Works</option>
+                <option value="PT">Performance Task</option>
+                <option value="Exam">Exam</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="class-record-max-score">Highest Possible Score</label>
+              <input
+                id="class-record-max-score"
+                type="number"
+                min="1"
+                step="0.01"
+                inputmode="decimal"
+                placeholder="e.g. 50"
+              />
+            </div>
+
+            <div class="field admin-load-field">
+              <label for="class-record-add-activity-button">Add Activity</label>
+              <button id="class-record-add-activity-button" type="button">Add Activity</button>
+            </div>
+
+            <div class="field admin-load-field">
+              <label for="class-record-download-button">Download CSV</label>
+              <button id="class-record-download-button" type="button">Download CSV</button>
+            </div>
+
+            <div class="field admin-load-field">
+              <label for="class-record-print-button">Print</label>
+              <button id="class-record-print-button" type="button">Print</button>
+            </div>
+          </div>
+
+          <p id="class-record-message" class="form-message" role="status" aria-live="polite"></p>
+        </article>
+
+        <article class="app-card">
+          <h3>Gradebook</h3>
+          <div id="class-record-table" class="admin-table-wrap" role="region" aria-label="Class record table" tabindex="0">
+            <table class="student-table">
+              <thead>
+                <tr>
+                  <th scope="col"> </th>
+                  <th scope="col">Written Works</th>
+                  <th scope="col">Performance Task</th>
+                  <th scope="col">Exam</th>
+                </tr>
+                <tr>
+                  <th scope="col">Activities:</th>
+                  <th scope="col">-</th>
+                  <th scope="col">-</th>
+                  <th scope="col">-</th>
+                </tr>
+                <tr>
+                  <th scope="col">Name / Highest Possible Score:</th>
+                  <th scope="col">-</th>
+                  <th scope="col">-</th>
+                  <th scope="col">-</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td colspan="4" class="empty-cell">Select a class to view class record.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section id="page-attendance" class="page" data-page="attendance" aria-label="Attendance">
+        <article class="app-card">
+          <h2>Attendance Record</h2>
+          <p>Choose a class, edit attendance by date, display a classroom QR, or scan each student's attendance QR.</p>
+
+          <div class="admin-toolbar">
+            <div class="field">
+              <label for="attendance-class-select">Class</label>
+              <select id="attendance-class-select">
+                <option value="">Select a class first</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="attendance-date">Date</label>
+              <input id="attendance-date" type="date" />
+            </div>
+            <div class="field admin-load-field">
+              <label for="load-attendance-button">Load Students</label>
+              <button id="load-attendance-button" type="button">Load Students</button>
+            </div>
+          </div>
+
+          <div class="admin-actions attendance-actions">
+            <button id="save-attendance-button" type="button">Save Attendance Date</button>
+            <button id="show-attendance-qr-button" type="button">Show Classroom QR</button>
+            <button id="scan-student-attendance-qr-button" type="button">Scan Student QR</button>
+          </div>
+
+          <p id="attendance-message" class="form-message" role="status" aria-live="polite"></p>
+        </article>
+
+        <article class="app-card">
+          <h3>Classroom Attendance QR</h3>
+          <div id="attendance-qr-panel" class="quest-qr-panel attendance-qr-panel" hidden></div>
+        </article>
+
+        <article class="app-card">
+          <h3>Attendance Table</h3>
+          <div id="attendance-students-list" class="attendance-students-list" aria-live="polite">
+            <p class="empty-cell">Select a class to load students.</p>
+          </div>
+        </article>
+      </section>
+
+      <section
+        id="page-enrollment-requests"
+        class="page"
+        data-page="enrollment-requests"
+        aria-label="Enrollment requests"
+      >
+        <article class="app-card">
+          <h2>Enrollment Requests</h2>
+          <p>Review and decide pending student enrollment requests for your classes.</p>
+
+          <div class="admin-toolbar">
+            <div class="field">
+              <label for="enrollment-class-filter">Filter by Class</label>
+              <select id="enrollment-class-filter">
+                <option value="">All My Classes</option>
+              </select>
+            </div>
+          </div>
+
+          <p id="enrollment-message" class="form-message" role="status" aria-live="polite"></p>
+        </article>
+
+        <article class="app-card">
+          <h3>Pending Requests</h3>
+          <div id="enrollment-requests-list" class="list-stack">
+            <p class="empty-cell">No pending enrollment requests.</p>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <div id="imageModal" class="image-modal hidden">
+      <button id="closeImageModal" type="button" aria-label="Close image preview">×</button>
+      <img id="modalImage" src="" alt="Preview" />
+    </div>
+
+    <script type="module" src="admin.js?v=10"></script>
+  </body>
+</html>

@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>COTE Web App | Registration</title>
+    <meta name="theme-color" content="#2563eb" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="container" aria-labelledby="form-title">
+      <h1 id="form-title">Student Registration</h1>
+      <p class="subtitle">Please complete all required details before submitting.</p>
+
+      <form id="registration-form" novalidate>
+        <div class="form-grid">
+          <div class="field">
+            <label for="first-name">First Name <span aria-hidden="true">*</span></label>
+            <input id="first-name" name="firstName" type="text" autocomplete="given-name" required />
+          </div>
+
+          <div class="field">
+            <label for="middle-name">Middle Name</label>
+            <input id="middle-name" name="middleName" type="text" autocomplete="additional-name" />
+          </div>
+
+          <div class="field">
+            <label for="last-name">Last Name <span aria-hidden="true">*</span></label>
+            <input id="last-name" name="lastName" type="text" autocomplete="family-name" required />
+          </div>
+
+          <div class="field">
+            <label for="sex">Sex <span aria-hidden="true">*</span></label>
+            <select id="sex" name="sex" required>
+              <option value="" selected disabled>Select sex</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="grade-level">Grade Level <span aria-hidden="true">*</span></label>
+            <select id="grade-level" name="gradeLevel" required>
+              <option value="" selected disabled>Select grade level</option>
+              <option value="Grade 11">Grade 11</option>
+              <option value="Grade 12">Grade 12</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="school-year">School Year <span aria-hidden="true">*</span></label>
+            <select id="school-year" name="schoolYearId" required>
+              <option value="" selected disabled>Select school year</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="section">Section <span aria-hidden="true">*</span></label>
+            <select id="section" name="sectionId" required disabled>
+              <option value="" selected>Select school year and grade level first</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="birthday">Birthday <span aria-hidden="true">*</span></label>
+            <input id="birthday" name="birthday" type="date" required />
+          </div>
+
+          <div class="field">
+            <label for="lrn">LRN <span aria-hidden="true">*</span></label>
+            <input id="lrn" name="lrn" type="text" inputmode="numeric" maxlength="12" required />
+          </div>
+
+          <div class="field">
+            <label for="phone-number">Phone Number <span aria-hidden="true">*</span></label>
+            <input
+              id="phone-number"
+              name="phoneNumber"
+              type="tel"
+              inputmode="tel"
+              placeholder="e.g. 09171234567"
+              required
+            />
+          </div>
+
+          <div class="field field-full">
+            <label for="address">Address <span aria-hidden="true">*</span></label>
+            <input id="address" name="address" type="text" autocomplete="street-address" required />
+          </div>
+
+          <div class="field">
+            <label for="email">Email <span aria-hidden="true">*</span></label>
+            <input id="email" name="email" type="email" autocomplete="email" required />
+          </div>
+
+          <div class="field">
+            <label for="password">Password <span aria-hidden="true">*</span></label>
+            <input id="password" name="password" type="password" minlength="6" required />
+          </div>
+
+          <div class="field">
+            <label for="confirm-password">Confirm Password <span aria-hidden="true">*</span></label>
+            <input id="confirm-password" name="confirmPassword" type="password" minlength="6" required />
+          </div>
+        </div>
+
+        <p id="form-message" class="form-message" role="status" aria-live="polite"></p>
+        <button type="submit">Submit</button>
+      </form>
+
+      <p class="auth-switch">
+        Already have an account?
+        <a href="index.html">Login here</a>
+      </p>
+
+      <p class="teacher-login-link" aria-label="Teacher registration link">
+        <a href="teacher-register.html">Register as a teacher</a>
+      </p>
+    </main>
+
+    <script type="module" src="script.js"></script>
+  </body>
+</html>

@@ -1,0 +1,71 @@
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getAuth, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  updateDoc,
+  collection,
+  addDoc,
+  deleteDoc,
+  getDocs,
+  limit,
+  query,
+  where,
+  orderBy,
+  serverTimestamp,
+  runTransaction,
+  writeBatch,
+  setDoc,
+  increment
+} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import {
+  getStorage,
+  ref,
+  uploadBytesResumable,
+  getDownloadURL,
+  deleteObject
+} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js';
+
+const firebaseConfig = {
+  apiKey: 'AIzaSyA_y-kzUWTt04vuyKSqR9b5_L8c_VvbCIs',
+  authDomain: 'cote-v1.firebaseapp.com',
+  projectId: 'cote-v1',
+  storageBucket: 'cote-v1.firebasestorage.app',
+  messagingSenderId: '414423398647',
+  appId: '1:414423398647:web:2e61049858326b2b2b7bf2'
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const storage = getStorage(app);
+
+export {
+  app,
+  auth,
+  db,
+  storage,
+  onAuthStateChanged,
+  signOut,
+  doc,
+  getDoc,
+  updateDoc,
+  collection,
+  addDoc,
+  deleteDoc,
+  getDocs,
+  limit,
+  query,
+  where,
+  orderBy,
+  serverTimestamp,
+  runTransaction,
+  writeBatch,
+  setDoc,
+  increment,
+  ref,
+  uploadBytesResumable,
+  getDownloadURL,
+  deleteObject
+};

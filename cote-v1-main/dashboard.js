@@ -1,0 +1,3117 @@
+import {
+  auth,
+  db,
+  onAuthStateChanged,
+  signOut,
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  collection,
+  addDoc,
+  getDocs,
+  query,
+  where,
+  orderBy,
+  serverTimestamp,
+} from './firebase.js';
+import { registerAppServiceWorker } from './pwa-updates.js';
+import {
+  getVisibleAchievementsForStudent,
+  getStudentUnlockedAchievementIds,
+  getStudentAchievementStatusMap,
+  getAchievementRequirementText,
+  seedAchievementsIfEmpty,
+  claimAchievement,
+  claimAllAchievements
+} from './achievements.js';
+import { getQuestsForUser, completeQuestByQuestId, isQuestPastDeadline } from './quests.js';
+import { initMessagingUI, refreshConversations, startMessagingAutoRefresh } from './messaging-ui.js';
+
+registerAppServiceWorker();
+
+const profileDataElement = document.getElementById('profileData');
+const profileFullNameElement = document.getElementById('profile-full-name');
+const profileEmailElement = document.getElementById('profile-email');
+const profileGradeSectionElement = document.getElementById('profile-grade-section');
+const profileAvatarElement = document.getElementById('profile-avatar');
+const profilePictureEditButton = document.getElementById('profile-picture-edit-btn');
+const profilePictureFormElement = document.getElementById('profile-picture-form');
+const profilePictureUrlInput = document.getElementById('profile-picture-url');
+const profilePictureSaveButton = document.getElementById('profile-picture-save-btn');
+const profilePictureCancelButton = document.getElementById('profile-picture-cancel-btn');
+const profilePictureMessageElement = document.getElementById('profile-picture-message');
+const sidebarStudentNameElement = document.getElementById('sidebar-student-name');
+const sidebarStudentEmailElement = document.getElementById('sidebar-student-email');
+const pointsTotalElement = document.getElementById('points-total');
+const logoutButton = document.getElementById('logout-button');
+const pageTitleElement = document.getElementById('page-title');
+const notificationsButton = document.getElementById('notifications-button');
+const announcementNotificationBadgeElement = document.getElementById('announcement-notification-badge');
+const messagesButton = document.getElementById('messages-button');
+const themeColorMetaElement = document.querySelector('meta[name="theme-color"]');
+const backgroundMusicElement = document.getElementById('background-music');
+const musicToggleButton = document.getElementById('music-toggle-button');
+const musicVolumeInput = document.getElementById('music-volume');
+const musicStatusElement = document.getElementById('music-status');
+
+const homeStudentNameElement = document.getElementById('home-student-name');
+const homeStudentSectionElement = document.getElementById('home-student-section');
+const homeStudentPointsElement = document.getElementById('home-student-points');
+const homeSectionNameElement = document.getElementById('home-section-name');
+const homeSectionTierElement = document.getElementById('home-section-tier');
+const homeSectionRankElement = document.getElementById('home-section-rank');
+const homeSectionPointsElement = document.getElementById('home-section-points');
+const teacherAnnouncementsListElement = document.getElementById('teacher-announcements-list');
+const studentNotificationsListElement = document.getElementById('student-notifications-list');
+const leaderboardListElement = document.getElementById('leaderboard-list');
+const profileRankElement = document.getElementById('profile-rank');
+const profileStudentRankElement = document.getElementById('profile-student-rank');
+const profileSectionTierElement = document.getElementById('profile-section-tier');
+const profileSectionRankElement = document.getElementById('profile-section-rank');
+const profileBadgesListElement = document.getElementById('profile-badges-list');
+const profileBadgeCountElement = document.getElementById('profile-badge-count');
+
+const sidebar = document.getElementById('sidebar');
+const sidebarOverlay = document.getElementById('sidebar-overlay');
+const burgerButton = document.getElementById('burger-button');
+
+const menuButtons = Array.from(document.querySelectorAll('.menu-btn'));
+const pages = Array.from(document.querySelectorAll('.page'));
+const recordsPageElement = document.getElementById('page-records');
+const achievementsPageElement = document.getElementById('page-achievements');
+const achievementsSummaryElement = document.getElementById('achievements-summary');
+const unlockedAchievementsListElement = document.getElementById('unlocked-achievements-list');
+const nextAchievementsListElement = document.getElementById('next-achievements-list');
+const availableClassesListElement = document.getElementById('available-classes-list');
+const myEnrollmentsListElement = document.getElementById('my-enrollments-list');
+const myClassesFeedbackElement = document.getElementById('my-classes-feedback');
+const classRecordsDetailElement = document.getElementById('class-records-detail');
+const studentResourcesListElement = document.getElementById('student-resources-list');
+const studentQuestsListElement = document.getElementById('student-quests-list');
+const studentQuestMessageElement = document.getElementById('student-quest-message');
+const studentScanQuestButton = document.getElementById('student-scan-quest-button');
+const studentQuestCodeInput = document.getElementById('student-quest-code-input');
+const studentSubmitQuestCodeButton = document.getElementById('student-submit-quest-code-button');
+const studentScanAttendanceButton = document.getElementById('student-scan-attendance-button');
+const studentAttendanceMessageElement = document.getElementById('student-attendance-message');
+const studentAttendanceQrPanelElement = document.getElementById('student-attendance-qr-panel');
+const loadingOverlay = document.getElementById('loadingOverlay');
+let overlaySequenceJob = 0;
+let currentStudentProfile = null;
+let currentStudentUser = null;
+let enrolledClassIds = new Set();
+let currentTeacherAnnouncements = [];
+let currentStudentNotifications = [];
+let currentStudentQuests = [];
+let pendingQuestIdFromUrl = '';
+let studentNotificationRefreshTimer = null;
+const teacherNameCache = new Map();
+
+const pageTitles = {
+  home: 'Home',
+  profile: 'Profile',
+  records: 'Records',
+  'my-classes': 'My Classes',
+  resources: 'Resources',
+  achievements: 'Achievements',
+  messages: 'Messages',
+  quest: 'Quest',
+  'scan-qr': 'Scan QR',
+  settings: 'Settings',
+};
+const LAST_PAGE_STORAGE_KEY = 'cote.student.lastPage';
+const ANNOUNCEMENT_LAST_SEEN_PREFIX = 'cote.student.announcements.lastSeen';
+const THEME_STORAGE_KEY = 'cote.student.theme';
+const MUSIC_ENABLED_STORAGE_KEY = 'cote.student.music.enabled';
+const MUSIC_VOLUME_STORAGE_KEY = 'cote.student.music.volume';
+let fallbackAudioContext = null;
+let fallbackMusicNodes = null;
+let isMusicPlaying = false;
+
+function isKnownPage(pageName) {
+  return pages.some((page) => page.dataset.page === pageName);
+}
+
+function getSavedPage(fallback = 'home') {
+  const savedPage = String(localStorage.getItem(LAST_PAGE_STORAGE_KEY) || '').trim();
+  return isKnownPage(savedPage) ? savedPage : fallback;
+}
+
+function saveCurrentPage(pageName) {
+  if (!isKnownPage(pageName)) return;
+  localStorage.setItem(LAST_PAGE_STORAGE_KEY, pageName);
+}
+
+function getPreferredTheme() {
+  const savedTheme = String(localStorage.getItem(THEME_STORAGE_KEY) || 'dark').trim();
+  return savedTheme === 'light' ? 'light' : 'dark';
+}
+
+function applyTheme(theme = getPreferredTheme()) {
+  const resolvedTheme = theme === 'light' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = resolvedTheme;
+  document.documentElement.dataset.themePreference = theme;
+  themeColorMetaElement?.setAttribute('content', resolvedTheme === 'light' ? '#f4f8fc' : '#061321');
+
+  document.querySelectorAll('input[name="student-theme"]').forEach((input) => {
+    input.checked = input.value === theme;
+  });
+}
+
+function saveThemePreference(theme) {
+  const normalizedTheme = theme === 'light' ? 'light' : 'dark';
+  localStorage.setItem(THEME_STORAGE_KEY, normalizedTheme);
+  applyTheme(normalizedTheme);
+}
+
+function getMusicVolume() {
+  const savedVolume = Number(localStorage.getItem(MUSIC_VOLUME_STORAGE_KEY) || musicVolumeInput?.value || 0.35);
+  return Number.isFinite(savedVolume) ? Math.min(1, Math.max(0, savedVolume)) : 0.35;
+}
+
+function setMusicStatus(message = '') {
+  if (musicStatusElement) {
+    musicStatusElement.textContent = message;
+  }
+}
+
+function updateMusicButton() {
+  if (musicToggleButton) {
+    musicToggleButton.textContent = isMusicPlaying ? 'Pause Music' : 'Play Music';
+  }
+}
+
+function stopFallbackMusic() {
+  if (!fallbackMusicNodes) return;
+
+  fallbackMusicNodes.oscillators.forEach((oscillator) => {
+    try {
+      oscillator.stop();
+    } catch (error) {
+      console.warn('Fallback music oscillator already stopped:', error);
+    }
+  });
+  fallbackMusicNodes = null;
+}
+
+async function startFallbackMusic() {
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContext) {
+    setMusicStatus('Music is not supported in this browser.');
+    return false;
+  }
+
+  fallbackAudioContext = fallbackAudioContext || new AudioContext();
+  await fallbackAudioContext.resume();
+
+  stopFallbackMusic();
+
+  const gain = fallbackAudioContext.createGain();
+  gain.gain.value = getMusicVolume() * 0.12;
+  gain.connect(fallbackAudioContext.destination);
+
+  const oscillators = [146.83, 220, 293.66].map((frequency, index) => {
+    const oscillator = fallbackAudioContext.createOscillator();
+    oscillator.type = index === 1 ? 'sine' : 'triangle';
+    oscillator.frequency.value = frequency;
+    oscillator.connect(gain);
+    oscillator.start();
+    return oscillator;
+  });
+
+  fallbackMusicNodes = { gain, oscillators };
+  setMusicStatus('Temporary music is playing. Replace audio/background-music.MP3 anytime.');
+  return true;
+}
+
+function applyMusicVolume() {
+  const volume = getMusicVolume();
+  if (musicVolumeInput) {
+    musicVolumeInput.value = String(volume);
+  }
+  if (backgroundMusicElement) {
+    backgroundMusicElement.volume = volume;
+  }
+  if (fallbackMusicNodes?.gain) {
+    fallbackMusicNodes.gain.gain.value = volume * 0.12;
+  }
+}
+
+async function startMusic() {
+  applyMusicVolume();
+
+  if (backgroundMusicElement) {
+    try {
+      await backgroundMusicElement.play();
+      stopFallbackMusic();
+      isMusicPlaying = true;
+      localStorage.setItem(MUSIC_ENABLED_STORAGE_KEY, 'true');
+      setMusicStatus('Background music is playing.');
+      updateMusicButton();
+      return;
+    } catch (error) {
+      console.warn('Background music file unavailable, using fallback:', error);
+    }
+  }
+
+  const fallbackStarted = await startFallbackMusic();
+  isMusicPlaying = fallbackStarted;
+  localStorage.setItem(MUSIC_ENABLED_STORAGE_KEY, fallbackStarted ? 'true' : 'false');
+  updateMusicButton();
+}
+
+function pauseMusic() {
+  backgroundMusicElement?.pause();
+  stopFallbackMusic();
+  isMusicPlaying = false;
+  localStorage.setItem(MUSIC_ENABLED_STORAGE_KEY, 'false');
+  setMusicStatus('Background music is paused.');
+  updateMusicButton();
+}
+
+function initMusicControls() {
+  applyMusicVolume();
+  updateMusicButton();
+
+  musicVolumeInput?.addEventListener('input', () => {
+    localStorage.setItem(MUSIC_VOLUME_STORAGE_KEY, String(getMusicVolume()));
+    applyMusicVolume();
+  });
+
+  musicToggleButton?.addEventListener('click', () => {
+    if (isMusicPlaying) {
+      pauseMusic();
+    } else {
+      startMusic();
+    }
+  });
+
+  if (localStorage.getItem(MUSIC_ENABLED_STORAGE_KEY) === 'true') {
+    setMusicStatus('Music is ready. Press Play Music to start.');
+  }
+}
+
+function showLoadingOverlay(text = 'Initializing C.O.T.E System...') {
+  if (!loadingOverlay) return;
+
+  loadingOverlay.classList.remove('loading-overlay-fade-out');
+  updateLoadingText(text);
+
+  loadingOverlay.classList.add('loading-overlay-visible');
+  loadingOverlay.setAttribute('aria-hidden', 'false');
+}
+
+function updateLoadingText(text) {
+  if (!loadingOverlay) return;
+
+  const loadingTextElement = loadingOverlay.querySelector('.loading-text');
+  if (loadingTextElement) {
+    loadingTextElement.textContent = text;
+    loadingTextElement.classList.remove('is-switching');
+    void loadingTextElement.offsetWidth;
+    loadingTextElement.classList.add('is-switching');
+    setTimeout(() => loadingTextElement.classList.remove('is-switching'), 360);
+  }
+}
+
+function hideLoadingOverlay() {
+  if (!loadingOverlay) return;
+
+  overlaySequenceJob += 1;
+  loadingOverlay.classList.add('loading-overlay-fade-out');
+  loadingOverlay.classList.remove('loading-overlay-visible');
+  loadingOverlay.setAttribute('aria-hidden', 'true');
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function playLoadingSequence(messages, interval = 430) {
+  if (!Array.isArray(messages) || messages.length === 0) return;
+
+  const job = ++overlaySequenceJob;
+  for (const message of messages) {
+    if (job !== overlaySequenceJob) return;
+    updateLoadingText(message);
+    await wait(interval);
+  }
+}
+
+function safe(value) {
+  if (value === undefined || value === null) return 'Not provided';
+  const text = String(value).trim();
+  return text || 'Not provided';
+}
+
+function makeFullName(data) {
+  return [data.firstName, data.middleName, data.lastName]
+    .map((v) => (v || '').trim())
+    .filter(Boolean)
+    .join(' ') || 'Not provided';
+}
+
+function makeGradeSection(data) {
+  const grade = (data.gradeLevel || '').trim();
+  const section = (data.section || '').trim();
+
+  if (grade && section) return `${grade} • ${section}`;
+  if (grade) return grade;
+  if (section) return section;
+  return 'Not provided';
+}
+
+function makeInitials(data) {
+  const first = (data.firstName || '').trim().charAt(0);
+  const last = (data.lastName || '').trim().charAt(0);
+  const initials = `${first}${last}`.toUpperCase();
+  return initials || '👤';
+}
+
+function normalizePoints(points) {
+  return typeof points === 'number' && Number.isFinite(points) ? points : 0;
+}
+
+function normalizeNumericValue(value, fallback = 0) {
+  const normalized = Number(value);
+  return Number.isFinite(normalized) ? normalized : fallback;
+}
+
+function buildTeacherFullName(data) {
+  return [data?.firstName, data?.middleName, data?.lastName]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function formatPercentage(value) {
+  const normalized = normalizeNumericValue(value, Number.NaN);
+  if (!Number.isFinite(normalized)) return '';
+  return Number.isInteger(normalized) ? String(normalized) : String(normalized.toFixed(2)).replace(/\.?0+$/, '');
+}
+
+async function resolveTeacherName(log = {}) {
+  const teacherId = String(log.teacherId || '').trim();
+  const existingTeacherName = String(log.teacherName || '').trim();
+  const hasPlaceholderName = !existingTeacherName || existingTeacherName.toLowerCase() === 'teacher panel';
+
+  if (!hasPlaceholderName) {
+    return existingTeacherName;
+  }
+
+  if (!teacherId) {
+    return 'Unknown Teacher';
+  }
+
+  if (teacherNameCache.has(teacherId)) {
+    return teacherNameCache.get(teacherId);
+  }
+
+  try {
+    const teacherSnap = await getDoc(doc(db, 'teachers', teacherId));
+    if (teacherSnap.exists()) {
+      const fullName = buildTeacherFullName(teacherSnap.data() || {});
+      if (fullName) {
+        teacherNameCache.set(teacherId, fullName);
+        return fullName;
+      }
+    }
+  } catch (error) {
+    console.error('Failed to resolve teacher name:', error);
+  }
+
+  teacherNameCache.set(teacherId, 'Unknown Teacher');
+  return 'Unknown Teacher';
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function showPointsPopup(points) {
+  const normalizedPoints = Number(points || 0);
+  if (!Number.isFinite(normalizedPoints) || normalizedPoints <= 0) return;
+
+  const popup = document.createElement('div');
+  popup.className = 'points-popup';
+  popup.innerText = `+${Math.round(normalizedPoints)} pts`;
+
+  document.body.appendChild(popup);
+
+  setTimeout(() => {
+    popup.classList.add('fade-out');
+    setTimeout(() => popup.remove(), 500);
+  }, 800);
+}
+
+globalThis.showPointsPopup = showPointsPopup;
+
+function makeLeaderboardName(data) {
+  return [data.firstName, data.lastName]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .join(' ');
+}
+
+function showMyClassesFeedback(message, type = 'success') {
+  if (!myClassesFeedbackElement) return;
+
+  const color = type === 'error' ? '#fca5a5' : '#86efac';
+  const background = type === 'error' ? 'rgba(127, 29, 29, 0.35)' : 'rgba(20, 83, 45, 0.35)';
+  myClassesFeedbackElement.innerHTML = `
+    <p style="margin: 0 0 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid ${color}; background: ${background};">
+      ${escapeHtml(message)}
+    </p>
+  `;
+}
+
+function clearMyClassesFeedback() {
+  if (myClassesFeedbackElement) {
+    myClassesFeedbackElement.innerHTML = '';
+  }
+}
+
+function getTimestampMillis(value) {
+  return value?.toMillis?.() || 0;
+}
+
+function getAnnouncementLastSeenKey() {
+  return `${ANNOUNCEMENT_LAST_SEEN_PREFIX}.${currentStudentUser?.uid || 'guest'}`;
+}
+
+function getAnnouncementLastSeenMillis() {
+  return Number(localStorage.getItem(getAnnouncementLastSeenKey()) || 0) || 0;
+}
+
+function setAnnouncementNotificationBadge(count) {
+  if (!announcementNotificationBadgeElement) return;
+
+  const normalizedCount = Math.max(0, Number(count) || 0);
+  announcementNotificationBadgeElement.hidden = normalizedCount === 0;
+  announcementNotificationBadgeElement.textContent = normalizedCount > 9 ? '9+' : String(normalizedCount);
+  notificationsButton?.setAttribute(
+    'aria-label',
+    normalizedCount ? `${normalizedCount} new announcement${normalizedCount === 1 ? '' : 's'}` : 'Notifications'
+  );
+}
+
+function markAnnouncementsSeen(records = []) {
+  const latestTimestamp = records.reduce((latest, announcement) => {
+    return Math.max(latest, getTimestampMillis(announcement.createdAt));
+  }, Date.now());
+
+  localStorage.setItem(getAnnouncementLastSeenKey(), String(latestTimestamp));
+  setAnnouncementNotificationBadge(0);
+}
+
+function updateAnnouncementNotificationBadge(records = []) {
+  setAnnouncementNotificationBadge(currentStudentNotifications.filter((notification) => !notification.isRead).length);
+}
+
+function getNotificationDateText(notification = {}) {
+  const date = notification.createdAt?.toDate?.();
+  if (!date) return '';
+  return date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+function renderStudentNotifications(records = []) {
+  if (!studentNotificationsListElement) return;
+
+  if (!records.length) {
+    studentNotificationsListElement.innerHTML = '<li>No notifications yet.</li>';
+    return;
+  }
+
+  studentNotificationsListElement.innerHTML = records
+    .slice(0, 8)
+    .map((notification) => {
+      const title = notification.title || 'Notification';
+      const message = notification.message || '';
+      const dateText = getNotificationDateText(notification);
+      const unreadClass = notification.isRead ? '' : ' is-unread';
+
+      return `
+        <li class="student-notification-item${unreadClass}">
+          <strong>${escapeHtml(title)}</strong>
+          ${dateText ? `<span>${escapeHtml(dateText)}</span>` : ''}
+          ${message ? `<p>${escapeHtml(message)}</p>` : ''}
+        </li>
+      `;
+    })
+    .join('');
+}
+
+async function loadStudentNotifications() {
+  if (!currentStudentUser?.uid || !studentNotificationsListElement) return;
+
+  try {
+    const snapshot = await getDocs(query(collection(db, 'notifications'), where('recipientId', '==', currentStudentUser.uid)));
+    currentStudentNotifications = snapshot.docs
+      .map((item) => ({ id: item.id, ...item.data() }))
+      .sort((a, b) => getTimestampMillis(b.createdAt) - getTimestampMillis(a.createdAt));
+
+    renderStudentNotifications(currentStudentNotifications);
+    updateAnnouncementNotificationBadge();
+  } catch (error) {
+    console.warn('Student notifications unavailable:', error);
+    currentStudentNotifications = [];
+    renderStudentNotifications([]);
+    setAnnouncementNotificationBadge(0);
+  }
+}
+
+function startStudentNotificationRefresh() {
+  if (studentNotificationRefreshTimer) {
+    clearInterval(studentNotificationRefreshTimer);
+  }
+
+  studentNotificationRefreshTimer = setInterval(() => {
+    if (currentStudentUser?.uid) {
+      loadStudentNotifications();
+    }
+  }, 30000);
+}
+
+async function markStudentNotificationsRead() {
+  const unreadNotifications = currentStudentNotifications.filter((notification) => !notification.isRead);
+  if (!unreadNotifications.length) {
+    setAnnouncementNotificationBadge(0);
+    return;
+  }
+
+  await Promise.all(
+    unreadNotifications.map((notification) =>
+      updateDoc(doc(db, 'notifications', notification.id), {
+        isRead: true,
+        readAt: serverTimestamp()
+      })
+    )
+  );
+
+  currentStudentNotifications = currentStudentNotifications.map((notification) => ({
+    ...notification,
+    isRead: true
+  }));
+  renderStudentNotifications(currentStudentNotifications);
+  setAnnouncementNotificationBadge(0);
+}
+
+function getActivePageName() {
+  return pages.find((page) => page.classList.contains('active'))?.dataset.page || 'home';
+}
+
+function isAnnouncementExpired(announcement = {}) {
+  const expiryDate = announcement.expiresAt?.toDate?.();
+  return Boolean(expiryDate && expiryDate.getTime() < Date.now());
+}
+
+function renderTeacherAnnouncements(records = []) {
+  if (!teacherAnnouncementsListElement) return;
+
+  if (!records.length) {
+    teacherAnnouncementsListElement.innerHTML = '<p class="empty-cell">No teacher announcements yet.</p>';
+    return;
+  }
+
+  teacherAnnouncementsListElement.innerHTML = records
+    .map((announcement) => {
+      const title = announcement.title || announcement.subject || 'Announcement';
+      const message = announcement.message || announcement.body || announcement.content || '';
+      const teacherName = announcement.teacherName || announcement.authorName || 'Teacher';
+      const date = announcement.createdAt?.toDate?.();
+      const dateText = date ? date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+      const expiryDate = announcement.expiresAt?.toDate?.();
+      const expiryText = expiryDate
+        ? expiryDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+        : '';
+
+      return `
+        <article class="teacher-announcement-item">
+          <div class="teacher-announcement-meta">
+            <strong>${escapeHtml(teacherName)}</strong>
+            ${dateText ? `<span>${escapeHtml(dateText)}</span>` : ''}
+          </div>
+          <h4>${escapeHtml(title)}</h4>
+          ${expiryText ? `<p><strong>Until:</strong> ${escapeHtml(expiryText)}</p>` : ''}
+          ${message ? `<p>${escapeHtml(message)}</p>` : ''}
+        </article>
+      `;
+    })
+    .join('');
+}
+
+function announcementMatchesStudent(announcement = {}) {
+  if (isAnnouncementExpired(announcement)) return false;
+
+  const target = String(announcement.target || announcement.audience || 'all').trim().toLowerCase();
+  if (!target || target === 'all' || target === 'students') return true;
+
+  const sectionId = String(currentStudentProfile?.sectionId || '').trim();
+  const sectionName = String(currentStudentProfile?.sectionName || currentStudentProfile?.section || '').trim().toLowerCase();
+  const classIds = Array.isArray(announcement.classIds) ? announcement.classIds.map((id) => String(id || '').trim()) : [];
+  const sectionIds = Array.isArray(announcement.sectionIds) ? announcement.sectionIds.map((id) => String(id || '').trim()) : [];
+  const sectionNames = Array.isArray(announcement.sectionNames)
+    ? announcement.sectionNames.map((name) => String(name || '').trim().toLowerCase())
+    : [];
+
+  if (target === 'section') {
+    return (
+      Boolean(sectionId && sectionIds.includes(sectionId)) ||
+      Boolean(sectionName && sectionNames.includes(sectionName)) ||
+      String(announcement.sectionId || '').trim() === sectionId ||
+      String(announcement.sectionName || '').trim().toLowerCase() === sectionName
+    );
+  }
+
+  if (target === 'class') {
+    return classIds.some((classId) => enrolledClassIds.has(classId)) || enrolledClassIds.has(String(announcement.classId || '').trim());
+  }
+
+  return true;
+}
+
+async function loadTeacherAnnouncements() {
+  if (!teacherAnnouncementsListElement) return;
+
+  try {
+    const snapshot = await getDocs(query(collection(db, 'teacherAnnouncements'), where('status', '==', 'active')));
+    const records = snapshot.docs
+      .map((item) => ({ id: item.id, ...item.data() }))
+      .filter(announcementMatchesStudent)
+      .sort((a, b) => getTimestampMillis(b.createdAt) - getTimestampMillis(a.createdAt))
+      .slice(0, 5);
+
+    currentTeacherAnnouncements = records;
+    renderTeacherAnnouncements(records);
+  } catch (error) {
+    console.warn('Teacher announcements unavailable:', error);
+    currentTeacherAnnouncements = [];
+    renderTeacherAnnouncements([]);
+  }
+}
+
+function isClassActive(classData) {
+  const status = String(classData.status || '').trim().toLowerCase();
+  if (!status) return true;
+  return status === 'active' || status === 'open';
+}
+
+function getTeacherName(classData) {
+  return (
+    String(classData.teacherName || '').trim() ||
+    String(classData.teacherFullName || '').trim() ||
+    String(classData.teacherEmail || '').trim() ||
+    'Not assigned'
+  );
+}
+
+function formatDateTime(value) {
+  const date = value?.toDate?.() || (value instanceof Date ? value : value ? new Date(value) : null);
+  if (!date || !Number.isFinite(date.getTime())) return '';
+  return date.toLocaleString();
+}
+
+function formatQuestDeadline(value) {
+  const formatted = formatDateTime(value);
+  return formatted || 'No deadline';
+}
+
+function setStudentQuestMessage(message, type = '') {
+  if (!studentQuestMessageElement) return;
+  studentQuestMessageElement.textContent = message;
+  studentQuestMessageElement.classList.remove('success', 'error');
+  if (type) {
+    studentQuestMessageElement.classList.add(type);
+  }
+}
+
+function setStudentAttendanceMessage(message, type = '') {
+  if (!studentAttendanceMessageElement) return;
+  studentAttendanceMessageElement.textContent = message;
+  studentAttendanceMessageElement.classList.remove('success', 'error');
+  if (type) {
+    studentAttendanceMessageElement.classList.add(type);
+  }
+}
+
+function getLocalDateKey(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function makeAttendanceLogId(classId, studentId, dateKey = getLocalDateKey()) {
+  return [dateKey, classId, studentId]
+    .map((part) => String(part || '').trim().replace(/[^A-Za-z0-9_-]/g, '_'))
+    .join('_');
+}
+
+function buildStudentAttendanceQrPayload(studentId = currentStudentUser?.uid) {
+  return `cote:attendance-student:${String(studentId || '').trim()}`;
+}
+
+function parseClassAttendanceQr(rawValue = '') {
+  const value = String(rawValue || '').trim();
+  if (value.startsWith('cote:attendance-class:')) {
+    const [, , classId = '', dateKey = '', teacherId = ''] = value.split(':');
+    return {
+      classId: classId.trim(),
+      dateKey: dateKey.trim() || getLocalDateKey(),
+      teacherId: teacherId.trim()
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    if (parsed?.type === 'class-attendance') {
+      return {
+        classId: String(parsed.classId || '').trim(),
+        dateKey: String(parsed.dateKey || getLocalDateKey()).trim(),
+        teacherId: String(parsed.teacherId || '').trim()
+      };
+    }
+  } catch (error) {
+    return null;
+  }
+
+  return null;
+}
+
+function getCurrentPosition() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      resolve(null);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => resolve(position),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  });
+}
+
+function isYouTubeUrl(url) {
+  const rawUrl = String(url || '').trim();
+  if (!rawUrl) return false;
+
+  try {
+    const hostname = new URL(rawUrl).hostname.toLowerCase();
+    return hostname.includes('youtube.com') || hostname.includes('youtu.be');
+  } catch (_error) {
+    return false;
+  }
+}
+
+function getYouTubeEmbedUrl(url) {
+  const rawUrl = String(url || '').trim();
+  if (!rawUrl || !isYouTubeUrl(rawUrl)) return null;
+
+  const match = rawUrl.match(/(?:v=|\/)([0-9A-Za-z_-]{11})(?:[?&/]|$)/);
+  const videoId = match?.[1] || '';
+  if (!videoId) return null;
+  return `https://www.youtube.com/embed/${videoId}`;
+}
+
+function isGoogleDriveUrl(url) {
+  const rawUrl = String(url || '').trim();
+  if (!rawUrl) return false;
+
+  try {
+    const hostname = new URL(rawUrl).hostname.toLowerCase();
+    return hostname.includes('drive.google.com');
+  } catch (_error) {
+    return false;
+  }
+}
+
+function isGoogleSlides(url) {
+  const rawUrl = String(url || '').trim();
+  if (!rawUrl) return false;
+
+  try {
+    const parsed = new URL(rawUrl);
+    return parsed.hostname.toLowerCase().includes('docs.google.com') && parsed.pathname.includes('/presentation/');
+  } catch (_error) {
+    return false;
+  }
+}
+
+function isGoogleSheets(url) {
+  const rawUrl = String(url || '').trim();
+  if (!rawUrl) return false;
+
+  try {
+    const parsed = new URL(rawUrl);
+    return parsed.hostname.toLowerCase().includes('docs.google.com') && parsed.pathname.includes('/spreadsheets/');
+  } catch (_error) {
+    return false;
+  }
+}
+
+function isGoogleDocs(url) {
+  const rawUrl = String(url || '').trim();
+  if (!rawUrl) return false;
+
+  try {
+    const parsed = new URL(rawUrl);
+    return parsed.hostname.toLowerCase().includes('docs.google.com') && parsed.pathname.includes('/document/');
+  } catch (_error) {
+    return false;
+  }
+}
+
+function getDriveFileId(url) {
+  const rawUrl = String(url || '').trim();
+  if (!rawUrl) return null;
+
+  const byPath = rawUrl.match(/\/(?:file|presentation|spreadsheets|document)\/d\/([A-Za-z0-9_-]+)/);
+  const byIdParam = rawUrl.match(/[?&]id=([A-Za-z0-9_-]+)/);
+  return byPath?.[1] || byIdParam?.[1] || null;
+}
+
+function getBadgeImageDisplayUrl(url) {
+  const rawUrl = String(url || '').trim();
+  if (!rawUrl) return '';
+
+  const driveFileId = getDriveFileId(rawUrl);
+  if (driveFileId) {
+    return `https://drive.google.com/thumbnail?id=${encodeURIComponent(driveFileId)}&sz=w256`;
+  }
+
+  return rawUrl;
+}
+
+function isValidHttpUrl(url) {
+  const rawUrl = String(url || '').trim();
+  if (!rawUrl) return false;
+
+  try {
+    const parsed = new URL(rawUrl);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch (_error) {
+    return false;
+  }
+}
+
+function getProfilePictureOriginalUrl(data = {}) {
+  return String(data.originalProfileImageUrl || data.profilePictureUrl || data.profileImageUrl || '').trim();
+}
+
+function getProfilePictureDisplayUrl(data = {}) {
+  return getBadgeImageDisplayUrl(getProfilePictureOriginalUrl(data));
+}
+
+function getProfilePictureCandidateUrls(data = {}) {
+  const originalUrl = getProfilePictureOriginalUrl(data);
+  if (!originalUrl) return [];
+
+  const driveFileId = getDriveFileId(originalUrl);
+  const candidates = driveFileId
+    ? [
+        `https://drive.google.com/thumbnail?id=${encodeURIComponent(driveFileId)}&sz=w512`,
+        `https://drive.google.com/uc?export=view&id=${encodeURIComponent(driveFileId)}`
+      ]
+    : [getProfilePictureDisplayUrl(data)];
+
+  candidates.push(originalUrl);
+  return Array.from(new Set(candidates.filter(Boolean)));
+}
+
+function renderProfileAvatar(data = {}) {
+  if (!profileAvatarElement) return;
+
+  const initials = escapeHtml(makeInitials(data));
+  const candidateUrls = getProfilePictureCandidateUrls(data);
+
+  if (!candidateUrls.length) {
+    profileAvatarElement.innerHTML = `<span>${initials}</span>`;
+    return;
+  }
+
+  profileAvatarElement.innerHTML = `
+    <span>${initials}</span>
+    <img src="${escapeHtml(candidateUrls[0])}" alt="" />
+  `;
+
+  const avatarImage = profileAvatarElement.querySelector('img');
+  let candidateIndex = 0;
+
+  avatarImage?.addEventListener('error', () => {
+    candidateIndex += 1;
+    if (candidateIndex < candidateUrls.length) {
+      avatarImage.src = candidateUrls[candidateIndex];
+      return;
+    }
+
+    avatarImage.remove();
+    setFormMessage(
+      profilePictureMessageElement,
+      'Profile picture link saved, but the image could not be displayed. Use a public direct image link.',
+      'error'
+    );
+  });
+}
+
+function setFormMessage(element, message, type = '') {
+  if (!element) return;
+
+  element.textContent = message;
+  element.classList.remove('success', 'error');
+  if (type) {
+    element.classList.add(type);
+  }
+}
+
+function setProfilePictureEditorOpen(isOpen) {
+  if (profilePictureFormElement) {
+    profilePictureFormElement.classList.toggle('is-open', isOpen);
+  }
+
+  if (profilePictureEditButton) {
+    profilePictureEditButton.setAttribute('aria-expanded', String(isOpen));
+  }
+
+  if (isOpen) {
+    profilePictureUrlInput?.focus();
+  }
+}
+
+function resetProfilePictureEditor() {
+  if (profilePictureUrlInput && currentStudentProfile) {
+    profilePictureUrlInput.value = getProfilePictureOriginalUrl(currentStudentProfile);
+  }
+
+  setFormMessage(profilePictureMessageElement, '');
+  setProfilePictureEditorOpen(false);
+}
+
+function renderResourceMedia(resource) {
+  const originalUrl = String(resource?.url || '').trim();
+  if (!originalUrl) return '';
+
+  const youtubeEmbedUrl = getYouTubeEmbedUrl(originalUrl);
+  if (youtubeEmbedUrl) {
+    return `
+      <div class="video-wrapper">
+        <iframe
+          src="${escapeHtml(youtubeEmbedUrl)}"
+          title="Embedded Video"
+          frameborder="0"
+          allow="autoplay; encrypted-media; picture-in-picture"
+          allowfullscreen
+          referrerpolicy="strict-origin-when-cross-origin">
+        </iframe>
+      </div>
+    `;
+  }
+
+  const fileId = getDriveFileId(originalUrl);
+
+  if (isGoogleSlides(originalUrl) && fileId) {
+    const slidesEmbedUrl = `https://docs.google.com/presentation/d/${fileId}/embed?start=false&loop=false&delayms=3000`;
+    return `
+      <div class="video-wrapper">
+        <iframe
+          src="${escapeHtml(slidesEmbedUrl)}"
+          title="Embedded Resource"
+          frameborder="0"
+          allowfullscreen
+          referrerpolicy="strict-origin-when-cross-origin">
+        </iframe>
+      </div>
+    `;
+  }
+
+  if (isGoogleSheets(originalUrl) && fileId) {
+    const sheetsEmbedUrl = `https://docs.google.com/spreadsheets/d/${fileId}/preview`;
+    return `
+      <div class="video-wrapper">
+        <iframe
+          src="${escapeHtml(sheetsEmbedUrl)}"
+          title="Embedded Resource"
+          frameborder="0"
+          allowfullscreen
+          referrerpolicy="strict-origin-when-cross-origin">
+        </iframe>
+      </div>
+    `;
+  }
+
+  if (isGoogleDocs(originalUrl) && fileId) {
+    const docsEmbedUrl = `https://docs.google.com/document/d/${fileId}/preview`;
+    return `
+      <div class="video-wrapper">
+        <iframe
+          src="${escapeHtml(docsEmbedUrl)}"
+          title="Embedded Resource"
+          frameborder="0"
+          allowfullscreen
+          referrerpolicy="strict-origin-when-cross-origin">
+        </iframe>
+      </div>
+    `;
+  }
+
+  if (isGoogleDriveUrl(originalUrl) && fileId) {
+    const driveEmbedUrl = `https://drive.google.com/file/d/${fileId}/preview`;
+    return `
+      <div class="video-wrapper">
+        <iframe
+          src="${escapeHtml(driveEmbedUrl)}"
+          title="Embedded Resource"
+          frameborder="0"
+          allow="autoplay; encrypted-media; picture-in-picture"
+          allowfullscreen
+          referrerpolicy="strict-origin-when-cross-origin">
+        </iframe>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="admin-actions">
+      <button type="button" data-resource-url="${escapeHtml(originalUrl)}">Open Resource</button>
+    </div>
+  `;
+}
+
+function renderStudentResources(resources = []) {
+  if (!studentResourcesListElement) return;
+
+  if (!resources.length) {
+    studentResourcesListElement.innerHTML = '<p>No active resources found for your approved classes.</p>';
+    return;
+  }
+
+  studentResourcesListElement.innerHTML = resources
+    .map((resource) => {
+      return `
+        <article class="app-card">
+          <h4>${escapeHtml(resource.title || 'Untitled Resource')}</h4>
+          <p><strong>Subject:</strong> ${escapeHtml(resource.subjectName || 'Not provided')}</p>
+          <p><strong>Teacher:</strong> ${escapeHtml(resource.teacherName || 'Unknown Teacher')}</p>
+          <p><strong>Description:</strong> ${escapeHtml(resource.description || 'No description')}</p>
+          <p><strong>Class:</strong> ${escapeHtml(resource.sectionName || 'Not provided')}</p>
+          <p><strong>Uploaded:</strong> ${escapeHtml(formatDateTime(resource.createdAt) || '—')}</p>
+          ${renderResourceMedia(resource)}
+        </article>
+      `;
+    })
+    .join('');
+
+  studentResourcesListElement.querySelectorAll('button[data-resource-url]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const url = String(button.dataset.resourceUrl || '').trim();
+      if (!url) return;
+      window.open(url, '_blank', 'noopener,noreferrer');
+    });
+  });
+
+}
+
+async function loadStudentResources() {
+  if (!studentResourcesListElement || !currentStudentUser?.uid) return;
+
+  const classIds = [...enrolledClassIds].filter(Boolean);
+  if (!classIds.length) {
+    studentResourcesListElement.innerHTML = '<p>Get approved in classes to view resources.</p>';
+    return;
+  }
+
+  studentResourcesListElement.innerHTML = '<p>Loading resources...</p>';
+
+  try {
+    const chunks = [];
+    for (let i = 0; i < classIds.length; i += 10) {
+      chunks.push(classIds.slice(i, i + 10));
+    }
+
+    const snapshots = await Promise.all(
+      chunks.map((ids) =>
+        getDocs(query(collection(db, 'resources'), where('classId', 'in', ids), where('status', '==', 'active')))
+      )
+    );
+
+    const resources = snapshots
+      .flatMap((snapshot) => snapshot.docs.map((resourceDoc) => ({ id: resourceDoc.id, ...resourceDoc.data() })))
+      .filter((resource) => classIds.includes(String(resource.classId || '').trim()))
+      .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+
+    renderStudentResources(resources);
+  } catch (error) {
+    console.error('Failed to load student resources:', error);
+    studentResourcesListElement.innerHTML = '<p>Unable to load resources right now.</p>';
+  }
+}
+
+function renderMyEnrollments(enrollments) {
+  if (!myEnrollmentsListElement) return;
+
+  if (!enrollments.length) {
+    myEnrollmentsListElement.innerHTML = '<p>No approved classes yet.</p>';
+    return;
+  }
+
+  myEnrollmentsListElement.innerHTML = enrollments
+    .map((enrollment) => {
+      const classData = enrollment.classData || {};
+      const subjectName = classData.subjectName || enrollment.subjectName || 'Unknown Subject';
+      const subjectCode = classData.subjectCode || enrollment.subjectCode || 'Not provided';
+      const sectionName = classData.sectionName || enrollment.sectionName || 'Not provided';
+      const schoolYear = classData.schoolYearName || classData.schoolYear || enrollment.schoolYearName || 'Not provided';
+      const term = classData.termName || classData.term || enrollment.termName || 'Not provided';
+      const teacherName =
+        classData.teacherName ||
+        enrollment.teacherName ||
+        classData.teacherEmail ||
+        'Not assigned';
+
+      return `
+        <article class="app-card">
+          <p><strong>Subject:</strong> ${escapeHtml(subjectName)}</p>
+          <p><strong>Subject Code:</strong> ${escapeHtml(subjectCode)}</p>
+          <p><strong>Section:</strong> ${escapeHtml(sectionName)}</p>
+          <p><strong>School Year:</strong> ${escapeHtml(schoolYear)}</p>
+          <p><strong>Term:</strong> ${escapeHtml(term)}</p>
+          <p><strong>Teacher:</strong> ${escapeHtml(teacherName)}</p>
+          <button type="button" class="view-records-btn" data-class-id="${escapeHtml(enrollment.classId || '')}">
+            View Records
+          </button>
+        </article>
+      `;
+    })
+    .join('');
+
+  const viewRecordButtons = myEnrollmentsListElement.querySelectorAll('.view-records-btn');
+  viewRecordButtons.forEach((button) => {
+    button.addEventListener('click', async () => {
+      const classId = String(button.dataset.classId || '').trim();
+      const selectedEnrollment = enrollments.find((item) => String(item.classId || '').trim() === classId);
+      await loadClassRecordsDetail(selectedEnrollment || {});
+    });
+  });
+}
+
+function formatScoreValue(score, maxScore) {
+  const normalizedScore = normalizeNumericValue(score, Number.NaN);
+  const normalizedMax = normalizeNumericValue(maxScore, Number.NaN);
+
+  if (!Number.isFinite(normalizedScore) || !Number.isFinite(normalizedMax) || normalizedMax <= 0) {
+    return '--';
+  }
+
+  return `${normalizedScore}/${normalizedMax}`;
+}
+
+function formatSignedNumber(value) {
+  const normalized = normalizeNumericValue(value, 0);
+  if (normalized > 0) return `+${normalized}`;
+  return String(normalized);
+}
+
+function getClassMetadata(enrollment = {}) {
+  const classData = enrollment.classData || {};
+  return {
+    classId: String(enrollment.classId || classData.id || '').trim(),
+    subjectName: classData.subjectName || enrollment.subjectName || 'Unknown Subject',
+    subjectCode: classData.subjectCode || enrollment.subjectCode || 'Not provided',
+    teacherName: classData.teacherName || enrollment.teacherName || classData.teacherEmail || 'Not assigned',
+    schoolYearName: classData.schoolYearName || classData.schoolYear || enrollment.schoolYearName || 'Not provided',
+    termName: classData.termName || classData.term || enrollment.termName || 'Not provided',
+    sectionName: classData.sectionName || enrollment.sectionName || 'Not provided',
+  };
+}
+
+function renderClassRecordsDetail({ metadata = {}, rows = [], summary = {} } = {}) {
+  if (!classRecordsDetailElement) return;
+
+  if (!metadata.classId) {
+    classRecordsDetailElement.innerHTML = '<p>Select an approved class and click <strong>View Records</strong>.</p>';
+    return;
+  }
+
+  const rowsHtml = rows.length
+    ? rows
+        .map(
+          (row) => `
+            <tr>
+              <td>${escapeHtml(row.activityTitle)}</td>
+              <td>${escapeHtml(row.type)}</td>
+              <td>${escapeHtml(row.scoreDisplay)}</td>
+              <td>${escapeHtml(row.percentageDisplay)}</td>
+              <td>${escapeHtml(row.academicPointsDisplay)}</td>
+            </tr>
+          `
+        )
+        .join('')
+    : `<tr><td colspan="5" class="empty-cell">No records available for this class yet.</td></tr>`;
+
+  classRecordsDetailElement.innerHTML = `
+    <div class="info-grid">
+      <p><strong>Subject Name:</strong> ${escapeHtml(metadata.subjectName || 'Not provided')}</p>
+      <p><strong>Subject Code:</strong> ${escapeHtml(metadata.subjectCode || 'Not provided')}</p>
+      <p><strong>Teacher Name:</strong> ${escapeHtml(metadata.teacherName || 'Not provided')}</p>
+      <p><strong>School Year:</strong> ${escapeHtml(metadata.schoolYearName || 'Not provided')}</p>
+      <p><strong>Term:</strong> ${escapeHtml(metadata.termName || 'Not provided')}</p>
+      <p><strong>Section:</strong> ${escapeHtml(metadata.sectionName || 'Not provided')}</p>
+    </div>
+
+    <div class="my-classes-summary-grid">
+      <article class="summary-card">
+        <p>Total Activities</p>
+        <h4>${escapeHtml(String(summary.totalActivities || 0))}</h4>
+      </article>
+      <article class="summary-card">
+        <p>Total Academic Points</p>
+        <h4>${escapeHtml(formatSignedNumber(summary.totalAcademicPoints || 0))}</h4>
+      </article>
+      <article class="summary-card">
+        <p>Average Percentage</p>
+        <h4>${escapeHtml(summary.averagePercentageDisplay || '0%')}</h4>
+      </article>
+    </div>
+
+    <div class="admin-table-wrap">
+      <table class="student-table">
+        <thead>
+          <tr>
+            <th>Activity</th>
+            <th>Type</th>
+            <th>Score</th>
+            <th>Percentage</th>
+            <th>Academic Points</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+async function loadClassRecordsDetail(enrollment = {}) {
+  if (!currentStudentUser?.uid || !classRecordsDetailElement) return;
+
+  const metadata = getClassMetadata(enrollment);
+  if (!metadata.classId) {
+    renderClassRecordsDetail({ metadata });
+    return;
+  }
+
+  classRecordsDetailElement.innerHTML = '<p>Loading class records...</p>';
+
+  try {
+    const classId = metadata.classId;
+    const studentId = currentStudentUser.uid;
+    const activitiesSnapshot = await getDocs(query(collection(db, 'activities'), where('classId', '==', classId)));
+
+    let scoresSnapshot;
+    try {
+      scoresSnapshot = await getDocs(
+        query(collection(db, 'scores'), where('classId', '==', classId), where('studentId', '==', studentId))
+      );
+    } catch (error) {
+      console.error('Failed to query scores with compound filter:', error);
+      const fallbackSnapshot = await getDocs(query(collection(db, 'scores'), where('classId', '==', classId)));
+      const filteredDocs = fallbackSnapshot.docs.filter(
+        (scoreDoc) => String(scoreDoc.data().studentId || '').trim() === studentId
+      );
+      scoresSnapshot = { docs: filteredDocs };
+    }
+
+    let pointLogsSnapshot;
+    try {
+      pointLogsSnapshot = await getDocs(
+        query(
+          collection(db, 'pointLogs'),
+          where('classId', '==', classId),
+          where('studentId', '==', studentId),
+          where('source', '==', 'academic')
+        )
+      );
+    } catch (error) {
+      console.error('Failed to query point logs with compound filter:', error);
+      const fallbackSnapshot = await getDocs(query(collection(db, 'pointLogs'), where('classId', '==', classId)));
+      const filteredDocs = fallbackSnapshot.docs.filter((logDoc) => {
+        const log = logDoc.data() || {};
+        return String(log.studentId || '').trim() === studentId && String(log.source || '').trim().toLowerCase() === 'academic';
+      });
+      pointLogsSnapshot = { docs: filteredDocs };
+    }
+
+    const activities = activitiesSnapshot.docs.map((activityDoc) => ({
+      id: activityDoc.id,
+      ...activityDoc.data(),
+    }));
+
+    const scoresByActivityId = new Map(
+      scoresSnapshot.docs.map((scoreDoc) => {
+        const score = scoreDoc.data() || {};
+        return [String(score.activityId || '').trim(), score];
+      })
+    );
+
+    const pointsByActivityId = new Map(
+      pointLogsSnapshot.docs.map((pointLogDoc) => {
+        const log = pointLogDoc.data() || {};
+        return [String(log.activityId || '').trim(), log];
+      })
+    );
+
+    const rows = activities.map((activity) => {
+      const activityId = String(activity.id || '').trim();
+      const scoreEntry = scoresByActivityId.get(activityId) || {};
+      const pointLogEntry = pointsByActivityId.get(activityId) || {};
+      const score = Number(scoreEntry.score);
+      const maxScore = Number(activity.maxScore ?? scoreEntry.maxScore);
+      const hasValidScore = Number.isFinite(score) && Number.isFinite(maxScore) && maxScore > 0;
+      const percentage = hasValidScore ? Number(((score / maxScore) * 100).toFixed(2)) : Number.NaN;
+      const awardedPoints = normalizeNumericValue(pointLogEntry.awardedPoints, 0);
+
+      return {
+        activityTitle: String(activity.title || scoreEntry.title || 'Untitled Activity'),
+        type: String(activity.componentType || activity.type || scoreEntry.componentType || scoreEntry.type || '--'),
+        scoreDisplay: formatScoreValue(score, maxScore),
+        percentageDisplay: Number.isFinite(percentage) ? `${formatPercentage(percentage)}%` : '--',
+        academicPoints: awardedPoints,
+        academicPointsDisplay: formatSignedNumber(awardedPoints),
+        percentageValue: percentage,
+      };
+    });
+
+    const rowsWithScores = rows.filter((row) => row.scoreDisplay !== '--');
+
+    const percentages = rows
+      .map((row) => row.percentageValue)
+      .filter((value) => Number.isFinite(value));
+    const averagePercentage = percentages.length
+      ? Number((percentages.reduce((sum, value) => sum + value, 0) / percentages.length).toFixed(2))
+      : 0;
+
+    const totalAcademicPoints = rows.reduce((sum, row) => sum + normalizeNumericValue(row.academicPoints, 0), 0);
+
+    renderClassRecordsDetail({
+      metadata,
+      rows: rowsWithScores,
+      summary: {
+        totalActivities: activities.length,
+        totalAcademicPoints,
+        averagePercentageDisplay: `${formatPercentage(averagePercentage)}%`,
+      },
+    });
+  } catch (error) {
+    console.error('Failed to load class-specific records:', error);
+    classRecordsDetailElement.innerHTML = '<p>Unable to load class records. Please try again later.</p>';
+  }
+}
+
+async function checkExistingEnrollment(classId) {
+  if (!currentStudentUser?.uid || !classId) return false;
+
+  if (enrolledClassIds.has(classId)) return true;
+
+  const enrollmentQuery = query(
+    collection(db, 'classEnrollments'),
+    where('studentId', '==', currentStudentUser.uid),
+    where('classId', '==', classId)
+  );
+  const enrollmentSnapshot = await getDocs(enrollmentQuery);
+  const hasEnrollment = !enrollmentSnapshot.empty;
+
+  if (hasEnrollment) {
+    enrolledClassIds.add(classId);
+  }
+
+  return hasEnrollment;
+}
+
+async function enrollInClass(classData) {
+  if (!currentStudentUser?.uid) {
+    showMyClassesFeedback('You must be logged in to enroll.', 'error');
+    return;
+  }
+
+  if (!classData?.id) {
+    showMyClassesFeedback('Class information is invalid.', 'error');
+    return;
+  }
+
+  try {
+    clearMyClassesFeedback();
+    const alreadyEnrolled = await checkExistingEnrollment(classData.id);
+    if (alreadyEnrolled) {
+      showMyClassesFeedback('You already have an enrollment request for this class.', 'error');
+      await loadAvailableClasses();
+      await loadMyEnrollments();
+      return;
+    }
+
+    const displayName = safe(makeFullName(currentStudentProfile || {}));
+    const classDocRef = doc(db, 'classes', classData.id);
+    const classSnapshot = await getDoc(classDocRef);
+
+    if (!classSnapshot.exists()) {
+      showMyClassesFeedback('Selected class could not be found.', 'error');
+      await loadAvailableClasses();
+      return;
+    }
+
+    const selectedClassData = classSnapshot.data() || {};
+    const sectionId = String(selectedClassData.sectionId || classData.sectionId || currentStudentProfile?.sectionId || '').trim();
+    const sectionName = String(
+      selectedClassData.sectionName || classData.sectionName || currentStudentProfile?.section || currentStudentProfile?.sectionName || ''
+    ).trim();
+    const subjectId = String(selectedClassData.subjectId || classData.subjectId || '').trim();
+    const subjectName = String(selectedClassData.subjectName || classData.subjectName || '').trim();
+    const schoolYearId = String(selectedClassData.schoolYearId || classData.schoolYearId || '').trim();
+    const schoolYearName = String(selectedClassData.schoolYearName || classData.schoolYearName || '').trim();
+    const termId = String(selectedClassData.termId || classData.termId || '').trim();
+    const termName = String(selectedClassData.termName || classData.termName || '').trim();
+    const teacherId = String(selectedClassData.teacherId || classData.teacherId || '').trim();
+    const teacherName = String(selectedClassData.teacherName || classData.teacherName || '').trim();
+
+    await addDoc(collection(db, 'classEnrollments'), {
+      classId: classData.id,
+      studentId: currentStudentUser.uid,
+      studentName: displayName,
+      studentEmail: currentStudentUser.email || '',
+      sectionId,
+      sectionName,
+      subjectId,
+      subjectName,
+      schoolYearId,
+      schoolYearName,
+      termId,
+      termName,
+      teacherId,
+      teacherName,
+      status: 'pending',
+      requestedAt: serverTimestamp(),
+    });
+
+    enrolledClassIds.add(classData.id);
+    showMyClassesFeedback('Enrollment request submitted. Please wait for teacher approval.');
+    await loadAvailableClasses();
+    await loadMyEnrollments();
+  } catch (error) {
+    console.error('Failed to enroll in class:', error);
+    showMyClassesFeedback('Unable to submit enrollment request. Please try again later.', 'error');
+  }
+}
+
+function renderAvailableClasses(classes) {
+  if (!availableClassesListElement) return;
+
+  if (!classes.length) {
+    availableClassesListElement.innerHTML = '<p>No available classes for enrollment.</p>';
+    return;
+  }
+
+  availableClassesListElement.innerHTML = classes
+    .map((classData) => {
+      const sectionName = classData.sectionName || 'Not provided';
+      const teacherName = getTeacherName(classData);
+      const status = classData.status || 'Active';
+      const isBlocked = classData.hasExistingEnrollment;
+
+      return `
+        <article class="app-card">
+          <p><strong>Subject:</strong> ${escapeHtml(classData.subjectName || classData.subject || 'Untitled')}</p>
+          <p><strong>Subject Code:</strong> ${escapeHtml(classData.subjectCode || 'Not provided')}</p>
+          <p><strong>Category:</strong> ${escapeHtml(classData.subjectCategory || 'Not provided')}</p>
+          <p><strong>Section:</strong> ${escapeHtml(sectionName)}</p>
+          <p><strong>Grade Level:</strong> ${escapeHtml(classData.gradeLevel || 'Not provided')}</p>
+          <p><strong>School Year:</strong> ${escapeHtml(classData.schoolYear || 'Not provided')}</p>
+          <p><strong>Term:</strong> ${escapeHtml(classData.term || 'Not provided')}</p>
+          <p><strong>Teacher:</strong> ${escapeHtml(teacherName)}</p>
+          <p><strong>Status:</strong> ${escapeHtml(status)}</p>
+          <button type="button" class="enroll-btn" data-class-id="${escapeHtml(classData.id)}" ${
+            isBlocked ? 'disabled' : ''
+          }>
+            ${isBlocked ? 'Already Requested' : 'Enroll'}
+          </button>
+        </article>
+      `;
+    })
+    .join('');
+
+  const enrollButtons = availableClassesListElement.querySelectorAll('.enroll-btn');
+  enrollButtons.forEach((button) => {
+    button.addEventListener('click', async () => {
+      const classId = button.dataset.classId;
+      const selectedClass = classes.find((item) => item.id === classId);
+      await enrollInClass(selectedClass);
+    });
+  });
+}
+
+async function loadMyEnrollments() {
+  if (!myEnrollmentsListElement || !currentStudentUser?.uid) return;
+
+  myEnrollmentsListElement.innerHTML = '<p>Loading approved classes...</p>';
+  if (classRecordsDetailElement) {
+    classRecordsDetailElement.innerHTML = '<p>Select an approved class and click <strong>View Records</strong>.</p>';
+  }
+
+  try {
+    let enrollmentsSnapshot;
+    try {
+      const enrollmentsQuery = query(
+        collection(db, 'classEnrollments'),
+        where('studentId', '==', currentStudentUser.uid),
+        where('status', '==', 'approved'),
+        orderBy('requestedAt', 'desc')
+      );
+      enrollmentsSnapshot = await getDocs(enrollmentsQuery);
+    } catch (error) {
+      const fallbackSnapshot = await getDocs(
+        query(
+          collection(db, 'classEnrollments'),
+          where('studentId', '==', currentStudentUser.uid),
+          where('status', '==', 'approved')
+        )
+      );
+      const docs = [...fallbackSnapshot.docs].sort((a, b) => {
+        const aTime = a.data().requestedAt?.toMillis?.() || 0;
+        const bTime = b.data().requestedAt?.toMillis?.() || 0;
+        return bTime - aTime;
+      });
+      enrollmentsSnapshot = { docs, empty: docs.length === 0 };
+      console.error('Failed to query enrollments with orderBy:', error);
+    }
+
+    const enrollments = enrollmentsSnapshot.docs.map((enrollmentDoc) => ({
+      id: enrollmentDoc.id,
+      ...enrollmentDoc.data(),
+    }));
+
+    enrolledClassIds = new Set(enrollments.map((enrollment) => enrollment.classId).filter(Boolean));
+
+    const classesSnapshot = await getDocs(collection(db, 'classes'));
+    const classMap = new Map(
+      classesSnapshot.docs.map((classDoc) => [classDoc.id, { id: classDoc.id, ...classDoc.data() }])
+    );
+
+    const enrollmentsWithClassData = enrollments.map((enrollment) => ({
+      ...enrollment,
+      classData: classMap.get(enrollment.classId) || null,
+    }));
+
+    renderMyEnrollments(enrollmentsWithClassData);
+    await loadStudentResources();
+    await loadTeacherAnnouncements();
+  } catch (error) {
+    console.error('Failed to load enrollments:', error);
+    myEnrollmentsListElement.innerHTML = '<p>Unable to load approved classes. Please try again later.</p>';
+    if (studentResourcesListElement) {
+      studentResourcesListElement.innerHTML = '<p>Unable to load resources because approved classes failed to load.</p>';
+    }
+  }
+}
+
+async function loadAvailableClasses() {
+  if (!availableClassesListElement || !currentStudentUser?.uid) return;
+
+  availableClassesListElement.innerHTML = '<p>Loading available classes...</p>';
+
+  try {
+    const classesSnapshot = await getDocs(collection(db, 'classes'));
+    const studentSectionId = String(currentStudentProfile?.sectionId || '').trim();
+    const studentSectionName = String(
+      currentStudentProfile?.sectionName || currentStudentProfile?.section || ''
+    ).trim().toLowerCase();
+
+    const availableClasses = classesSnapshot.docs
+      .map((classDoc) => ({ id: classDoc.id, ...classDoc.data() }))
+      .filter((classData) => isClassActive(classData))
+      .filter((classData) => {
+        const classSectionId = String(classData.sectionId || '').trim();
+        const classSectionName = String(classData.sectionName || '').trim().toLowerCase();
+
+        if (studentSectionId) {
+          return !classSectionId || classSectionId === studentSectionId;
+        }
+
+        if (studentSectionName) {
+          return !classSectionName || classSectionName === studentSectionName;
+        }
+
+        return true;
+      });
+
+    const classesWithEnrollmentCheck = await Promise.all(
+      availableClasses.map(async (classData) => ({
+        ...classData,
+        hasExistingEnrollment: await checkExistingEnrollment(classData.id),
+      }))
+    );
+
+    renderAvailableClasses(classesWithEnrollmentCheck.filter((item) => !item.hasExistingEnrollment));
+  } catch (error) {
+    console.error('Failed to load available classes:', error);
+    availableClassesListElement.innerHTML = '<p>Unable to load available classes. Please try again later.</p>';
+  }
+}
+
+async function loadLeaderboard() {
+  if (!leaderboardListElement) return;
+
+  leaderboardListElement.innerHTML = '<p>Loading leaderboard...</p>';
+  if (profileRankElement) {
+    profileRankElement.textContent = 'Loading...';
+  }
+
+  try {
+    const studentsSnapshot = await getDocs(collection(db, 'students'));
+    const students = studentsSnapshot.docs.map((studentDoc) => {
+      const student = studentDoc.data();
+      return {
+        id: studentDoc.id,
+        firstName: String(student.firstName || '').trim(),
+        lastName: String(student.lastName || '').trim(),
+        gradeLevel: String(student.gradeLevel || '').trim(),
+        section: String(student.section || '').trim(),
+        points: normalizePoints(student.points),
+      };
+    });
+
+    students.sort((a, b) => {
+      if (b.points !== a.points) return b.points - a.points;
+
+      const lastNameCompare = a.lastName.localeCompare(b.lastName, undefined, { sensitivity: 'base' });
+      if (lastNameCompare !== 0) return lastNameCompare;
+
+      return a.firstName.localeCompare(b.firstName, undefined, { sensitivity: 'base' });
+    });
+
+    const topStudents = students.slice(0, 10);
+    const currentStudentId = auth.currentUser?.uid;
+    const currentStudentIndex = students.findIndex((student) => student.id === currentStudentId);
+
+    if (profileRankElement) {
+      if (currentStudentIndex >= 0) {
+        const rank = currentStudentIndex + 1;
+        const total = students.length;
+        profileRankElement.textContent = `#${rank} of ${total}`;
+      } else {
+        profileRankElement.textContent = 'Not ranked';
+      }
+    }
+
+    if (!topStudents.length) {
+      leaderboardListElement.innerHTML = '<p>No leaderboard data available yet.</p>';
+      return;
+    }
+
+    leaderboardListElement.innerHTML = topStudents
+      .map((student, index) => {
+        const fullName = makeLeaderboardName(student) || 'Unnamed Student';
+        const gradeLevel = student.gradeLevel || 'Not provided';
+        const section = student.section || 'Not provided';
+        return `<p>#${index + 1} ${escapeHtml(fullName)} — ${escapeHtml(
+          gradeLevel
+        )} - ${escapeHtml(section)} — ${student.points} pts</p>`;
+      })
+      .join('');
+  } catch (error) {
+    console.error('Failed to load leaderboard:', error);
+    leaderboardListElement.innerHTML = '<p>No leaderboard data available yet.</p>';
+    if (profileRankElement) {
+      profileRankElement.textContent = 'Not ranked';
+    }
+
+    if (profileStudentRankElement) {
+      profileStudentRankElement.textContent = 'Not yet assigned';
+    }
+  }
+}
+
+function formatTimestamp(value) {
+  if (!value?.toDate) return 'Date unavailable';
+
+  const date = value.toDate();
+  return date.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+}
+
+function getRecordsListElement() {
+  if (!recordsPageElement) return null;
+
+  const pointsHistoryCard = recordsPageElement.querySelector('.app-card');
+  if (!pointsHistoryCard) return null;
+
+  let listElement = pointsHistoryCard.querySelector('#point-logs-list');
+
+  if (!listElement) {
+    listElement = document.createElement('ul');
+    listElement.id = 'point-logs-list';
+    listElement.className = 'list-stack';
+    pointsHistoryCard.appendChild(listElement);
+  }
+
+  return listElement;
+}
+
+async function loadPointLogs(studentId) {
+  const listElement = getRecordsListElement();
+  if (!listElement) return;
+
+  listElement.innerHTML = '<li>Loading point logs...</li>';
+
+  try {
+    const logsQuery = query(
+      collection(db, 'pointLogs'),
+      where('studentId', '==', studentId)
+    );
+
+    const logsSnapshot = await getDocs(logsQuery);
+
+    if (logsSnapshot.empty) {
+      listElement.innerHTML = '<li>No point logs available yet.</li>';
+      return;
+    }
+
+    const sortedDocs = logsSnapshot.docs.sort((a, b) => {
+      const aTime = a.data().createdAt?.toMillis?.() || 0;
+      const bTime = b.data().createdAt?.toMillis?.() || 0;
+      return bTime - aTime;
+    });
+
+    const renderedLogs = await Promise.all(
+      sortedDocs.map(async (logDoc) => {
+        const log = logDoc.data() || {};
+        const source = String(log.source || '').trim().toLowerCase();
+        const logType = String(log.type || '').trim().toLowerCase();
+
+        if (source === 'academic') {
+          const displayPoints = normalizeNumericValue(log.pointDifference ?? log.awardedPoints, 0);
+          const sign = displayPoints > 0 ? '+' : '';
+          const title = String(log.activityTitle || log.title || 'Academic score record').trim();
+
+          return `<li>${sign}${escapeHtml(String(displayPoints))} Academic — ${escapeHtml(title)}</li>`;
+        }
+
+        if (source === 'achievement') {
+          const achievementPoints = normalizeNumericValue(log.pointDifference ?? log.awardedPoints, 0);
+          const sign = achievementPoints > 0 ? '+' : '';
+          const achievementLabel = String(log.achievementTitle || log.reason || 'Achievement reward').trim();
+
+          return `<li>${sign}${escapeHtml(String(achievementPoints))} Achievement — ${escapeHtml(achievementLabel)}<br>System</li>`;
+        }
+
+        if (source === 'merit' || source === 'demerit' || logType === 'merit' || logType === 'demerit') {
+          const points = normalizePoints(log.points);
+          const isDemerit = source === 'demerit' || logType === 'demerit';
+          const sign = isDemerit ? '-' : '+';
+          const label = isDemerit ? 'Demerit' : 'Merit';
+          const reason = String(log.reason || 'No reason provided').trim();
+
+          return `<li>${sign}${points} ${label} — ${escapeHtml(reason)}</li>`;
+        }
+
+        const displayPoints = normalizeNumericValue(log.pointDifference ?? log.awardedPoints ?? log.points, 0);
+        const sign = displayPoints > 0 ? '+' : '';
+        const reason = String(log.reason || 'Point log update').trim();
+
+        return `<li>${sign}${escapeHtml(String(displayPoints))} Points — ${escapeHtml(reason)}</li>`;
+      })
+    );
+
+    const filteredLogs = renderedLogs.filter(Boolean);
+    listElement.innerHTML = filteredLogs.length
+      ? filteredLogs.join('')
+      : '<li>No point logs available yet.</li>';
+
+  } catch (error) {
+    console.error('Failed to load point logs:', error);
+    listElement.innerHTML = '<li>Unable to load logs. Please try again later.</li>';
+  }
+}
+
+
+function formatAchievementDate(value) {
+  if (!value?.toDate) return 'Recently unlocked';
+  return value.toDate().toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function getAchievementStatusDetails(achievement, unlockedIds, achievementStatusMap = new Map()) {
+  const achievementStatus = achievementStatusMap.get(achievement.id) || {};
+  const isUnlocked = unlockedIds.has(achievement.id);
+  const isClaimed = Boolean(achievementStatus.isClaimed);
+  const requirement = getAchievementRequirementText(achievement);
+  return {
+    isUnlocked,
+    isClaimed,
+    statusLabel: !isUnlocked ? 'Next' : isClaimed ? 'Completed ✔' : 'Unlocked',
+    requirement
+  };
+}
+
+function renderAchievementCard(achievement, unlockedIds, achievementStatusMap = new Map()) {
+  const status = getAchievementStatusDetails(achievement, unlockedIds, achievementStatusMap);
+  const title = escapeHtml(achievement.title || 'Untitled Achievement');
+  const rewardPoints = Number(achievement.rewardPoints || 0);
+  const detailTextRaw = status.requirement || achievement.description || 'No description available.';
+  const detailText = detailTextRaw.length > 62 ? `${detailTextRaw.slice(0, 59).trimEnd()}…` : detailTextRaw;
+  const claimButtonHtml =
+    status.isUnlocked && !status.isClaimed
+      ? `<button type="button" class="claim-btn" data-id="${escapeHtml(achievement.id)}">Claim +${escapeHtml(
+          String(rewardPoints)
+        )} pts</button>`
+      : '';
+
+  return `
+    <li class="achievement-card compact ${status.isUnlocked ? 'unlocked' : 'locked'} ${
+      status.isClaimed ? 'achievement-card-claimed' : ''
+    }">
+      <div class="achievement-card-header">
+        <h4>${title}</h4>
+        <span class="achievement-status-pill ${status.isUnlocked ? 'unlocked' : 'locked'}">${escapeHtml(status.statusLabel)}</span>
+      </div>
+      <div class="achievement-meta-row">
+        <span class="achievement-requirement">${escapeHtml(detailText)}</span>
+        <span class="achievement-reward-mini">+${escapeHtml(String(rewardPoints))} pts</span>
+      </div>
+      ${claimButtonHtml}
+    </li>
+  `;
+}
+
+function getProfileBadgeAchievements(visibleAchievements = [], unlockedIds = new Set()) {
+  return visibleAchievements.filter((achievement) => {
+    if (!unlockedIds.has(achievement.id)) return false;
+    if (achievement.nextAchievementId === null) return true;
+
+    const chainKey = String(achievement.chainKey || achievement.id);
+    const currentOrder = Number(achievement.chainOrder || 0);
+    const hasHigherVisibleTier = visibleAchievements.some((candidate) => {
+      return String(candidate.chainKey || candidate.id) === chainKey && Number(candidate.chainOrder || 0) > currentOrder;
+    });
+
+    return !hasHigherVisibleTier;
+  });
+}
+
+function getBadgeImageUrl(achievement = {}) {
+  return getBadgeImageDisplayUrl(
+    achievement.badgeImageUrl ||
+      achievement.badgeImage ||
+      achievement.badgeUrl ||
+      achievement.imageUrl ||
+      achievement.originalImageUrl ||
+      ''
+  );
+}
+
+function getBadgeInitials(achievement = {}) {
+  return String(achievement.title || achievement.name || 'Badge')
+    .split(/\s+/)
+    .map((word) => word.charAt(0))
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+}
+
+function renderProfileBadge(achievement) {
+  const title = escapeHtml(achievement.title || achievement.name || 'Untitled Badge');
+  const imageUrl = getBadgeImageUrl(achievement);
+  const initials = escapeHtml(getBadgeInitials(achievement));
+  const badgeVisual = imageUrl
+    ? `<span>${initials}</span><img src="${escapeHtml(imageUrl)}" alt="" loading="lazy" onerror="this.remove()" />`
+    : `<span>${initials}</span>`;
+
+  return `
+    <button type="button" class="profile-badge-item" aria-label="${title}" title="${title}">
+      <span class="profile-badge-tooltip" role="tooltip">${title}</span>
+      <span class="profile-badge-icon" aria-hidden="true">${badgeVisual}</span>
+    </button>
+  `;
+}
+
+function renderProfileBadges(badgeAchievements = []) {
+  if (!profileBadgesListElement) return;
+
+  if (profileBadgeCountElement) {
+    profileBadgeCountElement.textContent = `${badgeAchievements.length} earned`;
+  }
+
+  if (!badgeAchievements.length) {
+    profileBadgesListElement.innerHTML = '<p class="profile-badges-empty">No badges earned yet.</p>';
+    return;
+  }
+
+  const sortedAchievements = badgeAchievements
+    .slice()
+    .sort((a, b) => {
+      const dateB = b.achievedAt?.toMillis?.() || b.awardedAt?.toMillis?.() || 0;
+      const dateA = a.achievedAt?.toMillis?.() || a.awardedAt?.toMillis?.() || 0;
+      return dateB - dateA;
+    });
+
+  profileBadgesListElement.innerHTML = sortedAchievements
+    .map((achievement) => renderProfileBadge(achievement))
+    .join('');
+}
+
+function resetProfileBadges(message = 'No badges earned yet.') {
+  if (profileBadgeCountElement) {
+    profileBadgeCountElement.textContent = '0 earned';
+  }
+  if (profileBadgesListElement) {
+    profileBadgesListElement.innerHTML = `<p class="profile-badges-empty">${escapeHtml(message)}</p>`;
+  }
+}
+
+async function loadSpecialProfileBadges(studentId) {
+  const normalizedStudentId = String(studentId || '').trim();
+  if (!normalizedStudentId) return [];
+
+  try {
+    const snapshot = await getDocs(
+      query(
+        collection(db, 'studentSpecialBadges'),
+        where('studentId', '==', normalizedStudentId)
+      )
+    );
+
+    return snapshot.docs
+      .map((badgeDoc) => ({
+        id: badgeDoc.id,
+        ...badgeDoc.data(),
+        title: badgeDoc.data()?.name || 'Special Badge',
+        type: 'special'
+      }))
+      .filter((badge) => String(badge.status || 'active').trim() === 'active');
+  } catch (error) {
+    console.error('Failed to load special profile badges:', error);
+    return [];
+  }
+}
+
+async function refreshAchievementsUI() {
+  if (!currentStudentUser?.uid) return;
+  await loadAchievementsDashboard(currentStudentUser.uid);
+}
+
+async function loadAchievementsDashboard(studentId) {
+  if (!achievementsPageElement) return;
+
+  if (achievementsSummaryElement) {
+    achievementsSummaryElement.innerHTML = '<p>Loading achievements...</p>';
+  }
+  if (unlockedAchievementsListElement) {
+    unlockedAchievementsListElement.innerHTML = '<li>Loading unlocked achievements...</li>';
+  }
+  if (nextAchievementsListElement) {
+    nextAchievementsListElement.innerHTML = '<li>Loading next achievements...</li>';
+  }
+
+  try {
+    const [visibleAchievements, unlockedIds, achievementStatusMap, specialProfileBadges] = await Promise.all([
+      getVisibleAchievementsForStudent(studentId),
+      getStudentUnlockedAchievementIds(studentId),
+      getStudentAchievementStatusMap(studentId),
+      loadSpecialProfileBadges(studentId)
+    ]);
+
+    const unlockedAchievements = visibleAchievements.filter((achievement) => unlockedIds.has(achievement.id));
+    const lockedVisibleAchievements = visibleAchievements.filter((achievement) => !unlockedIds.has(achievement.id));
+    const unclaimedAchievements = unlockedAchievements.filter((achievement) => {
+      const achievementStatus = achievementStatusMap.get(achievement.id);
+      return achievementStatus?.isUnlocked && !achievementStatus?.isClaimed;
+    });
+
+    const latestAchievement = unlockedAchievements
+      .slice()
+      .sort((a, b) => (b.achievedAt?.toMillis?.() || 0) - (a.achievedAt?.toMillis?.() || 0))[0];
+
+    const nextAchievement = lockedVisibleAchievements[0] || null;
+    const profileBadgeAchievements = [
+      ...getProfileBadgeAchievements(visibleAchievements, unlockedIds),
+      ...specialProfileBadges
+    ];
+
+    renderProfileBadges(profileBadgeAchievements);
+
+    if (achievementsSummaryElement) {
+      achievementsSummaryElement.innerHTML = `
+        <p><strong>Total achievements unlocked:</strong> ${unlockedAchievements.length}</p>
+        <p><strong>Unclaimed rewards:</strong> ${unclaimedAchievements.length}</p>
+        <p><strong>Latest achievement:</strong> ${escapeHtml(latestAchievement?.title || 'No unlocked achievement yet')}</p>
+        <p><strong>Next achievement:</strong> ${escapeHtml(nextAchievement?.title || 'No visible next achievement')}</p>
+        ${
+          unclaimedAchievements.length >= 2
+            ? '<button type="button" id="claim-all-btn" class="claim-all-btn">Claim All</button>'
+            : ''
+        }
+      `;
+    }
+
+    if (unlockedAchievementsListElement) {
+      unlockedAchievementsListElement.innerHTML = unlockedAchievements.length
+        ? unlockedAchievements.map((achievement) => renderAchievementCard(achievement, unlockedIds, achievementStatusMap)).join('')
+        : '<li>No achievements unlocked yet.</li>';
+    }
+
+    if (nextAchievementsListElement) {
+      nextAchievementsListElement.innerHTML = lockedVisibleAchievements.length
+        ? lockedVisibleAchievements
+            .map((achievement) => renderAchievementCard(achievement, unlockedIds, achievementStatusMap))
+            .join('')
+        : '<li>No visible locked achievements right now.</li>';
+    }
+  } catch (error) {
+    console.error('Failed to load achievements dashboard:', error);
+    resetProfileBadges('Unable to load badges right now.');
+    if (achievementsSummaryElement) achievementsSummaryElement.innerHTML = '<p>Unable to load achievements summary right now.</p>';
+    if (unlockedAchievementsListElement) unlockedAchievementsListElement.innerHTML = '<li>Unable to load unlocked achievements.</li>';
+    if (nextAchievementsListElement) nextAchievementsListElement.innerHTML = '<li>Unable to load next achievements.</li>';
+  }
+}
+
+function toggleSidebar() {
+  if (!sidebar || !sidebarOverlay) return;
+
+  const isOpen = sidebar.classList.contains('open');
+  sidebar.classList.toggle('open', !isOpen);
+  sidebar.setAttribute('aria-hidden', String(isOpen));
+  sidebarOverlay.hidden = isOpen;
+}
+
+function closeSidebar() {
+  if (!sidebar || !sidebarOverlay) return;
+
+  sidebar.classList.remove('open');
+  sidebar.setAttribute('aria-hidden', 'true');
+  sidebarOverlay.hidden = true;
+}
+
+function showPage(pageName, options = {}) {
+  const targetPage = isKnownPage(pageName) ? pageName : 'home';
+
+  pages.forEach((page) => {
+    page.classList.toggle('active', page.dataset.page === targetPage);
+  });
+
+  menuButtons.forEach((button) => {
+    button.classList.toggle('active', button.dataset.target === targetPage);
+  });
+
+  if (pageTitleElement) {
+    pageTitleElement.textContent = pageTitles[targetPage] || 'Dashboard';
+  }
+
+  if (options.persist !== false) {
+    saveCurrentPage(targetPage);
+  }
+
+  closeSidebar();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function setStudentData(data, fallbackEmail = '') {
+  const displayName = safe(makeFullName(data));
+  const displayEmail = safe(data.email || fallbackEmail);
+  const displayGradeSection = makeGradeSection(data);
+  const points = normalizePoints(data.points);
+
+  if (sidebarStudentNameElement) {
+    sidebarStudentNameElement.textContent = displayName;
+  }
+
+  if (sidebarStudentEmailElement) {
+    sidebarStudentEmailElement.textContent = displayEmail;
+  }
+
+  if (profileFullNameElement) {
+    profileFullNameElement.textContent = displayName;
+  }
+
+  if (profileEmailElement) {
+    profileEmailElement.textContent = displayEmail;
+  }
+
+  if (profileGradeSectionElement) {
+    profileGradeSectionElement.textContent = displayGradeSection;
+  }
+
+  if (profileAvatarElement) {
+    renderProfileAvatar(data);
+  }
+
+  if (profilePictureUrlInput) {
+    profilePictureUrlInput.value = getProfilePictureOriginalUrl(data);
+  }
+
+  if (pointsTotalElement) {
+    pointsTotalElement.textContent = String(points);
+  }
+
+  if (profileStudentRankElement) {
+    const studentRank = Number(data.studentRank);
+    const sectionRankTotal = Number(data.sectionRankTotal);
+    const hasRank = Number.isFinite(studentRank) && studentRank > 0;
+    const hasTotal = Number.isFinite(sectionRankTotal) && sectionRankTotal > 0;
+
+    profileStudentRankElement.textContent = hasRank && hasTotal ? `#${studentRank} of ${sectionRankTotal}` : 'Not yet assigned';
+  }
+
+  if (homeStudentNameElement) {
+    homeStudentNameElement.textContent = displayName;
+  }
+
+  if (homeStudentSectionElement) {
+    homeStudentSectionElement.textContent = displayGradeSection;
+  }
+
+  if (homeStudentPointsElement) {
+    homeStudentPointsElement.textContent = String(points);
+  }
+
+  if (profileDataElement) {
+    profileDataElement.innerHTML = `
+      <p><strong>Full Name:</strong> ${displayName}</p>
+      <p><strong>Email:</strong> ${displayEmail}</p>
+      <p><strong>Sex:</strong> ${safe(data.sex)}</p>
+      <p><strong>Birthday:</strong> ${safe(data.birthday)}</p>
+      <p><strong>LRN:</strong> ${safe(data.lrn)}</p>
+      <p><strong>Phone Number:</strong> ${safe(data.phoneNumber)}</p>
+      <p><strong>Address:</strong> ${safe(data.address)}</p>
+      <p><strong>Profile Picture:</strong> ${getProfilePictureOriginalUrl(data) ? 'Linked' : 'Not provided'}</p>
+      <p><strong>Grade Level:</strong> ${safe(data.gradeLevel)}</p>
+      <p><strong>Section:</strong> ${safe(data.section)}</p>
+      <p><strong>Total Points:</strong> ${points}</p>
+    `;
+  }
+}
+
+function setSectionStanding(data = {}) {
+  const sectionName = safe(data.sectionName || data.name || currentStudentProfile?.sectionName || currentStudentProfile?.section);
+  const tier = String(data.tier || '').trim() || 'Not yet ranked';
+  const rankValue = Number(data.rank);
+  const rank = Number.isFinite(rankValue) && rankValue > 0 ? rankValue : null;
+  const points = normalizePoints(data.totalPoints);
+  const rankLabel = rank ? `#${rank}` : 'Not yet ranked';
+
+  if (homeSectionNameElement) {
+    homeSectionNameElement.textContent = sectionName;
+  }
+  if (homeSectionTierElement) {
+    homeSectionTierElement.innerHTML = `<span class="tier-pill ${String(tier).toLowerCase().replace(/\s+/g, '-')}">${escapeHtml(
+      tier
+    )}</span>`;
+  }
+  if (homeSectionRankElement) {
+    homeSectionRankElement.textContent = rankLabel;
+  }
+  if (homeSectionPointsElement) {
+    homeSectionPointsElement.textContent = `${points.toLocaleString()} pts`;
+  }
+  if (profileSectionTierElement) {
+    profileSectionTierElement.textContent = tier;
+  }
+  if (profileSectionRankElement) {
+    profileSectionRankElement.textContent = rankLabel;
+  }
+}
+
+async function loadStudentSectionStanding(studentData = {}) {
+  const sectionId = String(studentData.sectionId || '').trim();
+  const sectionName = String(studentData.sectionName || studentData.section || '').trim();
+  const studentSchoolYearId = String(studentData.schoolYearId || '').trim();
+
+  if (!sectionId) {
+    setSectionStanding({
+      sectionName: sectionName || 'No section assigned',
+      tier: 'No section assigned',
+      rank: null,
+      totalPoints: 0,
+    });
+    return;
+  }
+
+  try {
+    let sectionData = null;
+    let resolvedSectionName = sectionName;
+    const sectionSnap = await getDoc(doc(db, 'sections', sectionId));
+    if (!sectionSnap.exists()) {
+      setSectionStanding({
+        sectionName: sectionName || 'Section record not found',
+        tier: 'Section record not found',
+        rank: null,
+        totalPoints: 0,
+      });
+      return;
+    }
+
+    sectionData = sectionSnap.data() || {};
+    resolvedSectionName = sectionData.name || sectionData.sectionName || sectionName;
+    let tier = sectionData.tier || sectionData.sectionTier || 'Not yet ranked';
+    let rank = sectionData.rank || sectionData.sectionRank || null;
+    let totalPoints = sectionData.totalPoints || 0;
+
+    const hasRank = Number.isFinite(Number(rank)) && Number(rank) > 0;
+    const hasTier = String(tier || '').trim() && String(tier || '').trim() !== 'Not yet ranked';
+    const shouldTryFallback = (!hasRank || !hasTier) && Boolean(resolvedSectionName) && Boolean(studentSchoolYearId);
+
+    if ((!hasRank || !hasTier) && totalPoints > 0) {
+      console.warn('Section has totalPoints but missing rank/tier. Recompute ranking in Super Admin.', sectionData);
+    }
+
+    if (shouldTryFallback) {
+      let matchedSection = null;
+
+      const byNameSnapshot = await getDocs(
+        query(
+          collection(db, 'sections'),
+          where('name', '==', resolvedSectionName),
+          where('schoolYearId', '==', studentSchoolYearId)
+        )
+      );
+      matchedSection = byNameSnapshot.docs
+        .map((item) => item.data())
+        .find((item) => item && (item.rank || item.sectionRank) && (item.tier || item.sectionTier));
+
+      if (!matchedSection) {
+        const bySectionNameSnapshot = await getDocs(
+          query(
+            collection(db, 'sections'),
+            where('sectionName', '==', resolvedSectionName),
+            where('schoolYearId', '==', studentSchoolYearId)
+          )
+        );
+        matchedSection = bySectionNameSnapshot.docs
+          .map((item) => item.data())
+          .find((item) => item && (item.rank || item.sectionRank) && (item.tier || item.sectionTier));
+      }
+
+      if (matchedSection) {
+        sectionData = matchedSection;
+        tier = sectionData.tier || sectionData.sectionTier || tier;
+        rank = sectionData.rank || sectionData.sectionRank || rank;
+        totalPoints = sectionData.totalPoints || totalPoints;
+      }
+    }
+
+    setSectionStanding({
+      sectionName: sectionData.name || sectionData.sectionName || resolvedSectionName,
+      tier,
+      rank,
+      totalPoints,
+    });
+  } catch (error) {
+    console.error('Failed to load section standing:', error);
+    setSectionStanding({
+      sectionName: sectionName || 'Section record not found',
+      tier: 'Section record not found',
+      rank: null,
+      totalPoints: 0,
+    });
+  }
+}
+
+function renderStudentProfileNotFound(email = '', uid = '') {
+  console.error('Student document not found:', uid);
+
+  const fallback = safe(email);
+  const supportMessage = 'Student profile not found. Please contact admin.';
+
+  if (sidebarStudentNameElement) {
+    sidebarStudentNameElement.textContent = 'Profile not found';
+  }
+
+  if (sidebarStudentEmailElement) {
+    sidebarStudentEmailElement.textContent = fallback;
+  }
+
+  if (profileFullNameElement) {
+    profileFullNameElement.textContent = 'Profile not found';
+  }
+
+  if (profileEmailElement) {
+    profileEmailElement.textContent = fallback;
+  }
+
+  if (profileGradeSectionElement) {
+    profileGradeSectionElement.textContent = supportMessage;
+  }
+
+  if (profileAvatarElement) {
+    profileAvatarElement.textContent = '👤';
+  }
+
+  if (pointsTotalElement) {
+    pointsTotalElement.textContent = '0';
+  }
+
+  if (homeStudentNameElement) {
+    homeStudentNameElement.textContent = 'Profile not found';
+  }
+
+  if (homeStudentSectionElement) {
+    homeStudentSectionElement.textContent = supportMessage;
+  }
+
+  if (homeStudentPointsElement) {
+    homeStudentPointsElement.textContent = '0';
+  }
+
+  if (profileRankElement) {
+    profileRankElement.textContent = 'Not ranked';
+  }
+
+  if (profileStudentRankElement) {
+    profileStudentRankElement.textContent = 'Not yet assigned';
+  }
+  setSectionStanding({});
+  resetProfileBadges('No student profile found.');
+
+  if (profileDataElement) {
+    profileDataElement.innerHTML = `
+      <p><strong>Error:</strong> ${supportMessage}</p>
+      <p><strong>UID:</strong> ${safe(uid)}</p>
+      <p><strong>Email:</strong> ${fallback}</p>
+      <p><strong>Total Points:</strong> 0</p>
+    `;
+  }
+}
+
+function renderNoProfile(email = '') {
+  const fallback = safe(email);
+
+  if (sidebarStudentNameElement) {
+    sidebarStudentNameElement.textContent = 'No profile found';
+  }
+
+  if (sidebarStudentEmailElement) {
+    sidebarStudentEmailElement.textContent = fallback;
+  }
+
+  if (profileFullNameElement) {
+    profileFullNameElement.textContent = 'No profile found';
+  }
+
+  if (profileEmailElement) {
+    profileEmailElement.textContent = fallback;
+  }
+
+  if (profileGradeSectionElement) {
+    profileGradeSectionElement.textContent = 'Not provided';
+  }
+
+  if (profileAvatarElement) {
+    profileAvatarElement.textContent = '👤';
+  }
+
+  if (pointsTotalElement) {
+    pointsTotalElement.textContent = '0';
+  }
+
+  if (homeStudentNameElement) {
+    homeStudentNameElement.textContent = 'No profile found';
+  }
+
+  if (homeStudentSectionElement) {
+    homeStudentSectionElement.textContent = 'Not provided';
+  }
+
+  if (homeStudentPointsElement) {
+    homeStudentPointsElement.textContent = '0';
+  }
+
+  if (profileRankElement) {
+    profileRankElement.textContent = 'Not ranked';
+  }
+
+  if (profileStudentRankElement) {
+    profileStudentRankElement.textContent = 'Not yet assigned';
+  }
+  setSectionStanding({});
+  resetProfileBadges('No student profile found.');
+
+  if (profileDataElement) {
+    profileDataElement.innerHTML = `
+      <p><strong>Full Name:</strong> No profile found</p>
+      <p><strong>Email:</strong> ${fallback}</p>
+      <p><strong>Sex:</strong> Not provided</p>
+      <p><strong>Birthday:</strong> Not provided</p>
+      <p><strong>LRN:</strong> Not provided</p>
+      <p><strong>Phone Number:</strong> Not provided</p>
+      <p><strong>Address:</strong> Not provided</p>
+      <p><strong>Grade Level:</strong> Not provided</p>
+      <p><strong>Section:</strong> Not provided</p>
+      <p><strong>Total Points:</strong> 0</p>
+    `;
+  }
+}
+
+function renderStudentQuests(quests = []) {
+  if (!studentQuestsListElement) return;
+
+  if (!quests.length) {
+    studentQuestsListElement.innerHTML = '<p class="empty-cell">No quests assigned yet.</p>';
+    return;
+  }
+
+  studentQuestsListElement.innerHTML = quests
+    .map((quest) => {
+      const status = String(quest.studentQuestStatus || 'assigned').trim();
+      const questStatus = String(quest.status || 'active').trim();
+      const isCompleted = status === 'completed';
+      const isExpired = isQuestPastDeadline(quest);
+      const displayStatus = isCompleted ? 'completed' : isExpired ? 'expired' : questStatus;
+
+      return `
+        <article class="app-card quest-card">
+          <div class="quest-card-header">
+            <h4>${escapeHtml(quest.title || 'Untitled Quest')}</h4>
+            <span class="status-pill ${displayStatus === 'active' ? 'status-active' : 'status-pending'}">${escapeHtml(
+              displayStatus
+            )}</span>
+          </div>
+          <p>${escapeHtml(quest.description || 'No description')}</p>
+          <div class="quest-meta-grid">
+            <p><strong>Teacher:</strong> ${escapeHtml(quest.createdByName || 'Teacher')}</p>
+            <p><strong>Reward:</strong> ${Number(quest.points || quest.pointsAwarded || 0)} points${
+              quest.badgeId ? ' + badge' : ''
+            }</p>
+            <p><strong>Deadline:</strong> ${escapeHtml(formatQuestDeadline(quest.deadline))}</p>
+            <p><strong>Completed:</strong> ${escapeHtml(formatDateTime(quest.completedAt) || 'Not yet')}</p>
+          </div>
+        </article>
+      `;
+    })
+    .join('');
+}
+
+async function loadStudentQuests() {
+  if (!currentStudentUser?.uid || !studentQuestsListElement) return;
+
+  studentQuestsListElement.innerHTML = '<p class="empty-cell">Loading quests...</p>';
+  try {
+    currentStudentQuests = await getQuestsForUser(currentStudentUser.uid);
+    const visibleQuests = await Promise.all(
+      currentStudentQuests
+        .filter((quest) => String(quest.status || 'active') === 'active')
+        .map(async (quest) => ({
+          ...quest,
+          createdByName: await resolveTeacherName({ teacherId: quest.createdBy, teacherName: quest.createdByName })
+        }))
+    );
+    renderStudentQuests(visibleQuests);
+  } catch (error) {
+    console.error('Failed to load quests:', error);
+    currentStudentQuests = [];
+    studentQuestsListElement.innerHTML = '<p class="empty-cell">Unable to load quests right now.</p>';
+    setStudentQuestMessage('Unable to load quests. Please try again.', 'error');
+  }
+}
+
+function extractQuestIdFromScan(rawValue) {
+  const text = String(rawValue || '').trim();
+  if (!text) return '';
+
+  if (text.startsWith('cote-quest:')) {
+    return text.replace('cote-quest:', '').trim();
+  }
+
+  try {
+    const parsed = new URL(text, window.location.origin);
+    return String(parsed.searchParams.get('questId') || '').trim();
+  } catch (_error) {
+    return text;
+  }
+}
+
+async function completeScannedQuest(rawValue) {
+  const questId = extractQuestIdFromScan(rawValue);
+  if (!questId) {
+    setStudentQuestMessage('No quest code found.', 'error');
+    return;
+  }
+
+  setStudentQuestMessage('Completing scanned quest...');
+  try {
+    const result = await completeQuestByQuestId(questId);
+    if (result.completed) {
+      setStudentQuestMessage(`Quest completed. Awarded ${result.pointsAwarded} point(s).`, 'success');
+      showPointsPopup(result.pointsAwarded);
+    } else {
+      setStudentQuestMessage('This quest was already completed.', 'error');
+    }
+    await loadStudentQuests();
+
+    const studentSnap = await getDoc(doc(db, 'students', currentStudentUser.uid));
+    if (studentSnap.exists()) {
+      currentStudentProfile = studentSnap.data();
+      setStudentData(currentStudentProfile, currentStudentUser.email);
+      await loadStudentSectionStanding(currentStudentProfile);
+    }
+    loadPointLogs(currentStudentUser.uid);
+    loadAchievementsDashboard(currentStudentUser.uid);
+    loadStudentNotifications();
+  } catch (error) {
+    console.error('Failed to complete scanned quest:', error);
+    setStudentQuestMessage(error?.message || 'Unable to complete scanned quest.', 'error');
+  }
+}
+
+async function recordStudentAttendanceFromQr(rawValue = '') {
+  if (!currentStudentUser?.uid || !currentStudentProfile) {
+    setStudentAttendanceMessage('Log in before scanning attendance.', 'error');
+    return;
+  }
+
+  const qrData = parseClassAttendanceQr(rawValue);
+  if (!qrData?.classId) {
+    setStudentAttendanceMessage('This QR code is not an attendance QR.', 'error');
+    return;
+  }
+
+  setStudentAttendanceMessage('Recording attendance and checking location...');
+
+  const position = await getCurrentPosition();
+  const location = position
+    ? {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracy: position.coords.accuracy
+      }
+    : null;
+  const dateKey = qrData.dateKey || getLocalDateKey();
+  const attendanceRef = doc(db, 'attendanceLogs', makeAttendanceLogId(qrData.classId, currentStudentUser.uid, dateKey));
+
+  await setDoc(
+    attendanceRef,
+    {
+      classId: qrData.classId,
+      studentId: currentStudentUser.uid,
+      studentName: makeFullName(currentStudentProfile),
+      teacherId: qrData.teacherId || '',
+      attendanceDate: dateKey,
+      status: 'present',
+      method: 'class_qr',
+      location,
+      recordedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    },
+    { merge: true }
+  );
+
+  setStudentAttendanceMessage(
+    location ? 'Attendance recorded with GPS location.' : 'Attendance recorded. GPS location was unavailable.',
+    'success'
+  );
+}
+
+function renderStudentAttendanceQr() {
+  if (!studentAttendanceQrPanelElement || !currentStudentUser?.uid) return;
+
+  const payload = buildStudentAttendanceQrPayload(currentStudentUser.uid);
+  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(payload)}`;
+  studentAttendanceQrPanelElement.hidden = false;
+  studentAttendanceQrPanelElement.innerHTML = `
+    <div>
+      <p>Show this QR to your teacher for attendance scanning.</p>
+      <p class="quest-qr-code-text">${escapeHtml(payload)}</p>
+    </div>
+    <img src="${escapeHtml(qrImageUrl)}" alt="Your attendance QR code" />
+  `;
+}
+
+async function openAttendanceScanner() {
+  if (!currentStudentUser?.uid) {
+    setStudentAttendanceMessage('Log in before scanning attendance.', 'error');
+    return;
+  }
+
+  if (!('BarcodeDetector' in window) || !navigator.mediaDevices?.getUserMedia) {
+    setStudentAttendanceMessage('Camera scanning is not available on this browser.', 'error');
+    return;
+  }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'quest-scanner-overlay';
+  overlay.innerHTML = `
+    <div class="quest-scanner-panel">
+      <div class="quest-scanner-header">
+        <h3>Scan Attendance QR</h3>
+        <button type="button" aria-label="Close scanner">Close</button>
+      </div>
+      <video autoplay playsinline></video>
+      <p class="form-message">Point your camera at the classroom attendance QR code.</p>
+    </div>
+  `;
+  document.body.append(overlay);
+
+  const video = overlay.querySelector('video');
+  const closeButton = overlay.querySelector('button');
+  const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+  let stream = null;
+  let isClosed = false;
+
+  const closeScanner = () => {
+    isClosed = true;
+    stream?.getTracks?.().forEach((track) => track.stop());
+    overlay.remove();
+  };
+
+  closeButton?.addEventListener('click', closeScanner);
+
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    video.srcObject = stream;
+    await video.play();
+
+    const scanFrame = async () => {
+      if (isClosed) return;
+
+      try {
+        const codes = await detector.detect(video);
+        const rawValue = codes?.[0]?.rawValue || '';
+        if (rawValue) {
+          closeScanner();
+          await recordStudentAttendanceFromQr(rawValue);
+          return;
+        }
+      } catch (error) {
+        console.warn('Attendance QR scan frame failed:', error);
+      }
+
+      window.requestAnimationFrame(scanFrame);
+    };
+
+    scanFrame();
+  } catch (error) {
+    console.error('Failed to open attendance scanner:', error);
+    closeScanner();
+    setStudentAttendanceMessage('Unable to open camera scanner. Check camera permission and try again.', 'error');
+  }
+}
+
+async function submitManualQuestCode() {
+  const rawValue = String(studentQuestCodeInput?.value || '').trim();
+  if (!rawValue) {
+    setStudentQuestMessage('Enter a quest code or QR link first.', 'error');
+    studentQuestCodeInput?.focus();
+    return;
+  }
+
+  if (studentSubmitQuestCodeButton) {
+    studentSubmitQuestCodeButton.disabled = true;
+    studentSubmitQuestCodeButton.textContent = 'Submitting...';
+  }
+
+  try {
+    await completeScannedQuest(rawValue);
+    if (studentQuestCodeInput) {
+      studentQuestCodeInput.value = '';
+    }
+  } finally {
+    if (studentSubmitQuestCodeButton) {
+      studentSubmitQuestCodeButton.disabled = false;
+      studentSubmitQuestCodeButton.textContent = 'Submit Code';
+    }
+  }
+}
+
+async function openQuestScanner() {
+  if (!currentStudentUser?.uid) {
+    setStudentQuestMessage('Log in before scanning a quest.', 'error');
+    return;
+  }
+
+  if (!('BarcodeDetector' in window) || !navigator.mediaDevices?.getUserMedia) {
+    setStudentQuestMessage('Camera scanning is not available here. Enter the quest code below.', 'error');
+    studentQuestCodeInput?.focus();
+    return;
+  }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'quest-scanner-overlay';
+  overlay.innerHTML = `
+    <div class="quest-scanner-panel">
+      <div class="quest-scanner-header">
+        <h3>Scan Quest QR</h3>
+        <button type="button" aria-label="Close scanner">Close</button>
+      </div>
+      <video autoplay playsinline></video>
+      <p class="form-message">Point your camera at the quest QR code.</p>
+    </div>
+  `;
+  document.body.append(overlay);
+
+  const video = overlay.querySelector('video');
+  const closeButton = overlay.querySelector('button');
+  const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+  let stream = null;
+  let isClosed = false;
+
+  const closeScanner = () => {
+    isClosed = true;
+    stream?.getTracks?.().forEach((track) => track.stop());
+    overlay.remove();
+  };
+
+  closeButton?.addEventListener('click', closeScanner);
+
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    video.srcObject = stream;
+    await video.play();
+
+    const scanFrame = async () => {
+      if (isClosed) return;
+
+      try {
+        const codes = await detector.detect(video);
+        const rawValue = codes?.[0]?.rawValue || '';
+        if (rawValue) {
+          closeScanner();
+          await completeScannedQuest(rawValue);
+          return;
+        }
+      } catch (error) {
+        console.warn('Quest QR scan frame failed:', error);
+      }
+
+      window.requestAnimationFrame(scanFrame);
+    };
+
+    scanFrame();
+  } catch (error) {
+    console.error('Failed to open quest scanner:', error);
+    closeScanner();
+    setStudentQuestMessage('Unable to open camera scanner. Check camera permission or enter the code manually.', 'error');
+    studentQuestCodeInput?.focus();
+  }
+}
+
+function runPageLoaders(pageName) {
+  if (pageName === 'home') {
+    loadStudentNotifications();
+  }
+  if (pageName === 'resources') {
+    loadStudentResources();
+  }
+  if (pageName === 'achievements' && currentStudentUser?.uid) {
+    loadAchievementsDashboard(currentStudentUser.uid);
+  }
+  if (pageName === 'quest' && currentStudentUser?.uid) {
+    loadStudentQuests();
+  }
+  if (pageName === 'scan-qr' && currentStudentUser?.uid) {
+    renderStudentAttendanceQr();
+  }
+  if (pageName === 'messages' && currentStudentUser?.uid) {
+    refreshConversations();
+  }
+}
+
+async function saveProfilePicture(event) {
+  event.preventDefault();
+
+  if (!currentStudentUser?.uid || !currentStudentProfile) {
+    setFormMessage(profilePictureMessageElement, 'Profile is not ready yet.', 'error');
+    return;
+  }
+
+  const originalProfileImageUrl = String(profilePictureUrlInput?.value || '').trim();
+
+  if (originalProfileImageUrl && !isValidHttpUrl(originalProfileImageUrl)) {
+    setFormMessage(profilePictureMessageElement, 'Please enter a valid image link.', 'error');
+    return;
+  }
+
+  if (profilePictureSaveButton) {
+    profilePictureSaveButton.disabled = true;
+    profilePictureSaveButton.textContent = 'Saving...';
+  }
+
+  try {
+    const profileImageUrl = getBadgeImageDisplayUrl(originalProfileImageUrl);
+    await updateDoc(doc(db, 'students', currentStudentUser.uid), {
+      originalProfileImageUrl,
+      profileImageUrl,
+      profilePictureUrl: originalProfileImageUrl,
+      updatedAt: serverTimestamp()
+    });
+
+    currentStudentProfile = {
+      ...currentStudentProfile,
+      originalProfileImageUrl,
+      profileImageUrl,
+      profilePictureUrl: originalProfileImageUrl
+    };
+
+    setStudentData(currentStudentProfile, currentStudentUser.email || '');
+    setProfilePictureEditorOpen(false);
+    setFormMessage(
+      profilePictureMessageElement,
+      originalProfileImageUrl ? 'Profile picture updated.' : 'Profile picture removed.',
+      'success'
+    );
+  } catch (error) {
+    console.error('Failed to update profile picture:', error);
+    setFormMessage(profilePictureMessageElement, 'Failed to update profile picture.', 'error');
+  } finally {
+    if (profilePictureSaveButton) {
+      profilePictureSaveButton.disabled = false;
+      profilePictureSaveButton.textContent = 'Save Picture';
+    }
+  }
+}
+
+menuButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    const target = button.dataset.target;
+    showPage(target);
+    runPageLoaders(target);
+  });
+});
+
+burgerButton?.addEventListener('click', toggleSidebar);
+sidebarOverlay?.addEventListener('click', closeSidebar);
+profilePictureEditButton?.addEventListener('click', () => {
+  const isOpen = profilePictureFormElement?.classList.contains('is-open') || false;
+  setProfilePictureEditorOpen(!isOpen);
+});
+profilePictureCancelButton?.addEventListener('click', resetProfilePictureEditor);
+profilePictureFormElement?.addEventListener('submit', saveProfilePicture);
+studentScanQuestButton?.addEventListener('click', openQuestScanner);
+studentScanAttendanceButton?.addEventListener('click', openAttendanceScanner);
+studentSubmitQuestCodeButton?.addEventListener('click', submitManualQuestCode);
+studentQuestCodeInput?.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    submitManualQuestCode();
+  }
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    closeSidebar();
+    resetProfilePictureEditor();
+  }
+});
+
+document.addEventListener('click', async (event) => {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+
+  const claimButton = target.closest('.claim-btn');
+  if (claimButton) {
+    if (!currentStudentUser?.uid) return;
+
+    const achievementId = String(claimButton.dataset.id || '').trim();
+    if (!achievementId) return;
+
+    claimButton.disabled = true;
+    try {
+      await claimAchievement(currentStudentUser.uid, achievementId);
+      await refreshAchievementsUI();
+    } catch (error) {
+      console.error('Failed to claim achievement reward:', error);
+    } finally {
+      claimButton.disabled = false;
+    }
+    return;
+  }
+
+  const claimAllButton = target.closest('#claim-all-btn');
+  if (claimAllButton) {
+    if (!currentStudentUser?.uid) return;
+
+    claimAllButton.disabled = true;
+    try {
+      await claimAllAchievements(currentStudentUser.uid);
+      await refreshAchievementsUI();
+    } catch (error) {
+      console.error('Failed to claim all achievement rewards:', error);
+    } finally {
+      claimAllButton.disabled = false;
+    }
+  }
+});
+
+notificationsButton?.addEventListener('click', async () => {
+  showPage('home');
+  markAnnouncementsSeen(currentTeacherAnnouncements);
+  await markStudentNotificationsRead();
+  studentNotificationsListElement?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+
+messagesButton?.addEventListener('click', () => {
+  showPage('messages');
+  runPageLoaders('messages');
+});
+
+document.querySelectorAll('input[name="student-theme"]').forEach((input) => {
+  input.addEventListener('change', () => {
+    if (input.checked) {
+      saveThemePreference(input.value);
+    }
+  });
+});
+
+applyTheme(getPreferredTheme());
+initMusicControls();
+
+onAuthStateChanged(auth, async () => {
+  const user = auth.currentUser;
+
+  if (!user) {
+    if (studentNotificationRefreshTimer) {
+      clearInterval(studentNotificationRefreshTimer);
+      studentNotificationRefreshTimer = null;
+    }
+    window.location.replace('index.html');
+    return;
+  }
+
+  const uid = user.uid;
+  currentStudentUser = user;
+  pendingQuestIdFromUrl = String(new URLSearchParams(window.location.search).get('questId') || '').trim();
+
+  loadLeaderboard();
+
+  if (sidebarStudentEmailElement) {
+    sidebarStudentEmailElement.textContent = user.email || 'No email available';
+  }
+
+  try {
+    const studentRef = doc(db, 'students', uid);
+    const studentSnap = await getDoc(studentRef);
+
+    if (!studentSnap.exists()) {
+      renderStudentProfileNotFound(user.email, uid);
+      return;
+    }
+
+    const studentData = studentSnap.data();
+    currentStudentProfile = studentData;
+    const points = normalizePoints(studentData.points);
+
+    if (studentData.points === undefined) {
+      await updateDoc(studentRef, { points: 0 });
+      studentData.points = 0;
+    } else {
+      studentData.points = points;
+    }
+
+    setStudentData(studentData, user.email);
+    await loadStudentSectionStanding(studentData);
+    await seedAchievementsIfEmpty();
+    loadPointLogs(uid);
+    loadAchievementsDashboard(uid);
+    loadStudentQuests();
+    loadMyEnrollments();
+    loadAvailableClasses();
+    loadStudentNotifications();
+    renderStudentAttendanceQr();
+    startStudentNotificationRefresh();
+    await initMessagingUI();
+    startMessagingAutoRefresh();
+    const restoredPage = getSavedPage();
+    const initialPage = pendingQuestIdFromUrl ? 'quest' : restoredPage;
+    showPage(initialPage, { persist: false });
+    runPageLoaders(initialPage);
+    if (pendingQuestIdFromUrl) {
+      const questId = pendingQuestIdFromUrl;
+      pendingQuestIdFromUrl = '';
+      window.history.replaceState({}, document.title, window.location.pathname);
+      await completeScannedQuest(questId);
+    }
+  } catch (error) {
+    console.error('Failed to load profile:', error);
+
+    if (profileDataElement) {
+      profileDataElement.innerHTML = `
+        <p><strong>Error:</strong> Failed to load profile data.</p>
+      `;
+    }
+
+    if (profileFullNameElement) {
+      profileFullNameElement.textContent = 'Failed to load';
+    }
+
+    if (profileEmailElement) {
+      profileEmailElement.textContent = safe(user?.email);
+    }
+
+    if (profileGradeSectionElement) {
+      profileGradeSectionElement.textContent = 'Not available';
+    }
+
+    if (profileAvatarElement) {
+      profileAvatarElement.textContent = '👤';
+    }
+
+    if (pointsTotalElement) {
+      pointsTotalElement.textContent = '0';
+    }
+
+    if (homeStudentNameElement) {
+      homeStudentNameElement.textContent = 'Failed to load';
+    }
+
+    if (homeStudentSectionElement) {
+      homeStudentSectionElement.textContent = 'Not available';
+    }
+
+    if (homeStudentPointsElement) {
+      homeStudentPointsElement.textContent = '0';
+    }
+
+    if (profileRankElement) {
+      profileRankElement.textContent = 'Not ranked';
+    }
+
+    if (profileStudentRankElement) {
+      profileStudentRankElement.textContent = 'Not yet assigned';
+    }
+    setSectionStanding({});
+    resetProfileBadges('Unable to load badges right now.');
+  }
+});
+
+logoutButton?.addEventListener('click', async () => {
+  try {
+    await signOut(auth);
+    window.location.replace('index.html');
+  } catch (error) {
+    console.error('Logout failed:', error);
+    alert('Logout failed.');
+  }
+});
+
+window.addEventListener('load', () => {
+  showLoadingOverlay('Initializing C.O.T.E System...');
+  playLoadingSequence(['Initializing C.O.T.E System...', 'Loading Profile...', 'Syncing Records...'], 380).then(
+    async () => {
+      await wait(190);
+      hideLoadingOverlay();
+    }
+  );
+});
+
+window.toggleSidebar = toggleSidebar;
+window.closeSidebar = closeSidebar;
+window.showPage = showPage;
+
+showPage(getSavedPage(), { persist: false });
+closeSidebar();
